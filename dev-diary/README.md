@@ -12,7 +12,7 @@ Each document provides complete context for an engineer starting cold.
 
 **Current status:** Not started. P0 Ground is the serial bottleneck and nothing runs before it.
 
-The repository is at `github.com/nrynss/orma` on `main`. The Supabase project `orma` exists (`ap-south-1`), the repository is linked, `.env` is written, and sixteen function secrets are on the project. What remains in P0 is in [PHASE-0-ground.md](PHASE-0-ground.md). Email sends from `send.nryn.dev` on a sending-only key. The CALL-E path is proven by a real call and its payloads are in `testdata/calle/`. No value in `.env` is blank.
+The repository is at `github.com/nrynss/orma` on `main`. The Supabase project `orma` exists (`ap-south-1`), the repository is linked, `.env` is written, sixteen function secrets are on the project, and `pg_cron` and `pg_net` are installed. What remains in P0 is in [PHASE-0-ground.md](PHASE-0-ground.md). Email sends from `send.nryn.dev` on a sending-only key. The CALL-E path is proven by a real call and its payloads are in `testdata/calle/`. No value in `.env` is blank.
 
 ---
 
@@ -32,12 +32,12 @@ This allows almost the whole system to be built offline. The web app, the MCP se
 
 | Phase | Document | Requires | Runs parallel with | Blocks |
 |---|---|---|---|---|
-| **P0** Ground | [PHASE-0-ground.md](PHASE-0-ground.md) | none | none | everything |
-| **P1** Schema and contracts | [PHASE-1-contracts.md](PHASE-1-contracts.md) | P0 | none | downstream tracks |
+| **P0** Ground | [PHASE-0-ground.md](PHASE-0-ground.md) | none | everything | P5, P6 |
+| **P1** Schema and contracts | [PHASE-1-contracts.md](PHASE-1-contracts.md) | none | P0 | downstream tracks |
 | **P2** Call engine | [PHASE-2-call-engine.md](PHASE-2-call-engine.md) | P1 | P3, P4, P5, P7 | P7, P8 |
 | **P3** Telegram | [PHASE-3-telegram.md](PHASE-3-telegram.md) | T1.1, T1.2 | P2, P4, P5, P6 | P7 (delivery), P8 |
 | **P4** MCP server | [PHASE-4-mcp.md](PHASE-4-mcp.md) | T1.1, T1.2, T1.3 | P2, P3, P5, P6 | P8 |
-| **P5** Auth and web shell | [PHASE-5-auth-shell.md](PHASE-5-auth-shell.md) | T0.5, T1.2 | P2, P3, P4 | P6, P8 |
+| **P5** Auth and web shell | [PHASE-5-auth-shell.md](PHASE-5-auth-shell.md) | P0, T1.2 | P2, P3, P4 | P6, P8 |
 | **P6** Web app | [PHASE-6-web-app.md](PHASE-6-web-app.md) | T5.3, soft P2 | P2, P3, P4, P7 | P8 |
 | **P7** Analysis and receipts | [PHASE-7-analysis.md](PHASE-7-analysis.md) | T1.1, soft P2, T3.4 | P3, P4, P6 | P8 |
 | **P8** Ship | [PHASE-8-ship.md](PHASE-8-ship.md) | P2, P5, P6, P7 | none | final submission |
@@ -50,7 +50,7 @@ This allows almost the whole system to be built offline. The web app, the MCP se
               └──▶ P7 analysis ◀────┘───────┘
 ```
 
-Phases P0 and P1 form the serial bottleneck. Once the schema and the CALL-E fixtures freeze, development scales across five parallel tracks.
+P1 is the serial bottleneck now. P0 blocks only the web tracks and runs beside it. Once the schema and the CALL-E fixtures freeze, development scales across five parallel tracks.
 
 ---
 
@@ -147,12 +147,12 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 
 | Phase | Tasks complete | Status |
 |---|---|---|
-| P0 | 0 / 2 | Not started. T0.2 blocks every track that touches the hosted project. |
-| P1 | 0 / 6 | Not started. Blocked on T0.2. |
+| P0 | 0 / 2 | Not started. Blocks only the web tracks. P1 to P4 can start now. |
+| P1 | 0 / 6 | Not started. Nothing blocks it. Start here. |
 | P2 | 0 / 9 | Not started. Blocked on P1. |
 | P3 | 0 / 5 | Not started. Blocked on T1.1 and T1.2. Bot @orma_tele_bot is registered. |
 | P4 | 0 / 3 | Not started. Blocked on T1.1, T1.2, T1.3. |
-| P5 | 0 / 4 | Not started. Blocked on T0.5 and T1.2. |
+| P5 | 0 / 4 | Not started. Blocked on P0 and T1.2. |
 | P6 | 0 / 6 | Not started. Blocked on T5.3. |
 | P7 | 0 / 4 | Not started. Blocked on T1.1. |
 | P8 | 0 / 7 | Not started. |

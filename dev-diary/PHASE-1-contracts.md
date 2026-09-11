@@ -16,7 +16,7 @@ parallel: no
 
 ### T1.1: Core migrations ★
 ```yaml
-requires:   T0.1, T0.2
+requires:   []
 fixture-ok: yes
 size:       L · frontier
 owns:       supabase/migrations/

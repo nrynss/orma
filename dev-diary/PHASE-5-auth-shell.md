@@ -3,7 +3,7 @@
 ```yaml
 id:       P5
 size:     M
-requires: [T0.5, T1.2]
+requires: [T0.1, T0.2, T1.2]
 blocks:   [P6, P8]
 parallel: [P2, P3, P4]
 ```
@@ -55,7 +55,7 @@ A Telegram identity linked to an existing email account attaches to that account
 
 ### T5.3: App skeleton and sessions
 ```yaml
-requires:   T0.5, T5.1
+requires:   T0.1, T5.1
 fixture-ok: yes
 size:       M · mid
 owns:       web/src/lib/supabase.ts, web/src/routes/+layout.ts, web/src/routes/login/

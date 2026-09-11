@@ -2,53 +2,31 @@
 
 ```yaml
 id:       P0
-size:     S
+size:     XS
 requires: []
-blocks:   everything
+blocks:   [P5, P6]
 parallel: no
 ```
 
-**Goal:** A network that can reach the project, and TLS on the real hostname.
+**Goal:** A front door on the real hostname, and a way for a browser on this
+machine to reach the project.
 
-**Why this phase runs serially:** No track can test against the hosted project until T0.2 lands.
+**Why this phase is nearly empty:** Everything else that was in it is done. The
+repository is at `github.com/nrynss/orma`, private, default branch `main`, with
+`.env` and build output ignored. The Supabase project `orma` exists in
+`ap-south-1`, is linked, holds sixteen function secrets, and has `pg_cron 1.6.4`
+and `pg_net 0.20.4` installed. The CALL-E path is proven by a real call whose
+masked payloads are in `testdata/calle/`. The bot is registered, email sends from
+a verified domain on a sending-only key, and Vertex answers.
 
-The repository is on git at `github.com/nrynss/orma`, private, default branch
-`main`, with `.env` and build output ignored.
-
-The CALL-E path is already proven. One real call on 11 September returned a
-validated `structured_result`, transcript turns carry `speaker` and
-`offset_seconds`, and the payloads are in `testdata/calle/`. The prompt lives in
-[docs/calle-call.md](../docs/calle-call.md) and is iterated in T8.2, not here.
-
----
-
-### T0.2: Reach Supabase from this network ★
-```yaml
-requires:   []
-fixture-ok: yes
-size:       S · mid
-owns:       scripts/dev-dns.sh, docs/network.md
-status:     not-started
-```
-This network resolves `*.supabase.co` to `202.83.21.15`. The real answer, confirmed over DNS-over-HTTPS, is Cloudflare at `104.18.38.10` and `172.64.149.246`. Every request to the project fails with a TLS end-of-file, and port 5432 is unreachable.
-
-Pinning the real address works:
-
-```bash
-curl --resolve "$REF.supabase.co:443:104.18.38.10" "https://$REF.supabase.co/rest/v1/"
-```
-
-Pick a fix that survives a reboot and covers every tool, not only `curl`. A DNS-over-HTTPS resolver on the machine is the clean option. Host-file pinning works but goes stale when Cloudflare rotates.
-
-The Supabase CLI management commands work already, because `api.supabase.com` is unaffected. It is the project subdomain and the database host that fail.
-
-Record the chosen fix in `docs/network.md`, because every agent on every track hits this on their first request.
-
-**Done when:** `curl` with no `--resolve`, `psql` against port 5432, and `supabase db push` all reach the project, and the fix survives a reboot.
+Neither remaining task blocks P1 through P4. Those tracks have full database
+access already, three ways over: the session and transaction poolers on
+`aws-0-ap-south-1.pooler.supabase.com`, the management API, and the CLI, which
+pushes migrations and deploys functions without touching the blocked hostname.
 
 ---
 
-### T0.5: Cloudflare DNS and Pages skeleton
+### T0.1: Cloudflare front door ★
 ```yaml
 requires:   []
 fixture-ok: yes
@@ -56,14 +34,68 @@ size:       S · mid
 owns:       web/package.json, web/svelte.config.js, web/src/routes/+page.svelte
 status:     not-started
 ```
-Create the SvelteKit app with the Cloudflare adapter and deploy a single page. The content does not matter. The certificate does.
+Create the SvelteKit app with the Cloudflare adapter and deploy a single page.
+The content does not matter. The certificate does.
 
-Point `orma.nryn.dev` at the Pages project. Add `api.orma.nryn.dev` as a proxy in front of the Supabase functions host, so the webhook and MCP URLs are Orma's own from the first deploy and never need changing later.
+Point `orma.nryn.dev` at the Pages project. Add `api.orma.nryn.dev` in front of
+the Supabase functions host, so the webhook and MCP URLs are Orma's own from the
+first deploy and never need changing later.
 
-The zone id and account id are already in `.env`, and Pages authentication comes from `wrangler login` rather than from a token.
+That proxy does a second job worth knowing about. Requests to it resolve to
+Cloudflare and are fetched from Supabase on Cloudflare's network, which routes
+around the local resolution problem in T0.2 for everything served under
+`/functions/v1`. Deployed functions become reachable from this machine even while
+T0.2 is open.
 
-One trap will cost you an hour if nobody warns you. Wrangler auto-loads a project `.env` and prefers a `CLOUDFLARE_API_TOKEN` found there over your OAuth login. Our zone-scoped token is therefore named `CF_DNS_API_TOKEN` on purpose. Do not rename it back, and do not add `CLOUDFLARE_API_TOKEN` to `.env`, or every Pages command fails with an authentication error that blames your login.
+The zone id and account id are in `.env`. Pages authentication comes from
+`wrangler login`, not from a token.
 
-`nryn.dev` at the apex is already served by the `nrynss-github-io` Pages project. Orma takes the `orma` subdomain and leaves the apex alone.
+One trap will cost you an hour if nobody warns you. Wrangler auto-loads a project
+`.env` and prefers a `CLOUDFLARE_API_TOKEN` found there over your OAuth login.
+The zone-scoped token is therefore named `CF_DNS_API_TOKEN` on purpose. Do not
+rename it back, and do not add `CLOUDFLARE_API_TOKEN` to `.env`, or every Pages
+command fails with an authentication error that blames your login.
 
-**Done when:** `https://orma.nryn.dev` serves the placeholder over a valid certificate, and `https://api.orma.nryn.dev/functions/v1/` reaches Supabase.
+`nryn.dev` at the apex is already served by the `nrynss-github-io` Pages project,
+and `inner-life.nryn.dev` by another. Orma takes the `orma` subdomain and leaves
+both alone.
+
+**Done when:** `https://orma.nryn.dev` serves the placeholder over a valid
+certificate, and `https://api.orma.nryn.dev/functions/v1/` reaches Supabase from
+this machine.
+
+---
+
+### T0.2: Resolve the project hostname locally
+```yaml
+requires:   []
+fixture-ok: yes
+size:       S · mid
+owns:       docs/network.md
+status:     not-started
+```
+This network resolves `*.supabase.co` to `202.83.21.15`. The true answer, over
+DNS-over-HTTPS, is Cloudflare at `104.18.38.10` and `172.64.149.246`. Querying
+`1.1.1.1` and `8.8.8.8` directly returns the hijacked address too, because port
+53 is intercepted.
+
+What that actually costs is narrow. The database, the management API and the CLI
+are all unaffected. What fails is HTTPS to `pyuubklpkhjngiqqwypf.supabase.co`,
+which means PostgREST and Auth cannot be reached by a browser or by `curl` on
+this machine. The web app in P5 and P6 needs that; nothing before it does.
+
+Pinning the real address works:
+
+```bash
+curl --resolve "$REF.supabase.co:443:104.18.38.10" "https://$REF.supabase.co/rest/v1/"
+```
+
+Pick a fix that survives a reboot and covers every tool, not only `curl`. A
+DNS-over-HTTPS resolver on the machine is the clean option. Host-file pinning
+works but goes stale when Cloudflare rotates.
+
+Record the chosen fix in `docs/network.md`.
+
+**Done when:** `curl` with no `--resolve` reaches `/rest/v1/` and
+`/auth/v1/health`, a browser signs in against the hosted project, and the fix
+survives a reboot.
