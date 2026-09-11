@@ -213,8 +213,8 @@ demos better regardless.
 - **Polling:** wait ~60s after start, then every 5–10s until terminal, or take the webhook.
 - **$0.05 per billable call**, 20 free on signup.
 - **India is English and Hindi, no Malayalam.** The name is a name.
-- **Calls can land as "suspected spam caller".** Anticipation does not survive the handset saying spam before the user looks. The only clean mitigation is the callee saving the number as a contact, which works precisely because the callee is your own subscriber.
-- **Numbers are purchasable in the US and Brazil only.** India-bound calls come from an allocated local line you do not control, which weakens the save-the-contact mitigation. Watch for India being added.
+- **Calls arrive flagged as likely spam.** Not a risk, an observation: the 11 September call landed that way on a Pixel, and every CALL-E call so far has. Anticipation does not survive the handset saying spam before the user looks. The only clean mitigation is the callee saving the number as a contact, which works precisely because the callee is your own subscriber, and it needs a number we do not have. See `feedback.md` issue 9.
+- **Numbers are purchasable in the US and Brazil only.** India-bound calls come from an allocated local line you do not control and the API never names, which removes the save-the-contact mitigation rather than weakening it. Watch for India being added.
 
 ---
 

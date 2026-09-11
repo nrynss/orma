@@ -161,9 +161,10 @@ symmetry.
 
 ---
 
-## 9. Numbers are US and Brazil only, which breaks the spam mitigation
+## 9. CALL-E calls arrive flagged as spam, and there is no number to save
 
-**Severity: high.** Commercially, this may be the most consequential entry here.
+**Severity: highest in this document.** Observed, repeated, and it attacks the
+premise rather than the implementation.
 
 Numbers can be purchased in the United States and Brazil. Calls to India go out
 from an allocated local line the customer does not control and cannot be sure is
@@ -182,16 +183,33 @@ anticipation is the mechanism. Onboarding wants a step that says "save this
 number, here is why", and that step cannot be written honestly today, because we
 cannot tell the user which number to save.
 
-**Evidence so far.** One real call to an Indian mobile on 11 September was not
-flagged as spam, so this is a structural risk rather than an observed failure.
-One data point is not a pattern, and the risk does not need to fire often to
-matter: it only has to fire on the day someone was going to answer.
+**Evidence.** The call placed on 11 September arrived on a Pixel showing a
+likely-spam warning, and the account owner reports that every CALL-E call has
+arrived the same way. This is not a risk we are anticipating. It is the current
+default behaviour, on Google's own dialer, which ships on Pixel and on a large
+share of Android handsets, in a market where call screening is near universal.
 
-**Suggested fix, in order of how much it would help.** Sell numbers in India.
-Failing that, guarantee a stable originating line per subscriber and expose it on
-the API before the call, so an application can tell its user what to save.
-Failing even that, expose the number that was actually used on the call record,
-so the pattern can at least be measured.
+So the mitigation is not optional, and the mitigation is unavailable. Saving the
+caller as a contact is what suppresses that warning, and the API exposes no
+originating number to save.
+
+**Suggested fix, in order of how much it would help.**
+
+1. Sell numbers in India, so a customer can own and warm their own line.
+2. Guarantee a stable originating line per subscriber, and expose it on the API
+   before the call, so an application can tell its user exactly what to save.
+3. At minimum, report the number actually used on the call record. Today an
+   integrator cannot even measure the problem, let alone route around it.
+4. Pursue registration with the carrier and caller-ID reputation services for the
+   lines already in use. The lines appear to be classified as spam already, which
+   is a reputation problem that gets worse as volume grows, and it is not
+   something any individual customer can fix from outside.
+
+**Why this one is worth CALL-E's attention beyond us.** Every project built on
+outbound calls inherits this. A call that announces itself as probable spam is
+answered less, and an agent that is answered less produces less of the outcome it
+was bought for. It degrades every customer's numbers at once, quietly, and none
+of them can see it from the API.
 
 ---
 
@@ -217,3 +235,35 @@ audio was poor before the caller told us.
 
 **Idempotency is required rather than optional.** Making the header mandatory on
 call creation is the right call, and rarer than it should be.
+
+---
+
+## 11. Recipient validation and call attempts are hard to audit
+
+**Severity: medium.**
+
+**What happened.** Our first `POST /v1/calls` used an invalid `recipients`
+shape. It returned HTTP 422 before issuing a CallTask id. The accepted shape
+used an object with a `phones` array. The rejected response did not make that
+accepted envelope clear enough to correct without consulting the API reference.
+
+One corrected request created `call_jDAvO3ThAO5Fa2kBPCmV6A`. The operator then
+reported two rings. Orma issued no second accepted request. The reason for the
+second ring is unconfirmed. The task finally returned `failed`, with
+`call_failed` and `NO ANSWER (Hangup by: bot)`.
+
+**Evidence.** The failed request returned HTTP 422 and no CallTask id. The
+corrected request returned one CallTask id. Its event list ended in
+`call.failed`. The API returned no cost amount. The operator reported the two
+rings separately.
+
+**Cost to us.** We spent one failed request correcting the recipient envelope.
+The accepted task rang twice by operator report, yet the API gave no cost field
+or clear attempt explanation to reconcile the report. The terminal fixture was
+still useful, but we had to treat the repeated-ring cause as unknown.
+
+**Suggested fix.** Return a JSON pointer and the expected recipient object in
+the 422 response. Show `{ "phones": ["+XXXXXXXXXXXX"] }` beside the field.
+Expose every dial attempt, its reason, and a cost amount on the CallTask. That
+would let an integrator distinguish one task with provider retries from two
+dispatches.

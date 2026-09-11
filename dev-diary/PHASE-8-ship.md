@@ -44,7 +44,9 @@ Real calls to a real phone, on the real schedule, every day until submission.
 
 This is what makes "you've mentioned this three times" true. It is also the only way the call's own quality gets tested, which is the eighty percent of perceived polish that no amount of correct plumbing supplies.
 
-Keep a log of each day: whether the two-beat landing worked, whether it felt like a person thinking or a list being read, and what the extraction got wrong. Feed that back into the task template in [docs/calle-call.md](../docs/calle-call.md).
+Keep a log of each day: the number the handset showed and whether it was flagged, whether the two-beat landing worked, whether it felt like a person thinking or a list being read, and what the extraction got wrong.
+
+Record the caller id by hand every day. The API does not report the originating number, so a handset photograph or a note is the only way to learn whether the line is stable. If it is stable, saving it as a contact becomes a real onboarding step and `feedback.md` issue 9 gets a much sharper second half. Feed that back into the task template in [docs/calle-call.md](../docs/calle-call.md).
 
 The 11 September call already named four failures to watch for: leading before landing, long silences, skipping the walk and the exit, and capturing something the caller never confirmed. The last two matter most, because the demo beat lives in the exit.
 
@@ -109,6 +111,8 @@ That single beat carries give-before-take and unpunished quitting together. A pr
 Lead with the call arriving already knowing, not with scheduling. The repository already ships a scheduler wrapper for recurring reminders, so that ground is taken.
 
 Show the timeline from T6.6 once, briefly, to prove the machinery is real. Caption the seeded row where it appears.
+
+**Decide before shooting how the incoming call appears.** CALL-E calls arrive flagged as likely spam on Android, every time so far. A demo that opens on a handset saying "Likely spam" undercuts a product whose mechanism is anticipation. Save the caller as a contact on the demo handset first, so it rings as Orma. That is not a trick, it is the product's own recommendation to every user, and it is worth one honest line in the video or the README rather than a silent edit.
 
 **Done when:** the cut is under three minutes, the central exchange is one unbroken take of real audio, and the seed disclosure is legible on screen.
 
