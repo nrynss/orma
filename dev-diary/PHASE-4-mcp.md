@@ -22,7 +22,7 @@ size:       M · mid
 owns:       supabase/functions/mcp/index.ts
 status:     not-started
 ```
-Streamable HTTP in stateless mode, served at `api.orma.nryn.dev/mcp`. Stateless suits a function, because there is no session to hold between requests.
+Streamable HTTP in stateless mode, served at `orma-api.nryn.dev/mcp`. Stateless suits a function, because there is no session to hold between requests.
 
 Authorisation is the caller's Supabase JWT. The server creates a client with that token and never uses the service role, so every tool runs under the same row-level security as the browser. A missing or expired token is a clean protocol error, not a 500.
 

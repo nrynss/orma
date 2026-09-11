@@ -29,7 +29,7 @@ document describes what gets built.
  pg_cron ──weekly──► fn:analysis ──► Vertex AI
 ```
 
-`api.orma.nryn.dev` is a Cloudflare proxy in front of the Supabase functions
+`orma-api.nryn.dev` is a Cloudflare proxy in front of the Supabase functions
 host, so the webhook and MCP URLs are Orma's own and survive a project change.
 
 ---
@@ -437,7 +437,7 @@ was captured and retired, and the pattern report. It never asks for anything.
 
 ## 9. MCP server
 
-Streamable HTTP in stateless mode, served at `api.orma.nryn.dev/mcp`.
+Streamable HTTP in stateless mode, served at `orma-api.nryn.dev/mcp`.
 
 Tools, per product.md §2: `add_item`, `list_items`, `retire_item`, `set_slot`,
 `get_last_call`, `get_patterns`.
@@ -498,7 +498,7 @@ no bespoke CRUD API to write, test or secure.
 
 **Cloudflare.** A Pages project building the SvelteKit app on the custom domain
 `orma.nryn.dev`. `nryn.dev` already lives in Cloudflare, so the certificate comes
-from Cloudflare. A second record, `api.orma.nryn.dev`, proxies to the Supabase
+from Cloudflare. A second record, `orma-api.nryn.dev`, proxies to the Supabase
 functions host.
 
 **Secrets**, all as function secrets, none in the repository. Names must not

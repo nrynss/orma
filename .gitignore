@@ -23,3 +23,8 @@ supabase/.branches/
 
 # Wrangler local cache
 .wrangler/
+
+# SvelteKit and Worker build output
+web/.svelte-kit/
+web/build/
+proxy/.wrangler/

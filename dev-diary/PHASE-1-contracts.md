@@ -93,7 +93,7 @@ answer, so neither costs a conversation:
 * `call-failed.json`: a call that ended `failed`, with `failure_code` and
   `failure_message` verbatim.
 * `webhook-*.json`: the three event types with their headers, captured once
-  `api.orma.nryn.dev` is reachable. Until then the poll path covers it.
+  `orma-api.nryn.dev` is reachable. Until then the poll path covers it.
 
 Record the observed `failure_code` values in `docs/calle-call.md` as they appear.
 Nothing branches on them, since missed calls are out of scope, but the vocabulary

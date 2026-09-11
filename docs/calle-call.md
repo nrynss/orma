@@ -22,7 +22,7 @@ Request shape, from the OpenAPI contract:
 | `task` | The whole instruction, assembled by `briefing.ts` |
 | `recipients` | The E.164 number |
 | `result_schema` | Below, inline on every call |
-| `webhook_url` | `https://api.orma.nryn.dev/functions/v1/calle-webhook/<secret>` |
+| `webhook_url` | `https://orma-api.nryn.dev/functions/v1/calle-webhook/<secret>` |
 | `metadata` | `{"call_run_id": "<uuid>"}` |
 | `Idempotency-Key` header | `orma:{user_id}:{local_date}:{part_of_day}:v1` |
 

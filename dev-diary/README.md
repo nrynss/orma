@@ -10,9 +10,9 @@ Where a phase document and specification conflict, the specification wins. Recor
 
 Each document provides complete context for an engineer starting cold.
 
-**Current status:** Not started. P0 Ground is the serial bottleneck and nothing runs before it.
+**Current status:** P0 is complete. P1 is next and nothing blocks it.
 
-The repository is at `github.com/nrynss/orma` on `main`. The Supabase project `orma` exists (`ap-south-1`), the repository is linked, `.env` is written, sixteen function secrets are on the project, and `pg_cron` and `pg_net` are installed. What remains in P0 is in [PHASE-0-ground.md](PHASE-0-ground.md). Email sends from `send.nryn.dev` on a sending-only key. The CALL-E path is proven by a real call and its payloads are in `testdata/calle/`. No value in `.env` is blank.
+P0 is complete. What exists is listed in [PHASE-0-ground.md](PHASE-0-ground.md): the repository, the Supabase project with its extensions and secrets, the deployed app and front door, the bot, verified email, and a proven CALL-E path. Start at P1.
 
 ---
 
@@ -32,35 +32,35 @@ This allows almost the whole system to be built offline. The web app, the MCP se
 
 | Phase | Document | Requires | Runs parallel with | Blocks |
 |---|---|---|---|---|
-| **P0** Ground | [PHASE-0-ground.md](PHASE-0-ground.md) | none | everything | P5, P6 |
+| **P0** Ground | [PHASE-0-ground.md](PHASE-0-ground.md) | none | — | done |
 | **P1** Schema and contracts | [PHASE-1-contracts.md](PHASE-1-contracts.md) | none | P0 | P2, P3, P4, P5, P7 |
 | **P2** Call engine | [PHASE-2-call-engine.md](PHASE-2-call-engine.md) | P1 | P3, P4, P5, P7 | P7, P8 |
 | **P3** Telegram | [PHASE-3-telegram.md](PHASE-3-telegram.md) | T1.1, T1.2 | P2, P4, P5, P6 | P7 (delivery), P8 |
 | **P4** MCP server | [PHASE-4-mcp.md](PHASE-4-mcp.md) | T1.1, T1.2, T1.3 | P2, P3, P5, P6 | P8 |
-| **P5** Auth and web shell | [PHASE-5-auth-shell.md](PHASE-5-auth-shell.md) | P0, T1.2 | P2, P3, P4, P7 | P6, P8 |
+| **P5** Auth and web shell | [PHASE-5-auth-shell.md](PHASE-5-auth-shell.md) | T1.2 | P2, P3, P4, P7 | P6, P8 |
 | **P6** Web app | [PHASE-6-web-app.md](PHASE-6-web-app.md) | T5.3, soft P2 | P2, P3, P4, P7 | P8 |
 | **P7** Analysis and receipts | [PHASE-7-analysis.md](PHASE-7-analysis.md) | T1.1, T3.4, soft P2 | P4, P6 | P8 |
 | **P8** Ship | [PHASE-8-ship.md](PHASE-8-ship.md) | P2, P3, P4, P5, P6, P7 | none | final submission |
 
 ```text
+  P0 done
+     │
   P1 contracts ─┬─▶ P2 call engine ─┬─▶ P7 analysis ─┐
                 ├─▶ P3 telegram ────┘                │
-                └─▶ P4 mcp ──────────────────────────┤
-                                                     ├─▶ P8 ship
-  P0 front door ─▶ P5 auth shell ─▶ P6 web app ──────┘
+                ├─▶ P4 mcp ──────────────────────────┤
+                │                                    ├─▶ P8 ship
+                └─▶ P5 auth shell ─▶ P6 web app ─────┘
 ```
 
-Two independent roots. P1 opens four tracks against the database. P0 opens the
-web chain, which is the only thing the local resolution problem holds up.
-
-P1 is the only serial bottleneck. Once the schema and the CALL-E fixtures freeze, four tracks run against the database while the web chain runs beside them.
+P1 is the only bottleneck left. Once the schema and the CALL-E fixtures freeze,
+all five tracks run at once.
 
 ---
 
 ## Parallel Tracks
 
-Five tracks run concurrently without path conflicts. Four open when T1.2 lands.
-The fifth opens on P0 and does not wait for the schema at all.
+Five tracks run concurrently without path conflicts, all of them opening on a
+task inside P1.
 
 | Track | Phase | Opens on | Live CALL-E? | First task | Readiness |
 |---|---|---|---|---|---|
@@ -68,7 +68,7 @@ The fifth opens on P0 and does not wait for the schema at all.
 | **B: Telegram** | P3 | T1.2 | No | T3.1 | Bot is registered. Needs Gemini, not CALL-E. |
 | **C: MCP** | P4 | T1.3 | No | T4.1 | Pure database work behind the same RLS as the browser. |
 | **D: Analysis** | P7 | T1.1 | No | T7.1 | Facts are SQL over fixture rows. |
-| **E: Auth and web** | P5 | P0 | No | T5.1 | Independent of the schema. Held up only by local resolution. |
+| **E: Auth and web** | P5 | T1.2 | No | T5.1 | App and front door are deployed. Point it at `ORMA_API_URL`. |
 
 Prioritise track A. Nothing in the demo exists without it, and it is the only
 track that has to keep running for days before submission. Track E is the one to
@@ -153,13 +153,13 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 
 | Phase | Tasks complete | Status |
 |---|---|---|
-| P0 | 0 / 2 | Not started. Blocks only the web tracks. P1 to P4 can start now. |
+| P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
 | P1 | 0 / 6 | Not started. Nothing blocks it. Start here. |
 | P2 | 0 / 9 | Not started. Blocked on P1. |
 | P3 | 0 / 5 | Not started. Blocked on T1.1 and T1.2. Bot @orma_tele_bot is registered. |
 | P4 | 0 / 3 | Not started. Blocked on T1.1, T1.2, T1.3. |
-| P5 | 0 / 4 | Not started. Blocked on P0 and T1.2. |
-| P6 | 0 / 6 | Not started. Blocked on T5.3, and through it on P0. |
+| P5 | 0 / 4 | Not started. Blocked on T1.2. |
+| P6 | 0 / 6 | Not started. Blocked on T5.3. |
 | P7 | 0 / 4 | Not started. Blocked on T1.1, and on T3.4 for delivery. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
 

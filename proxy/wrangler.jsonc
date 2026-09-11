@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orma-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-10",
+  "account_id": "605bb8b43bddbbc2cbe22a191131c7e1",
+  "routes": [{ "pattern": "orma-api.nryn.dev", "custom_domain": true }],
+  "observability": { "enabled": true },
+  "vars": {
+    "SUPABASE_HOST": "pyuubklpkhjngiqqwypf.supabase.co"
+  }
+}
