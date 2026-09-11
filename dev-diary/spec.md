@@ -132,8 +132,8 @@ call_runs (
   idempotency_key   text not null unique,
   calle_goal_run_id text,
   calle_call_id     text,
-  calle_run_spec    jsonb,                           -- id and version pinned
-  calle_error       jsonb,                           -- code and message, verbatim
+  calle_confidence  jsonb,                           -- score and label, as returned
+  calle_failure     jsonb,                           -- failure_code and message, verbatim
   briefing          jsonb,                           -- exactly what was sent
   dry_run           boolean not null default false,
   billable          boolean not null default false,
