@@ -135,11 +135,13 @@ Submissions close 14 September at 23:45 SGT, which is 21:15 IST.
 requires:   T8.2
 fixture-ok: yes
 size:       S · light
-owns:       (operational)
+owns:       dev-diary/feedback.md
 status:     not-started
 ```
 A separate prize with its own deadline of 18 September, four days after submissions close, and its own judging. One entry per entrant, rewarding actionable comments such as bug reports and interface suggestions.
 
-The day log from T8.2 is the raw material. Anything the API could not tell Orma, anything the console made awkward, and every place the docs and the endpoints disagreed belongs here.
+The raw material already exists. [`dev-diary/feedback.md`](feedback.md) is written as the work happens, so this task is editing rather than remembering. Add whatever the day log from T8.2 turned up, then submit.
 
-**Done when:** the survey is submitted with specific, reproducible observations rather than general praise.
+Lead with the unsigned webhook and the missing call disposition. Those are the two that changed what Orma could be, and a reviewer can act on both.
+
+**Done when:** the survey is submitted with specific, reproducible observations rather than general praise, and every issue in `feedback.md` is either included or deliberately dropped.

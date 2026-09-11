@@ -108,6 +108,23 @@ record the response shape alongside the verdict.
 
 Every number that reaches a phone is masked in samples, logs and documents.
 
+## Record CALL-E friction as you hit it
+
+Anything CALL-E does that surprises you goes into
+[`dev-diary/feedback.md`](dev-diary/feedback.md) in the same session you hit it. A wrong path in
+the docs, a field that is not there, a response shape nobody documented, a behaviour that had to
+be discovered by spending a call.
+
+Write it while you have the request and the response in front of you. Reconstructing an issue two
+days later loses the evidence and usually the point.
+
+Each entry says what happened, the evidence, what it cost, and what would fix it. Mask every
+phone number and never paste a key. Record what worked too, when it is specific.
+
+This is not bookkeeping. It is how the next agent avoids rediscovering the same thing, and it is
+the raw material for a separate prize with its own deadline of 18 September, judged on actionable
+bug reports and interface suggestions.
+
 ## Task shape and dispatch
 
 Tasks live in `dev-diary/PHASE-*.md`. Each carries this block.

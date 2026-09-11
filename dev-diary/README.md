@@ -5,6 +5,7 @@ This document outlines the work breakdown for **Orma**.
 Reference specifications:
 - [`product.md`](product.md): What Orma is, why it is a phone call, and the rules that cannot bend.
 - [`spec.md`](spec.md): Stack, schema, state machines, and everything that gets built.
+- [`feedback.md`](feedback.md): Every piece of CALL-E friction, written as it is hit. Feeds T8.7.
 
 Where a phase document and specification conflict, the specification wins. Record discrepancies in the handoff log.
 
@@ -277,3 +278,20 @@ Three copies now exist: the local file, GitHub, and the Supabase function
 secrets the deployed functions actually read. **Change one and you change all
 three.** A secret value cannot be read back out of GitHub, so listing shows names
 only.
+
+### 2026-09-11 · CALL-E feedback opened
+
+[`feedback.md`](feedback.md) now collects every piece of friction with CALL-E, and
+the agent protocol makes writing it an obligation in the session it is hit rather
+than a task at the end.
+
+Seeded with nine entries from today. Two are worth leading the survey with:
+webhooks carry no signature at all, only a de-duplication id, and no call
+disposition is reported, which is what forced missed-call handling out of the
+product. Four smaller ones cover Goals being uncreatable over the API, the calls
+route having no locale control, the reference index printing navigation labels as
+paths, and an under-specified result-schema boundary that cost a real call to
+settle.
+
+The last entry records what worked, because the survey rewards specifics in both
+directions. The extraction grading its own call unprompted is the unusual one.
