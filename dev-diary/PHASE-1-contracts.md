@@ -54,7 +54,7 @@ requires:   T1.1
 fixture-ok: yes
 size:       XS · mid
 owns:       supabase/migrations/20260911122907_*.sql, supabase/migrations/20260911130516_*.sql
-status:     claimed:gpt-5.6-sol
+status:     done
 ```
 The linked project already has the two scheduler-extension migrations in its
 history. Their local files were lost before the repository was created.

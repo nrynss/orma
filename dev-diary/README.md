@@ -11,8 +11,8 @@ Where a phase document and specification conflict, the specification wins. Recor
 
 Each document provides complete context for an engineer starting cold.
 
-**Current status:** P0 is complete. T1.1 through T1.5 are complete. T1.1a
-migration-history repair and T1.6 are the remaining P1 tasks.
+**Current status:** P0 is complete. T1.1 through T1.5 and T1.1a are complete.
+T1.6 is the remaining P1 task.
 
 P0 is complete. What exists is listed in [PHASE-0-ground.md](PHASE-0-ground.md): the repository, the Supabase project with its extensions and secrets, the deployed app and front door, the bot, verified email, and a proven CALL-E path. Start at P1.
 
@@ -156,7 +156,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | Phase | Tasks complete | Status |
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
-| P1 | 5 / 7 | T1.1a migration history and T1.6 local seed remain. |
+| P1 | 6 / 7 | T1.6 local seed and reset remains. |
 | P2 | 0 / 9 | Not started. Blocked on P1. |
 | P3 | 0 / 5 | Not started. Blocked on T1.1 and T1.2. Bot @orma_tele_bot is registered. |
 | P4 | 0 / 3 | Not started. Blocked on T1.1, T1.2, T1.3. |
@@ -330,6 +330,13 @@ overwriting either consumer when generation fails. This unblocks P4.
 **T1.5 Result validation.** The calls result parser accepts only a complete,
 valid object. It records a reason and returns null for every invalid result.
 Retirements without evidence offsets are rejected. This unblocks T2.7.
+
+### 2026-09-11 · T1.1a complete
+
+**T1.1a Scheduler extension migration history.** The local history now carries
+the exact remote versions for `pg_cron` and `pg_net`. Independent catalogue and
+migration-list checks matched their versions and schemas. The approved RLS
+migration then applied without repairing live history.
 
 ### 2026-09-11 · Spam flagging accepted as a risk
 
