@@ -130,7 +130,6 @@ call_runs (
   mood              text,                            -- from the result
   poll_after        timestamptz,
   idempotency_key   text not null unique,
-  calle_goal_run_id text,
   calle_call_id     text,
   calle_confidence  jsonb,                           -- score and label, as returned
   calle_failure     jsonb,                           -- failure_code and message, verbatim
