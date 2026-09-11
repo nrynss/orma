@@ -1,0 +1,25 @@
+# Secrets. Never commit.
+.env
+.env.local
+.env.*.local
+.secrets-tmp/
+*-credentials*.json
+*service-account*.json
+
+# Dependencies and build output
+node_modules/
+web/.svelte-kit/
+web/build/
+web/.wrangler/
+dist/
+
+# Supabase local state
+supabase/.temp/
+supabase/.branches/
+
+# OS and editor
+.DS_Store
+*.swp
+
+# Wrangler local cache
+.wrangler/

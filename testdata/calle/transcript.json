@@ -1,0 +1,137 @@
+[
+  {
+    "offset_seconds": 0,
+    "speaker": "bot",
+    "text": "You\u2019ve mentioned the dentist three times."
+  },
+  {
+    "offset_seconds": 2,
+    "speaker": "bot",
+    "text": "It\u2019s been 34 days."
+  },
+  {
+    "offset_seconds": 12,
+    "speaker": "bot",
+    "text": "I'm here."
+  },
+  {
+    "offset_seconds": 17,
+    "speaker": "user",
+    "text": "Yeah, why don't?"
+  },
+  {
+    "offset_seconds": 18,
+    "speaker": "bot",
+    "text": "Sorry,"
+  },
+  {
+    "offset_seconds": 18,
+    "speaker": "bot",
+    "text": "did that come through clearly? I\u2019m Orma, calling for your quick daily check-in."
+  },
+  {
+    "offset_seconds": 27,
+    "speaker": "user",
+    "text": "Yeah, so I didn't understand what you said."
+  },
+  {
+    "offset_seconds": 28,
+    "speaker": "bot",
+    "text": "Oh,"
+  },
+  {
+    "offset_seconds": 29,
+    "speaker": "bot",
+    "text": "just a quick update from Orma: you\u2019ve mentioned the dentist three times,"
+  },
+  {
+    "offset_seconds": 33,
+    "speaker": "bot",
+    "text": "and it\u2019s been 34 days."
+  },
+  {
+    "offset_seconds": 41,
+    "speaker": "user",
+    "text": "Yeah, I'm not going to test."
+  },
+  {
+    "offset_seconds": 41,
+    "speaker": "bot",
+    "text": "Thanks, got it."
+  },
+  {
+    "offset_seconds": 42,
+    "speaker": "bot",
+    "text": "What\u2019s new today that needs capturing?"
+  },
+  {
+    "offset_seconds": 44,
+    "speaker": "user",
+    "text": "Continental."
+  },
+  {
+    "offset_seconds": 49,
+    "speaker": "bot",
+    "text": "Hmm,"
+  },
+  {
+    "offset_seconds": 50,
+    "speaker": "bot",
+    "text": "\u201cContinental\u201d \u2014 do you mean that as a new item to track,"
+  },
+  {
+    "offset_seconds": 53,
+    "speaker": "user",
+    "text": "But I want to call on."
+  },
+  {
+    "offset_seconds": 54,
+    "speaker": "bot",
+    "text": "Sure,"
+  },
+  {
+    "offset_seconds": 55,
+    "speaker": "bot",
+    "text": "I can capture that."
+  },
+  {
+    "offset_seconds": 62,
+    "speaker": "user",
+    "text": "Anything else?"
+  },
+  {
+    "offset_seconds": 62,
+    "speaker": "bot",
+    "text": "On the open list"
+  },
+  {
+    "offset_seconds": 69,
+    "speaker": "user",
+    "text": "I don't have anything else."
+  },
+  {
+    "offset_seconds": 70,
+    "speaker": "bot",
+    "text": "Quick"
+  },
+  {
+    "offset_seconds": 76,
+    "speaker": "bot",
+    "text": "Okay."
+  },
+  {
+    "offset_seconds": 79,
+    "speaker": "user",
+    "text": "Bye."
+  },
+  {
+    "offset_seconds": 80,
+    "speaker": "bot",
+    "text": "Confirmed for tomorrow at 8 AM,"
+  },
+  {
+    "offset_seconds": 82,
+    "speaker": "bot",
+    "text": "bye."
+  }
+]
