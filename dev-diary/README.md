@@ -11,8 +11,8 @@ Where a phase document and specification conflict, the specification wins. Recor
 
 Each document provides complete context for an engineer starting cold.
 
-**Current status:** P0 is complete. T1.1 through T1.5 are complete. T1.6 is the
-last P1 task.
+**Current status:** P0 is complete. T1.1 through T1.5 are complete. T1.1a
+migration-history repair and T1.6 are the remaining P1 tasks.
 
 P0 is complete. What exists is listed in [PHASE-0-ground.md](PHASE-0-ground.md): the repository, the Supabase project with its extensions and secrets, the deployed app and front door, the bot, verified email, and a proven CALL-E path. Start at P1.
 
@@ -156,7 +156,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | Phase | Tasks complete | Status |
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
-| P1 | 5 / 6 | T1.6 local seed and reset remains. |
+| P1 | 5 / 7 | T1.1a migration history and T1.6 local seed remain. |
 | P2 | 0 / 9 | Not started. Blocked on P1. |
 | P3 | 0 / 5 | Not started. Blocked on T1.1 and T1.2. Bot @orma_tele_bot is registered. |
 | P4 | 0 / 3 | Not started. Blocked on T1.1, T1.2, T1.3. |
@@ -330,3 +330,31 @@ overwriting either consumer when generation fails. This unblocks P4.
 **T1.5 Result validation.** The calls result parser accepts only a complete,
 valid object. It records a reason and returns null for every invalid result.
 Retirements without evidence offsets are rejected. This unblocks T2.7.
+
+### 2026-09-11 · Spam flagging accepted as a risk
+
+The originating line rotates. Every CALL-E call comes from a different number,
+and they arrive flagged as likely spam on Android. Confirmed by observation, not
+inferred.
+
+That removes the save-the-contact mitigation rather than weakening it, so it has
+been cut from T5.4 rather than softened. Onboarding now sets the expectation
+instead: the call comes from a number you will not recognise, at the time you
+chose, and your phone may warn you. Answer it anyway. A user who was told is far
+more likely to answer than one who was surprised, and that is the only lever
+left.
+
+**Narayan accepted this as a risk.** It is not solved and will not be before
+submission.
+
+Two consequences. T8.5 cannot pre-save a contact for the demo, so the video
+either starts after the call is answered or shows the warning and says the line.
+Staging a saved contact is out, because it cannot happen for a real user. And
+T8.2 collects the distinct numbers across the week, since a list of them is
+better evidence for `feedback.md` issue 9 than our description of the problem.
+
+Issue 9 also gained a hypothesis worth more than the complaint: rotation may be
+causing the classification rather than failing to prevent it. A number that
+places one call and is never seen again, from a pool, to a stranger, is close to
+the signature these classifiers are built to catch, and reputation cannot accrue
+to a line that is discarded after one use.

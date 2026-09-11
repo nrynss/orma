@@ -167,21 +167,33 @@ symmetry.
 premise rather than the implementation.
 
 Numbers can be purchased in the United States and Brazil. Calls to India go out
-from an allocated local line the customer does not control and cannot be sure is
-stable between calls.
+from an allocated local line the customer does not control, and it is **a
+different number on every call**. Confirmed by observation across the calls
+placed on this account.
 
-**Why that matters more than it looks.** A handset showing "suspected spam
-caller" has ended the call before the callee decides anything. The only clean
-mitigation is the callee saving the number as a contact, and that works precisely
-because the callee is your own subscriber rather than a stranger. But saving a
-number requires a number that is yours, known in advance, and the same one
-tomorrow. An uncontrolled, possibly rotating originating line makes the one
-available mitigation impossible to offer.
+**Why that matters more than it looks.** A handset showing a spam warning has
+ended the call before the callee decides anything. The only clean mitigation is
+the callee saving the caller as a contact, and that works precisely because the
+callee is your own subscriber rather than a stranger. Saving requires a number
+that is the same one tomorrow. Rotation does not weaken that mitigation, it
+removes it.
+
+**A hypothesis worth testing on your side.** Rotation may be causing the
+classification rather than merely failing to prevent it. A number that places one
+call and is never seen again, from a pool, to a recipient with no prior
+relationship, is close to the textbook signature of unwanted traffic. Reputation
+cannot accrue to a line that is discarded after one use. If that is what is
+happening, then every customer's calls are being scored against a pool that can
+only get worse as the platform grows, and no customer can do anything about it
+from the outside. We cannot test this ourselves, because the API never reports
+which number was used.
 
 **Cost to us.** Orma is a ritual. It rings at a time you chose and the
-anticipation is the mechanism. Onboarding wants a step that says "save this
-number, here is why", and that step cannot be written honestly today, because we
-cannot tell the user which number to save.
+anticipation is the mechanism. We had planned an onboarding step saying "save
+this number, here is why". It has been cut, because there is no number to save.
+The product now tells users the call arrives from a different number every day
+and may be flagged, and asks them to answer anyway. We are accepting the risk
+because there is nothing else on offer.
 
 **Evidence.** The call placed on 11 September arrived on a Pixel showing a
 likely-spam warning, and the account owner reports that every CALL-E call has
@@ -195,15 +207,14 @@ originating number to save.
 
 **Suggested fix, in order of how much it would help.**
 
-1. Sell numbers in India, so a customer can own and warm their own line.
-2. Guarantee a stable originating line per subscriber, and expose it on the API
-   before the call, so an application can tell its user exactly what to save.
-3. At minimum, report the number actually used on the call record. Today an
-   integrator cannot even measure the problem, let alone route around it.
-4. Pursue registration with the carrier and caller-ID reputation services for the
-   lines already in use. The lines appear to be classified as spam already, which
-   is a reputation problem that gets worse as volume grows, and it is not
-   something any individual customer can fix from outside.
+1. Stop rotating. A stable line per subscriber, or per customer, is the single
+   change that would let reputation accrue at all and let a callee save the
+   caller. Everything else here is a consolation prize.
+2. Sell numbers in India, so a customer can own and warm their own line.
+3. Report the number actually used on the call record. Today an integrator cannot
+   even measure the problem, let alone route around it, and could not tell you
+   whether a fix had worked.
+4. Pursue carrier and caller-ID reputation registration for the lines in use.
 
 **Why this one is worth CALL-E's attention beyond us.** Every project built on
 outbound calls inherits this. A call that announces itself as probable spam is

@@ -98,8 +98,12 @@ Consent is a row and not a checkbox. Store the exact wording shown, the moment, 
 
 Number confirmation is honest about what it is. Orma has no SMS channel, so the number is self-declared and the first call confirms it. Say that on the screen rather than implying verification that did not happen.
 
-Close with the step that protects the ritual: ask the user to save the Orma number as a contact, and explain why. A handset that says "suspected spam" has ended the call before it was answered.
+Close by setting the expectation that protects the ritual, which is not the step originally planned here.
 
-This step cannot be written honestly yet. Numbers are purchasable in the United States and Brazil only, and India-bound calls go out from an allocated line we do not control, so there is no number to tell the user to save. Recorded as issue 9 in [`feedback.md`](feedback.md). Until it is answered, say what is true: the call comes from an unfamiliar number, it may be flagged, and saving it after the first call is what stops that. Do not invent a number.
+Orma calls arrive from a different number every time, and they arrive flagged as likely spam. Saving the caller as a contact would fix it, and rotation makes that impossible. Recorded as issue 9 in [`feedback.md`](feedback.md), and accepted as a risk rather than solved.
+
+So say it plainly, once, during onboarding. The call comes from a number you will not recognise, at the time you chose, and your phone may warn you about it. Answer it anyway. Setting that expectation before the first call is the only mitigation available, and a user who was told is far more likely to answer than one who was surprised.
+
+Do not invent a number to save. Do not imply the warning can be prevented.
 
 **Done when:** a new account reaches a dispatchable profile in one pass, a malformed number is rejected client and server side, the consent row records the shown wording verbatim, and skipping consent leaves the profile undispatchable.

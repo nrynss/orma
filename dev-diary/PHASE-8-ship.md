@@ -46,7 +46,7 @@ This is what makes "you've mentioned this three times" true. It is also the only
 
 Keep a log of each day: the number the handset showed and whether it was flagged, whether the two-beat landing worked, whether it felt like a person thinking or a list being read, and what the extraction got wrong.
 
-Record the caller id by hand every day. The API does not report the originating number, so a handset photograph or a note is the only way to learn whether the line is stable. If it is stable, saving it as a contact becomes a real onboarding step and `feedback.md` issue 9 gets a much sharper second half. Feed that back into the task template in [docs/calle-call.md](../docs/calle-call.md).
+Record the caller id by hand every day. The API does not report the originating number, and the line rotates, so a note is the only way to build any picture of the pool at all. Collect them for `feedback.md` issue 9: a list of distinct numbers across a week is evidence that rotation is real and measurable, which is worth more to a reviewer than our description of it. Feed that back into the task template in [docs/calle-call.md](../docs/calle-call.md).
 
 The 11 September call already named four failures to watch for: leading before landing, long silences, skipping the walk and the exit, and capturing something the caller never confirmed. The last two matter most, because the demo beat lives in the exit.
 
@@ -112,7 +112,11 @@ Lead with the call arriving already knowing, not with scheduling. The repository
 
 Show the timeline from T6.6 once, briefly, to prove the machinery is real. Caption the seeded row where it appears.
 
-**Decide before shooting how the incoming call appears.** CALL-E calls arrive flagged as likely spam on Android, every time so far. A demo that opens on a handset saying "Likely spam" undercuts a product whose mechanism is anticipation. Save the caller as a contact on the demo handset first, so it rings as Orma. That is not a trick, it is the product's own recommendation to every user, and it is worth one honest line in the video or the README rather than a silent edit.
+**Decide before shooting how the incoming call appears.** CALL-E calls arrive flagged as likely spam, from a different number each time, so the contact cannot be pre-saved. There is no version of this where the handset says Orma.
+
+Two honest options. Start the shot after the call is answered, so the incoming screen never appears and nothing is implied either way. Or show it and say the line, which costs four seconds and buys credibility: the call comes from a number you will not recognise, and that is the one thing about this we have not solved yet.
+
+Do not stage a saved contact. It cannot happen for a real user and a judge who tries the product would find out.
 
 **Done when:** the cut is under three minutes, the central exchange is one unbroken take of real audio, and the seed disclosure is legible on screen.
 

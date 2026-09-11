@@ -48,6 +48,27 @@ shows the tick predicate using its index rather than a sequential scan.
 
 ---
 
+### T1.1a: Scheduler extension migration history
+```yaml
+requires:   T1.1
+fixture-ok: yes
+size:       XS · mid
+owns:       supabase/migrations/20260911122907_*.sql, supabase/migrations/20260911130516_*.sql
+status:     claimed:gpt-5.6-sol
+```
+The linked project already has the two scheduler-extension migrations in its
+history. Their local files were lost before the repository was created.
+
+Reconstruct the idempotent extension declarations from the live extension
+catalogue and commit them under the exact remote versions. Do not repair remote
+history. A repair would claim the extensions never ran while leaving them active.
+
+**Done when:** `supabase migration list --linked` reports matching local and
+remote history, and `supabase db push --linked` can apply the approved RLS
+migration without a migration-history repair.
+
+---
+
 ### T1.2: Row-level security policies ★
 ```yaml
 requires:   T1.1
@@ -143,7 +164,7 @@ requires:   T1.1, T1.2
 fixture-ok: yes
 size:       S · light
 owns:       supabase/seed.sql
-status:     not-started
+status:     claimed:gpt-5.6-sol
 ```
 A local database that resets into a usable state. One profile, one slot, four items of varying age, one completed call run with a transcript and mentions.
 
