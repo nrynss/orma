@@ -23,7 +23,7 @@ Both tasks are closed. Nothing in P0 blocks anything now.
 | Repository | `github.com/nrynss/orma`, private, default branch `main` |
 | Supabase project | `orma`, ref `pyuubklpkhjngiqqwypf`, `ap-south-1`, Postgres 17.6 |
 | Extensions | `pg_cron 1.6.4`, `pg_net 0.20.4` |
-| Function secrets | Sixteen, no blank values in `.env` |
+| Secrets | `.env` local, GitHub variables and secrets for cloud agents, sixteen Supabase function secrets |
 | Web app | `https://orma.nryn.dev`, SvelteKit on the Cloudflare adapter |
 | Front door | `https://orma-api.nryn.dev`, a Worker proxying the whole Supabase API |
 | Telegram | `@orma_tele_bot`, registered, no webhook yet |
@@ -31,6 +31,9 @@ Both tasks are closed. Nothing in P0 blocks anything now.
 | CALL-E | Proven by a real call, masked payloads in `testdata/calle/` |
 
 Deploys are `npm run deploy` in `web/` and in `proxy/`.
+
+No machine needs the local `.env`. `./scripts/bootstrap-env.sh` rebuilds it from
+the environment, and GitHub holds every value as a repository variable or secret.
 
 ---
 

@@ -64,6 +64,8 @@ Judging opens 30 September and closes 13 October, sixteen days after submissions
 
 A daily GitHub Actions workflow does two things: a request against PostgREST to register measured activity, and a `pg_dump` into a private repository, which also covers backups not being downloadable on the free plan.
 
+Copy the `env:` block from `.github/workflows/_env-example.yml` rather than writing one. It is the canonical mapping of which names are `vars.` and which are `secrets.`. Reach the database through `SUPABASE_DB_URL` and PostgREST through `ORMA_API_URL`, never the project host.
+
 **Done when:** the workflow has run daily for a week, a restore from one of its dumps has been demonstrated, and the project has not paused.
 
 ---

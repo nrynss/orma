@@ -260,3 +260,20 @@ told an agent to post to the goal-run endpoint with scalar variables, and the
 schema still carried `calle_goal_run_id` and `calle_run_spec`, which exist only
 on that route. All corrected, and the dangling-reference and task-count checks
 pass.
+
+### 2026-09-11 · Secrets reachable from anywhere
+
+Every value in `.env` now also lives on the repository, so a cloud agent, a
+Codespace or a workflow can run without the local file. Configuration is in
+GitHub **variables** and credentials are in **secrets**, split so a workflow can
+print what it is doing without printing a key.
+
+`scripts/bootstrap-env.sh` rebuilds `.env` from the environment and refuses,
+naming the gaps, if anything is missing. Verified by a round trip against the
+real file. `.github/workflows/_env-example.yml` is the canonical `env:` block and
+is not a running workflow.
+
+Three copies now exist: the local file, GitHub, and the Supabase function
+secrets the deployed functions actually read. **Change one and you change all
+three.** A secret value cannot be read back out of GitHub, so listing shows names
+only.

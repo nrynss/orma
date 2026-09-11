@@ -23,7 +23,7 @@ requires:   []
 fixture-ok: yes
 size:       L · frontier
 owns:       supabase/migrations/
-status:     not-started
+status:     claimed:gpt-5.6-sol
 ```
 Write every table in `spec.md` §2 as ordered migrations: `profiles`, `consents`, `slots`, `items`, `item_mentions`, `commitments`, `call_runs`, `call_events`, `transcripts`, `results`, `pattern_reports`, `deliveries`, `webhook_events`.
 
@@ -83,7 +83,7 @@ requires:   []
 fixture-ok: no
 size:       S · mid
 owns:       testdata/calle/
-status:     not-started
+status:     claimed:gpt-5.6-sol
 ```
 This task is what lets four tracks develop without spending money.
 

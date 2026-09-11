@@ -1,0 +1,46 @@
+# Not a running workflow. It is the copy-paste block every Orma workflow needs,
+# and the canonical list of which names are variables and which are secrets.
+#
+# Never echo a secret. GitHub masks them in logs, but a base64 or a JSON dump
+# defeats that.
+name: env example
+on:
+  workflow_dispatch:
+
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    env:
+      # Configuration. Safe to print.
+      ORMA_ENV: ${{ vars.ORMA_ENV }}
+      ORMA_DRY_RUN: ${{ vars.ORMA_DRY_RUN }}
+      ORMA_PUBLIC_URL: ${{ vars.ORMA_PUBLIC_URL }}
+      ORMA_API_URL: ${{ vars.ORMA_API_URL }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      CALLE_API_BASE: ${{ vars.CALLE_API_BASE }}
+      GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+      GOOGLE_VERTEX_PROJECT: ${{ vars.GOOGLE_VERTEX_PROJECT }}
+      GOOGLE_VERTEX_LOCATION: ${{ vars.GOOGLE_VERTEX_LOCATION }}
+      RESEND_FROM: ${{ vars.RESEND_FROM }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
+      # Credentials and personal data. Never printed.
+      ORMA_OWNER_PHONE: ${{ secrets.ORMA_OWNER_PHONE }}
+      ORMA_WEBHOOK_SECRET: ${{ secrets.ORMA_WEBHOOK_SECRET }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      CALLE_API_KEY: ${{ secrets.CALLE_API_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+      GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      CF_DNS_API_TOKEN: ${{ secrets.CF_DNS_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: ./scripts/bootstrap-env.sh
+      - run: echo "env rebuilt, $(grep -c = .env) keys"

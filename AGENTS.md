@@ -189,8 +189,36 @@ Keep secrets out of the repository and out of the web bundle. Never export one i
 shell, because that writes it to `~/.zsh_history`.
 
 Required secrets carry no default. A missing one stops startup with an error naming the variable.
-The anon key is the only key that reaches the browser. The service role key appearing anywhere
+The publishable key is the only key that reaches the browser. The secret key appearing anywhere
 under `web/` fails the build.
+
+### Three places they live, and one way to get them
+
+`.env` is the local file. It is never committed and never will be. If you are working on a
+machine that has one, use it.
+
+**GitHub holds the same values**, so an agent, a Codespace or a workflow that never sees the
+local file can still run. Configuration is in repository **variables**, credentials and personal
+data are in repository **secrets**. That split exists so a workflow can print its configuration
+without printing a key.
+
+**Supabase function secrets** are the third copy, and the only one the deployed Edge Functions
+read. `supabase secrets set` puts them there.
+
+To rebuild the file anywhere, export the names and run:
+
+```bash
+./scripts/bootstrap-env.sh
+```
+
+`.github/workflows/_env-example.yml` is not a running workflow. It is the copy-paste `env:`
+block every Orma workflow needs, and the canonical list of which names are variables and which
+are secrets.
+
+**A secret value cannot be read back out of GitHub.** Listing shows names only, by design. If
+you change one, change it in all three places, and say so in the handoff log.
+
+**Never echo a secret.** GitHub masks them in logs, but a base64 or a JSON dump defeats that.
 
 ## Documentation style
 

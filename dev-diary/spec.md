@@ -521,8 +521,22 @@ rebuilt on every build, and without that file the deploy refuses, because
 `nryn.dev` and `*.nryn.dev` and nothing deeper, so a two-level name fails its
 TLS handshake with no certificate at all.
 
-**Secrets**, all as Supabase function secrets, none in the repository. Names must
-not start with `SUPABASE_`, which is reserved.
+**Secrets** live in three places and are committed to none of them.
+
+| Copy | Holds | Read by |
+|---|---|---|
+| `.env` | everything | local tooling, `set -a; . ./.env` |
+| GitHub variables and secrets | everything, split by whether printing it is safe | cloud agents, Codespaces, workflows |
+| Supabase function secrets | what functions need | the deployed Edge Functions |
+
+`scripts/bootstrap-env.sh` rebuilds `.env` from the environment, so an agent that
+never sees the local file can still run. `.github/workflows/_env-example.yml`
+carries the `env:` block that maps every name to `vars.` or `secrets.`.
+
+A secret value cannot be read back out of GitHub; listing shows names only. Change
+one and you change it in all three places.
+
+Names must not start with `SUPABASE_`, which is reserved by the platform.
 
 ```
 # Runtime
