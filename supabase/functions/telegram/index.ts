@@ -103,8 +103,8 @@ export function createTelegramHandler(deps: TelegramDeps): (req: Request) => Pro
 
     try {
       return await handleUpdate(req);
-    } catch (error) {
-      console.error(error);
+    } catch {
+      console.error("telegram update failed");
       return new Response(null, { status: 500 });
     }
   };
