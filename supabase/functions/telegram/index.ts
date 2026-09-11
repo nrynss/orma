@@ -1,16 +1,18 @@
 /**
  * T3.1 Telegram webhook. Secret sits in the path, then grammY may parse.
  *
+ * Runtime env, same names as GitHub secrets and `scripts/bootstrap-env.sh`:
+ * `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `ORMA_API_URL`.
+ * A missing name throws before any update is read.
+ *
  * Webhook URL is `${ORMA_API_URL}/functions/v1/telegram/${TELEGRAM_WEBHOOK_SECRET}`.
- * GET with that path registers the webhook at Telegram. POST handles updates.
+ * Boot and GET on that path call Telegram `setWebhook`. POST handles updates.
  *
- * Pin, forged update (expect 401 and an empty body, no Telegram call):
- * `deno test --allow-net=deno.land,jsr.io,esm.sh,registry.npmjs.org supabase/functions/telegram/index.ts`
+ * Pin forged updates and /start with:
+ * `deno test --allow-net --allow-env --allow-read supabase/functions/telegram/index.ts`
  *
- * Pin, /start (same command): the mocked Bot API receives START_LINK_PROMPT.
- *
- * Deploy still needs JWT verification off for this function. T5.1 owns
- * `supabase/config.toml`, so that flag is a contract change, not this file.
+ * Live forged POST against the front door should be 401 with an empty body.
+ * JWT verification must be off at deploy time. T5.1 owns `config.toml`.
  */
 import { Bot, webhookCallback } from "npm:grammy@1.38.3";
 
@@ -108,7 +110,7 @@ export function createTelegramHandler(deps: TelegramDeps): (req: Request) => Pro
   };
 }
 
-async function registerWebhook(deps: TelegramDeps): Promise<Response> {
+export async function registerWebhook(deps: TelegramDeps): Promise<Response> {
   const webhookUrl = telegramWebhookUrl(deps.apiUrl, deps.webhookSecret);
   const telegramUrl = `https://api.telegram.org/bot${deps.botToken}/setWebhook`;
   const response = await deps.fetch(telegramUrl, {
@@ -132,7 +134,11 @@ async function registerWebhook(deps: TelegramDeps): Promise<Response> {
 }
 
 if (import.meta.main) {
-  Deno.serve(createTelegramHandler(depsFromEnv()));
+  const deps = depsFromEnv();
+  registerWebhook(deps).catch(() => {
+    console.error("telegram setWebhook failed");
+  });
+  Deno.serve(createTelegramHandler(deps));
 }
 
 function startUpdate(): string {
@@ -151,13 +157,14 @@ function startUpdate(): string {
 
 const testFn = (Deno as { test?: (name: string, fn: () => Promise<void>) => void }).test;
 if (typeof testFn === "function" && !import.meta.main) {
-  const secret = "path-secret-value";
+  const secret = crypto.randomUUID();
+  const botToken = `1:${crypto.randomUUID()}`;
   const apiUrl = "https://orma-api.nryn.dev";
 
   testFn("forged update without the path secret is discarded", async () => {
     const calls: string[] = [];
     const handler = createTelegramHandler({
-      botToken: "123:test",
+      botToken,
       webhookSecret: secret,
       apiUrl,
       fetch: async (input) => {
@@ -179,7 +186,7 @@ if (typeof testFn === "function" && !import.meta.main) {
 
   testFn("forged update with no path secret is discarded", async () => {
     const handler = createTelegramHandler({
-      botToken: "123:test",
+      botToken,
       webhookSecret: secret,
       apiUrl,
       fetch: async () => {
@@ -197,10 +204,31 @@ if (typeof testFn === "function" && !import.meta.main) {
     if ((await response.text()) !== "") throw new Error("expected an empty body");
   });
 
+  testFn("GET with the path secret registers the ORMA_API_URL webhook", async () => {
+    let capturedUrl: string | undefined;
+    const handler = createTelegramHandler({
+      botToken,
+      webhookSecret: secret,
+      apiUrl,
+      fetch: async (_input, init) => {
+        const parsed = JSON.parse(String(init?.body ?? "{}")) as { url?: string };
+        capturedUrl = parsed.url;
+        return new Response(JSON.stringify({ ok: true, result: true }), {
+          headers: { "content-type": "application/json" },
+        });
+      },
+    });
+    const response = await handler(new Request(`${apiUrl}/functions/v1/telegram/${secret}`));
+    if (response.status !== 200) throw new Error(`expected 200, got ${response.status}`);
+    const expected = `${apiUrl}/functions/v1/telegram/${secret}`;
+    if (capturedUrl !== expected) throw new Error("setWebhook url must use ORMA_API_URL");
+    if (capturedUrl.includes("supabase.co")) throw new Error("setWebhook must not use the project host");
+  });
+
   testFn("/start replies with the linking prompt", async () => {
     const sendBodies: string[] = [];
     const handler = createTelegramHandler({
-      botToken: "123:test",
+      botToken,
       webhookSecret: secret,
       apiUrl,
       fetch: async (_input, init) => {
