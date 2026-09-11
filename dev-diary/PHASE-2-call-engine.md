@@ -134,7 +134,7 @@ This task needs one live call to prove the timing against the real service.
 requires:   T1.4, T2.4
 fixture-ok: yes
 size:       M · frontier
-owns:       supabase/functions/calle-webhook/index.ts
+owns:       supabase/functions/calle-webhook/index.ts, testdata/calle/webhook-*.json
 status:     not-started
 ```
 CALL-E webhooks carry no signature. The only identifier is a `CALL-E-Event-Id` header, which is a de-duplication key and not authentication. The body is therefore a notification and never a fact.
@@ -148,7 +148,14 @@ Four steps, in order:
 
 No item, call or billing state is ever mutated from body content. Event types are `call.completed`, `call.failed` and `call.result_validation_failed`.
 
-**Done when:** a replayed fixture event is a no-op, a request without the secret is rejected, a body hand-edited to retire a different user's item changes nothing, and the three event fixtures each drive the correct re-fetch.
+Capture the three event types into `testdata/calle/webhook-*.json` as they
+arrive, with numbers masked. They could not be taken in T1.4, because capturing a
+webhook needs an endpoint to receive it, and this task is that endpoint.
+
+**Done when:** a replayed event is a no-op, a request without the secret is
+rejected, a body hand-edited to retire a different user's item changes nothing,
+the three event types are committed as fixtures, and each drives the correct
+re-fetch.
 
 ---
 

@@ -37,7 +37,14 @@ Index `call_runs (state, scheduled_for)` for the tick, `item_mentions (item_id, 
 
 Add a trigger maintaining `profiles.updated_at`.
 
-**Done when:** `supabase db reset` applies the full stack clean, the unique and check constraints reject bad rows in a test, and the tick query plan uses the index rather than a sequential scan.
+The acceptance test does not need a local runtime. The migration can be applied
+to the project and measured there, through the management API, which works on
+this network when the project host does not. Either path is a real measurement.
+Quoting the migration file is not.
+
+**Done when:** the migration applies clean from empty, a test proves the unique
+`idempotency_key` and the `phone_e164` check each reject a bad row, and `EXPLAIN`
+shows the tick predicate using its index rather than a sequential scan.
 
 ---
 
@@ -82,7 +89,7 @@ Generate TypeScript types from the live schema and commit them to both consumers
 requires:   []
 fixture-ok: no
 size:       S · mid
-owns:       testdata/calle/
+owns:       testdata/calle/, supabase/functions/_shared/fixtures.ts, docs/calle-call.md
 status:     claimed:gpt-5.6-sol
 ```
 This task is what lets four tracks develop without spending money.
@@ -90,20 +97,25 @@ This task is what lets four tracks develop without spending money.
 Three files already exist from the 11 September call, with the number masked:
 `call-completed.json`, `call-completed-events.json` and `transcript.json`.
 
-Two shapes are still missing and are produced against a number that does not
-answer, so neither costs a conversation:
+One shape is still missing: `call-failed.json`, a call that ended `failed`, with
+`failure_code` and `failure_message` verbatim. It is produced against a number
+that does not answer, so it costs no conversation, but it does place a real call.
 
-* `call-failed.json`: a call that ended `failed`, with `failure_code` and
-  `failure_message` verbatim.
-* `webhook-*.json`: the three event types with their headers, captured once
-  `orma-api.nryn.dev` is reachable. Until then the poll path covers it.
+**That call needs operator authorization before you place it.** Do not invent the
+shape from the completed one. A fabricated fixture teaches four tracks the wrong
+contract and nobody finds out until a real failure arrives.
+
+Webhook captures are NOT in this task. They cannot be taken until an endpoint
+exists to receive them, which is T2.6, so they are captured there. Until then the
+poll path in T2.5 covers the same ground.
 
 Record the observed `failure_code` values in `docs/calle-call.md` as they appear.
 Nothing branches on them, since missed calls are out of scope, but the vocabulary
 is worth having.
 
-**Done when:** the failed shape is committed with its number masked, and a
-fixture loader in `_shared` returns every file as typed objects.
+**Done when:** the failed shape is committed with its number masked, and
+`supabase/functions/_shared/fixtures.ts` returns every file in `testdata/calle/`
+as typed objects.
 
 ---
 
