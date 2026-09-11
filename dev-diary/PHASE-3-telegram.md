@@ -20,7 +20,7 @@ requires:   []
 fixture-ok: yes
 size:       S · mid
 owns:       supabase/functions/telegram/index.ts
-status:     not-started
+status:     claimed:orma
 ```
 Register the bot, set the webhook to the function URL with `TELEGRAM_WEBHOOK_SECRET` in the path, and stand up grammY on Deno.
 
