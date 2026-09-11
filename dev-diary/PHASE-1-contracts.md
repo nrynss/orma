@@ -3,7 +3,7 @@
 ```yaml
 id:       P1
 size:     M
-requires: [P0]
+requires: []
 blocks:   [P2, P3, P4, P5, P7]
 parallel: no
 ```
@@ -11,6 +11,9 @@ parallel: no
 **Goal:** Freeze the database schema, the access policies, the generated types and the recorded CALL-E payloads that every other track develops against.
 
 **Why this phase runs serially:** Five tracks launch the moment it closes, and all five read the same tables under the same policies. A schema change after this point costs five rebases.
+
+Nothing blocks it. P0 is complete, the project is linked, and `pg_cron` and
+`pg_net` are installed.
 
 ---
 

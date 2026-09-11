@@ -156,8 +156,23 @@ the next agent should not work out again.
 ## Stack, frozen
 
 Supabase on the free plan, Postgres 17, for database, auth, storage, `pg_cron` and Edge Functions.
-Deno for functions. SvelteKit with the Cloudflare adapter, deployed to Cloudflare Pages. CALL-E
-for calls. Gemini via Vertex AI for transcription and prose. Resend over HTTP for email.
+Deno for functions. SvelteKit with the Cloudflare adapter, deployed as a Worker with a static
+asset binding, because Cloudflare has folded Pages into Workers. CALL-E for calls. Gemini via
+Vertex AI for transcription and prose. Resend over HTTP for email.
+
+Two deployed Workers, each with `npm run deploy` in its own directory. `web/` serves
+`orma.nryn.dev`. `proxy/` serves `orma-api.nryn.dev` and passes the whole Supabase API through.
+
+**Reach Supabase through `ORMA_API_URL`, never through the project host.** This network
+misresolves `*.supabase.co`, and the front door is what routes around it.
+
+**Cloudflare's free certificate covers `nryn.dev` and `*.nryn.dev`, one level only.** A
+two-level name fails its TLS handshake with no certificate at all. Keep every hostname one
+level deep.
+
+**Never put `CLOUDFLARE_API_TOKEN` in `.env`.** Wrangler auto-loads a project `.env` and
+prefers that name over your OAuth login, which breaks every deploy with an error that blames
+the login. The zone-scoped token is `CF_DNS_API_TOKEN`.
 
 There is no server and no container. Nothing in this design needs a process that stays up, and
 nothing should be added that does.

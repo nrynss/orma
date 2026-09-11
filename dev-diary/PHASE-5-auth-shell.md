@@ -3,7 +3,7 @@
 ```yaml
 id:       P5
 size:     M
-requires: [T0.1, T0.2, T1.2]
+requires: [T1.2]
 blocks:   [P6, P8]
 parallel: [P2, P3, P4]
 ```
@@ -11,6 +11,10 @@ parallel: [P2, P3, P4]
 **Goal:** Two ways in, one session, and an onboarding that produces a profile the call engine will actually dispatch for.
 
 **Why both paths:** Telegram is free, instant, and doubles as the Start press. Email lets a judge sign up without a Telegram account. Both mint the same JWT, so every policy from T1.2 is written once.
+
+The app itself already exists and is deployed. P0 left a SvelteKit Worker at
+`orma.nryn.dev` with a landing page, and a front door at `orma-api.nryn.dev`.
+This phase adds auth to what is there. It does not scaffold anything.
 
 ---
 
@@ -53,21 +57,30 @@ A Telegram identity linked to an existing email account attaches to that account
 
 ---
 
-### T5.3: App skeleton and sessions
+### T5.3: Supabase client and sessions
 ```yaml
-requires:   T0.1, T5.1
+requires:   T5.1
 fixture-ok: yes
 size:       M · mid
 owns:       web/src/lib/supabase.ts, web/src/routes/+layout.ts, web/src/routes/login/
 status:     not-started
 ```
-The SvelteKit shell: a Supabase client, session handling across server and client rendering, route protection, and the login page carrying both paths.
+Add to the deployed app: a Supabase client, session handling across server and
+client rendering, route protection, and the login page carrying both paths.
 
-The landing page is server rendered so a first-time visitor sees content rather than a spinner. The signed-in app is client rendered and talks to PostgREST directly.
+**Point the client at `ORMA_API_URL`, never at the project host.** The front door
+is what makes this work from a network that misresolves `*.supabase.co`, and it
+keeps the URL Orma's own if the Supabase project is ever replaced.
 
-The anon key is the only key in the bundle. A build check fails if the service role key appears anywhere under `web/`.
+The landing page from P0 is already server rendered. The signed-in app is client
+rendered and talks to PostgREST through the front door.
 
-**Done when:** a signed-out visitor to an app route lands on login, a signed-in reload keeps the session, and the landing page returns content in the server response body.
+The publishable key is the only key in the bundle. A build check fails if the
+secret key appears anywhere under `web/`.
+
+**Done when:** a signed-out visitor to an app route lands on login, a signed-in
+reload keeps the session, and no request in the browser network tab goes to a
+`supabase.co` host.
 
 ---
 
