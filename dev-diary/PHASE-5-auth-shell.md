@@ -100,4 +100,6 @@ Number confirmation is honest about what it is. Orma has no SMS channel, so the 
 
 Close with the step that protects the ritual: ask the user to save the Orma number as a contact, and explain why. A handset that says "suspected spam" has ended the call before it was answered.
 
+This step cannot be written honestly yet. Numbers are purchasable in the United States and Brazil only, and India-bound calls go out from an allocated line we do not control, so there is no number to tell the user to save. Recorded as issue 9 in [`feedback.md`](feedback.md). Until it is answered, say what is true: the call comes from an unfamiliar number, it may be flagged, and saving it after the first call is what stops that. Do not invent a number.
+
 **Done when:** a new account reaches a dispatchable profile in one pass, a malformed number is rejected client and server side, the consent row records the shown wording verbatim, and skipping consent leaves the profile undispatchable.

@@ -293,5 +293,12 @@ route having no locale control, the reference index printing navigation labels a
 paths, and an under-specified result-schema boundary that cost a real call to
 settle.
 
+A tenth entry followed on Narayan's prompting, and it may be the most
+commercially consequential of the set: numbers are purchasable in the United
+States and Brazil only, so India-bound calls come from an uncontrolled line. The
+only clean mitigation for a spam label is the callee saving the number, and that
+needs a number that is yours and the same tomorrow. T5.4 is amended to say what
+is true rather than invent one.
+
 The last entry records what worked, because the survey rewards specifics in both
 directions. The extraction grading its own call unprompted is the unusual one.

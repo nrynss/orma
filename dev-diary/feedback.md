@@ -53,7 +53,9 @@ detection.
 deliberate decline and an unreachable phone, on the reasoning that someone ducking
 a call and someone riding a motorbike are different events. That distinction is
 not implementable. We cut missed-call handling from the product entirely rather
-than guess.
+than guess, and `product.md` §10 now documents that as a known limitation citing
+this gap as its cause. The shipped limitation and this entry are the same fact,
+seen from the two ends.
 
 **Suggested fix.** Report a disposition enum alongside `status`. Even a coarse
 one, `answered`, `no_answer`, `busy`, `rejected`, `voicemail`, `unknown`, would
@@ -159,7 +161,41 @@ symmetry.
 
 ---
 
-## 9. What worked, and is worth saying
+## 9. Numbers are US and Brazil only, which breaks the spam mitigation
+
+**Severity: high.** Commercially, this may be the most consequential entry here.
+
+Numbers can be purchased in the United States and Brazil. Calls to India go out
+from an allocated local line the customer does not control and cannot be sure is
+stable between calls.
+
+**Why that matters more than it looks.** A handset showing "suspected spam
+caller" has ended the call before the callee decides anything. The only clean
+mitigation is the callee saving the number as a contact, and that works precisely
+because the callee is your own subscriber rather than a stranger. But saving a
+number requires a number that is yours, known in advance, and the same one
+tomorrow. An uncontrolled, possibly rotating originating line makes the one
+available mitigation impossible to offer.
+
+**Cost to us.** Orma is a ritual. It rings at a time you chose and the
+anticipation is the mechanism. Onboarding wants a step that says "save this
+number, here is why", and that step cannot be written honestly today, because we
+cannot tell the user which number to save.
+
+**Evidence so far.** One real call to an Indian mobile on 11 September was not
+flagged as spam, so this is a structural risk rather than an observed failure.
+One data point is not a pattern, and the risk does not need to fire often to
+matter: it only has to fire on the day someone was going to answer.
+
+**Suggested fix, in order of how much it would help.** Sell numbers in India.
+Failing that, guarantee a stable originating line per subscriber and expose it on
+the API before the call, so an application can tell its user what to save.
+Failing even that, expose the number that was actually used on the call record,
+so the pattern can at least be measured.
+
+---
+
+## 10. What worked, and is worth saying
 
 Not everything here is a complaint, and the survey rewards specifics either way.
 

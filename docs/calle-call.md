@@ -169,3 +169,13 @@ recursion. A nullable object sits too close to that edge to risk.
 
 Orma owns the slot. `slot_change_requested` is a proposal that Orma confirms, and
 extraction never writes the schedule.
+
+## Observed failed-call vocabulary
+
+The authorised no-answer probe on 11 September 2026 returned terminal
+`failure_code` `call_failed`. Its top-level `failure_message` was
+`calling task status=NO ANSWER (Hangup by: bot)`.
+
+The recipient attempt also returned `failure_code` `408`. Its
+`failure_message` was `null`. This vocabulary is recorded for reconciliation
+observability only. Orma does not branch on missed-call outcomes.

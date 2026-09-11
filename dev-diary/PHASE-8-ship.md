@@ -142,6 +142,6 @@ A separate prize with its own deadline of 18 September, four days after submissi
 
 The raw material already exists. [`dev-diary/feedback.md`](feedback.md) is written as the work happens, so this task is editing rather than remembering. Add whatever the day log from T8.2 turned up, then submit.
 
-Lead with the unsigned webhook and the missing call disposition. Those are the two that changed what Orma could be, and a reviewer can act on both.
+Lead with three: the unsigned webhook, the missing call disposition, and numbers being unavailable in India. Those are the ones that changed what Orma could be, and a reviewer can act on all three. The last is also the one with a commercial answer rather than only an engineering one.
 
 **Done when:** the survey is submitted with specific, reproducible observations rather than general praise, and every issue in `feedback.md` is either included or deliberately dropped.
