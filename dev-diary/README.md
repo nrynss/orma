@@ -11,8 +11,8 @@ Where a phase document and specification conflict, the specification wins. Recor
 
 Each document provides complete context for an engineer starting cold.
 
-**Current status:** P0 is complete. T1.1 and T1.4 have frozen the schema and
-fixtures. T1.2 and T1.3 are next.
+**Current status:** P0 is complete. T1.1 through T1.5 are complete. T1.6 is the
+last P1 task.
 
 P0 is complete. What exists is listed in [PHASE-0-ground.md](PHASE-0-ground.md): the repository, the Supabase project with its extensions and secrets, the deployed app and front door, the bot, verified email, and a proven CALL-E path. Start at P1.
 
@@ -156,7 +156,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | Phase | Tasks complete | Status |
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
-| P1 | 2 / 6 | T1.1 and T1.4 complete. T1.2 and T1.3 can run now. |
+| P1 | 5 / 6 | T1.6 local seed and reset remains. |
 | P2 | 0 / 9 | Not started. Blocked on P1. |
 | P3 | 0 / 5 | Not started. Blocked on T1.1 and T1.2. Bot @orma_tele_bot is registered. |
 | P4 | 0 / 3 | Not started. Blocked on T1.1, T1.2, T1.3. |
@@ -316,3 +316,17 @@ payloads now load through the typed fixture loader. The failed probe made one
 accepted CallTask. It ended `call_failed` after no answer. The vocabulary lives
 in `docs/calle-call.md`, and provider friction is recorded in `feedback.md`.
 This unblocks T1.5.
+
+### 2026-09-11 · T1.2, T1.3 and T1.5 complete
+
+**T1.2 Row-level security.** Every contract table has RLS enabled. Independent
+two-user probes found no cross-user read, update, or delete path. Anonymous
+probes read zero rows from all thirteen tables. This unblocks T1.6 and P3.
+
+**T1.3 Generated types.** Both consumers now share types generated from the
+linked live schema. The check regenerates into a temporary file and fails before
+overwriting either consumer when generation fails. This unblocks P4.
+
+**T1.5 Result validation.** The calls result parser accepts only a complete,
+valid object. It records a reason and returns null for every invalid result.
+Retirements without evidence offsets are rejected. This unblocks T2.7.

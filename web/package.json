@@ -11,7 +11,9 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"deploy": "npm run build && wrangler deploy",
-		"cf-typegen": "wrangler types"
+		"cf-typegen": "wrangler types",
+		"types:generate": "sh -ceu 'tmp=$(mktemp); supabase gen types typescript --project-id pyuubklpkhjngiqqwypf > \"$tmp\"; cp \"$tmp\" src/lib/database.types.ts; cp \"$tmp\" ../supabase/functions/_shared/database.types.ts; rm -f \"$tmp\"'",
+		"types:check": "supabase gen types typescript --project-id pyuubklpkhjngiqqwypf | diff -u src/lib/database.types.ts - && diff -u src/lib/database.types.ts ../supabase/functions/_shared/database.types.ts"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-cloudflare": "^7.2.9",

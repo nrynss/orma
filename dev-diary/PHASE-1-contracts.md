@@ -54,7 +54,7 @@ requires:   T1.1
 fixture-ok: yes
 size:       M · frontier
 owns:       supabase/migrations/*_rls.sql
-status:     not-started
+status:     done
 ```
 Enable RLS on every table. No exceptions, including the ones only functions write.
 
@@ -75,8 +75,8 @@ The web app and the MCP server both run under these policies with the caller's J
 requires:   T1.1
 fixture-ok: yes
 size:       XS · light
-owns:       web/src/lib/database.types.ts, supabase/functions/_shared/database.types.ts
-status:     not-started
+owns:       web/src/lib/database.types.ts, supabase/functions/_shared/database.types.ts, web/package.json
+status:     done
 ```
 Generate TypeScript types from the live schema and commit them to both consumers. Add a script that regenerates and fails CI if the committed types drift from the migrations.
 
@@ -125,7 +125,7 @@ requires:   T1.4
 fixture-ok: yes
 size:       M · frontier
 owns:       supabase/functions/_shared/result.ts
-status:     not-started
+status:     done
 ```
 Implement the null-or-correct rule in Orma's own code, so a malformed result is caught before it reaches the database rather than after.
 
