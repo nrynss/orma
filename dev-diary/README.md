@@ -12,7 +12,7 @@ Each document provides complete context for an engineer starting cold.
 
 **Current status:** Not started. P0 Ground is the serial bottleneck and nothing runs before it.
 
-The Supabase project `orma` exists (`ap-south-1`), the repository is linked, `.env` is written, and sixteen function secrets are on the project. What remains in P0 is in [PHASE-0-ground.md](PHASE-0-ground.md). Email sends from `send.nryn.dev` on a sending-only key. The CALL-E path is proven by a real call and its payloads are in `testdata/calle/`. No value in `.env` is blank.
+The repository is at `github.com/nrynss/orma` on `main`. The Supabase project `orma` exists (`ap-south-1`), the repository is linked, `.env` is written, and sixteen function secrets are on the project. What remains in P0 is in [PHASE-0-ground.md](PHASE-0-ground.md). Email sends from `send.nryn.dev` on a sending-only key. The CALL-E path is proven by a real call and its payloads are in `testdata/calle/`. No value in `.env` is blank.
 
 ---
 
@@ -147,8 +147,8 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 
 | Phase | Tasks complete | Status |
 |---|---|---|
-| P0 | 0 / 3 | Not started. T0.2 blocks every track that touches the hosted project. |
-| P1 | 0 / 6 | Not started. Blocked on T0.1 and T0.2. |
+| P0 | 0 / 2 | Not started. T0.2 blocks every track that touches the hosted project. |
+| P1 | 0 / 6 | Not started. Blocked on T0.2. |
 | P2 | 0 / 9 | Not started. Blocked on P1. |
 | P3 | 0 / 5 | Not started. Blocked on T1.1 and T1.2. Bot @orma_tele_bot is registered. |
 | P4 | 0 / 3 | Not started. Blocked on T1.1, T1.2, T1.3. |

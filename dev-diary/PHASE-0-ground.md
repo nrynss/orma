@@ -8,32 +8,17 @@ blocks:   everything
 parallel: no
 ```
 
-**Goal:** Git footing, a network that can reach the project, and TLS on the real hostname.
+**Goal:** A network that can reach the project, and TLS on the real hostname.
 
 **Why this phase runs serially:** No track can test against the hosted project until T0.2 lands.
+
+The repository is on git at `github.com/nrynss/orma`, private, default branch
+`main`, with `.env` and build output ignored.
 
 The CALL-E path is already proven. One real call on 11 September returned a
 validated `structured_result`, transcript turns carry `speaker` and
 `offset_seconds`, and the payloads are in `testdata/calle/`. The prompt lives in
 [docs/calle-call.md](../docs/calle-call.md) and is iterated in T8.2, not here.
-
----
-
-### T0.1: Repository on git footing ★
-```yaml
-requires:   []
-fixture-ok: yes
-size:       XS · light
-owns:       LICENSE, NOTICE, README.md
-status:     not-started
-```
-Initialise git and create the tree the rest of the work assumes: `supabase/migrations`, `supabase/functions`, `web/`, `testdata/`, `scripts/`.
-
-`.gitignore` already covers `.env`, build output and credential files. Verify it with `git check-ignore -v .env` before the first commit rather than after.
-
-The root `README.md` is a stub at this point. Its real content is the submission README, written in T8.4.
-
-**Done when:** `git log` shows an initial commit, `git status` is clean, and `git check-ignore` confirms no secret file is tracked.
 
 ---
 
@@ -65,7 +50,7 @@ Record the chosen fix in `docs/network.md`, because every agent on every track h
 
 ### T0.5: Cloudflare DNS and Pages skeleton
 ```yaml
-requires:   T0.1
+requires:   []
 fixture-ok: yes
 size:       S · mid
 owns:       web/package.json, web/svelte.config.js, web/src/routes/+page.svelte
