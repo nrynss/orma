@@ -33,40 +33,46 @@ This allows almost the whole system to be built offline. The web app, the MCP se
 | Phase | Document | Requires | Runs parallel with | Blocks |
 |---|---|---|---|---|
 | **P0** Ground | [PHASE-0-ground.md](PHASE-0-ground.md) | none | everything | P5, P6 |
-| **P1** Schema and contracts | [PHASE-1-contracts.md](PHASE-1-contracts.md) | none | P0 | downstream tracks |
+| **P1** Schema and contracts | [PHASE-1-contracts.md](PHASE-1-contracts.md) | none | P0 | P2, P3, P4, P5, P7 |
 | **P2** Call engine | [PHASE-2-call-engine.md](PHASE-2-call-engine.md) | P1 | P3, P4, P5, P7 | P7, P8 |
 | **P3** Telegram | [PHASE-3-telegram.md](PHASE-3-telegram.md) | T1.1, T1.2 | P2, P4, P5, P6 | P7 (delivery), P8 |
 | **P4** MCP server | [PHASE-4-mcp.md](PHASE-4-mcp.md) | T1.1, T1.2, T1.3 | P2, P3, P5, P6 | P8 |
-| **P5** Auth and web shell | [PHASE-5-auth-shell.md](PHASE-5-auth-shell.md) | P0, T1.2 | P2, P3, P4 | P6, P8 |
+| **P5** Auth and web shell | [PHASE-5-auth-shell.md](PHASE-5-auth-shell.md) | P0, T1.2 | P2, P3, P4, P7 | P6, P8 |
 | **P6** Web app | [PHASE-6-web-app.md](PHASE-6-web-app.md) | T5.3, soft P2 | P2, P3, P4, P7 | P8 |
-| **P7** Analysis and receipts | [PHASE-7-analysis.md](PHASE-7-analysis.md) | T1.1, soft P2, T3.4 | P3, P4, P6 | P8 |
-| **P8** Ship | [PHASE-8-ship.md](PHASE-8-ship.md) | P2, P5, P6, P7 | none | final submission |
+| **P7** Analysis and receipts | [PHASE-7-analysis.md](PHASE-7-analysis.md) | T1.1, T3.4, soft P2 | P4, P6 | P8 |
+| **P8** Ship | [PHASE-8-ship.md](PHASE-8-ship.md) | P2, P3, P4, P5, P6, P7 | none | final submission |
 
 ```text
-  P0 ──▶ P1 ──┬──▶ P2 call engine ──────────┐
-              ├──▶ P3 telegram ─────┬───────┤
-              ├──▶ P4 mcp ──────────┼───────┼──▶ P8 ship
-              ├──▶ P5 auth shell ──▶ P6 web ┤
-              └──▶ P7 analysis ◀────┘───────┘
+  P1 contracts ─┬─▶ P2 call engine ─┬─▶ P7 analysis ─┐
+                ├─▶ P3 telegram ────┘                │
+                └─▶ P4 mcp ──────────────────────────┤
+                                                     ├─▶ P8 ship
+  P0 front door ─▶ P5 auth shell ─▶ P6 web app ──────┘
 ```
 
-P1 is the serial bottleneck now. P0 blocks only the web tracks and runs beside it. Once the schema and the CALL-E fixtures freeze, development scales across five parallel tracks.
+Two independent roots. P1 opens four tracks against the database. P0 opens the
+web chain, which is the only thing the local resolution problem holds up.
+
+P1 is the only serial bottleneck. Once the schema and the CALL-E fixtures freeze, four tracks run against the database while the web chain runs beside them.
 
 ---
 
 ## Parallel Tracks
 
-When Phase P1 completes, five tracks launch concurrently without path conflicts:
+Five tracks run concurrently without path conflicts. Four open when T1.2 lands.
+The fifth opens on P0 and does not wait for the schema at all.
 
-| Track | Phase | Live CALL-E? | First task | Readiness |
-|---|---|---|---|---|
-| **A: Call engine** | P2 | Only T2.5 | T2.1 | Everything else runs against `testdata/` recordings. |
-| **B: Telegram** | P3 | No | T3.1 | Needs a bot token and Gemini, not CALL-E. |
-| **C: MCP** | P4 | No | T4.1 | Pure database work behind the same RLS as the browser. |
-| **D: Auth and shell** | P5 | No | T5.1 | Needs Supabase auth and a sender domain. |
-| **E: Analysis** | P7 | No | T7.1 | Facts are SQL over fixture rows. |
+| Track | Phase | Opens on | Live CALL-E? | First task | Readiness |
+|---|---|---|---|---|---|
+| **A: Call engine** | P2 | T1.5 | Only T2.5 | T2.1 | Everything else runs against the `testdata/` recordings. |
+| **B: Telegram** | P3 | T1.2 | No | T3.1 | Bot is registered. Needs Gemini, not CALL-E. |
+| **C: MCP** | P4 | T1.3 | No | T4.1 | Pure database work behind the same RLS as the browser. |
+| **D: Analysis** | P7 | T1.1 | No | T7.1 | Facts are SQL over fixture rows. |
+| **E: Auth and web** | P5 | P0 | No | T5.1 | Independent of the schema. Held up only by local resolution. |
 
-Prioritise track A. Nothing in the demo exists without it, and it is the only track that has to run for days before submission.
+Prioritise track A. Nothing in the demo exists without it, and it is the only
+track that has to keep running for days before submission. Track E is the one to
+hand to whoever is blocked, since it shares no files with the other four.
 
 ---
 
@@ -153,9 +159,9 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P3 | 0 / 5 | Not started. Blocked on T1.1 and T1.2. Bot @orma_tele_bot is registered. |
 | P4 | 0 / 3 | Not started. Blocked on T1.1, T1.2, T1.3. |
 | P5 | 0 / 4 | Not started. Blocked on P0 and T1.2. |
-| P6 | 0 / 6 | Not started. Blocked on T5.3. |
-| P7 | 0 / 4 | Not started. Blocked on T1.1. |
-| P8 | 0 / 7 | Not started. |
+| P6 | 0 / 6 | Not started. Blocked on T5.3, and through it on P0. |
+| P7 | 0 / 4 | Not started. Blocked on T1.1, and on T3.4 for delivery. |
+| P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
 
 ---
 
