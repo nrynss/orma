@@ -9,8 +9,14 @@ insert into auth.users (
   email,
   encrypted_password,
   email_confirmed_at,
+  confirmation_token,
+  recovery_token,
+  email_change_token_new,
+  email_change,
   raw_app_meta_data,
-  raw_user_meta_data
+  raw_user_meta_data,
+  created_at,
+  updated_at
 )
 values (
   '00000000-0000-4000-8000-000000000001',
@@ -20,8 +26,14 @@ values (
   'local@example.com',
   extensions.crypt('local-dev-password', extensions.gen_salt('bf')),
   now(),
+  '',
+  '',
+  '',
+  '',
   '{"provider":"email","providers":["email"]}'::jsonb,
-  '{"display_name":"Local Developer"}'::jsonb
+  '{"display_name":"Local Developer"}'::jsonb,
+  now(),
+  now()
 );
 
 insert into auth.identities (
@@ -108,8 +120,8 @@ values (
   'morning',
   now() - interval '1 day',
   'completed',
-  'completed',
-  'hopeful',
+  'answered_extracted',
+  'energised',
   'orma:local-seed:completed:v1',
   now() - interval '1 day',
   '{"user_name":"Local Developer","lead_line":"You mentioned the dentist three times.","open_items":"Book a dentist appointment; Renew the passport; Call Amma; Finish the local seed","slot_local_time":"08:00"}'::jsonb,
@@ -120,7 +132,7 @@ values (
 insert into public.call_events (call_run_id, at, kind, detail)
 values
   ('40000000-0000-4000-8000-000000000001', now() - interval '1 day', 'dispatched', '{"dry_run":true}'::jsonb),
-  ('40000000-0000-4000-8000-000000000001', now() - interval '23 hours', 'completed', '{"disposition":"completed"}'::jsonb);
+  ('40000000-0000-4000-8000-000000000001', now() - interval '23 hours', 'completed', '{"disposition":"answered_extracted"}'::jsonb);
 
 insert into public.transcripts (call_run_id, turns, raw, fetched_at)
 values (
@@ -133,7 +145,7 @@ values (
 insert into public.results (call_run_id, structured, valid, fetched_at)
 values (
   '40000000-0000-4000-8000-000000000001',
-  '{"captured_items":[],"retired_items":[],"commitments":[{"item_text":"Book a dentist appointment","due":"tomorrow","evidence_offset_seconds":8}],"mood":"hopeful","slot_request":null}'::jsonb,
+  '{"captured_items":[],"retired_items":[],"commitments":[{"item_id":"30000000-0000-4000-8000-000000000001","due":"tomorrow","evidence_offset_seconds":8}],"mood":"energised","slot_change_requested":"no"}'::jsonb,
   true,
   now() - interval '23 hours'
 );

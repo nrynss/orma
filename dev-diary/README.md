@@ -11,8 +11,8 @@ Where a phase document and specification conflict, the specification wins. Recor
 
 Each document provides complete context for an engineer starting cold.
 
-**Current status:** P0 is complete. T1.1 through T1.5 and T1.1a are complete.
-T1.6 is the remaining P1 task.
+**Current status:** P0 and P1 are complete. Schema, policies, types, fixtures,
+validation and local seed data are frozen.
 
 P0 is complete. What exists is listed in [PHASE-0-ground.md](PHASE-0-ground.md): the repository, the Supabase project with its extensions and secrets, the deployed app and front door, the bot, verified email, and a proven CALL-E path. Start at P1.
 
@@ -156,11 +156,11 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | Phase | Tasks complete | Status |
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
-| P1 | 6 / 7 | T1.6 local seed and reset remains. |
-| P2 | 0 / 9 | Not started. Blocked on P1. |
-| P3 | 0 / 5 | Not started. Blocked on T1.1 and T1.2. Bot @orma_tele_bot is registered. |
-| P4 | 0 / 3 | Not started. Blocked on T1.1, T1.2, T1.3. |
-| P5 | 0 / 4 | Not started. Blocked on T1.2. |
+| P1 | 7 / 7 | Complete. Contracts are frozen. |
+| P2 | 0 / 9 | Not started. T2.1, T2.2 and T2.3 can start. |
+| P3 | 0 / 5 | T3.1 can start. Bot @orma_tele_bot is registered. |
+| P4 | 0 / 3 | T4.1 can start. |
+| P5 | 0 / 4 | T5.1 can start. |
 | P6 | 0 / 6 | Not started. Blocked on T5.3. |
 | P7 | 0 / 4 | Not started. Blocked on T1.1, and on T3.4 for delivery. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
@@ -337,6 +337,18 @@ Retirements without evidence offsets are rejected. This unblocks T2.7.
 the exact remote versions for `pg_cron` and `pg_net`. Independent catalogue and
 migration-list checks matched their versions and schemas. The approved RLS
 migration then applied without repairing live history.
+
+### 2026-09-11 · P1 complete
+
+**T1.6 Local seed and reset.** An isolated reset creates a password-sign-in
+profile with slots, four items, a completed run, transcript, mentions,
+commitment, result and events. The seeded run uses `answered_extracted`, and its
+stored result parses through T1.5. Independent review found zero residue after
+the seed contract remediation.
+
+**P1 closure.** The linked project has the core schema and RLS migration. Local
+history matches its scheduler extensions. Generated types represent the live
+schema. T2.1, T2.2, T2.3, T3.1, T4.1 and T5.1 now have their binding upstreams.
 
 ### 2026-09-11 · Spam flagging accepted as a risk
 
