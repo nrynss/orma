@@ -42,7 +42,7 @@ size:       L · frontier
 owns:       supabase/functions/_shared/briefing.ts
 status:     not-started
 ```
-The heart of the product. Given a user and a moment, produce the scalar variables the Goal expects.
+The heart of the product. Given a user and a moment, produce the substitutions the task template in [docs/calle-call.md](../docs/calle-call.md) expects: `user_name`, `lead_line`, `open_items`, `last_call_summary` and `slot_local_time`.
 
 All of it is SQL. `open_count` is a count. Mention counts come from `item_mentions`. Ages come from `since_date` where the user gave one and from `created_at` where they did not. `lead_line` is rendered from those numbers into a sentence before the request is built.
 
@@ -52,7 +52,7 @@ Ordering follows `product.md` §3. The lead is one or two things the user did no
 
 Store the assembled object on `call_runs.briefing` before dispatch, so any claim made on a call traces back to the rows that produced it.
 
-**Done when:** a fixture user with a four-mention item 34 days old yields the expected `lead_line` verbatim, every variable is a string, number or boolean with no nesting, and a golden test pins the rendering.
+**Done when:** a fixture user with a four-mention item 34 days old yields the expected `lead_line` verbatim, the rendered task matches the template step for step, and a golden test pins it.
 
 ---
 
@@ -84,15 +84,28 @@ size:       L · frontier
 owns:       supabase/functions/_shared/calle.ts
 status:     not-started
 ```
-The client. `POST /v1/goals/{goal_id}/runs` with the phone number, the assembled variables, and the `Idempotency-Key` header carrying the key stored in T2.1.
+The client. `POST /v1/calls` with the assembled `task`, the E.164 number in
+`recipients`, the inline `result_schema` from
+[docs/calle-call.md](../docs/calle-call.md), `webhook_url` pointing at
+`ORMA_API_URL`, `metadata` carrying the `call_run_id`, and the `Idempotency-Key`
+header holding the key stored in T2.1.
 
-Record `calle_goal_run_id`, `calle_call_id` and the `run_spec` the run pinned, so a call can be read against the exact interface it was placed under even after the Goal is republished.
+Orma composes each call rather than running a published Goal. Goals cannot be
+created over the API, so a Goal would put the prompt in a console rather than in
+the repository, and it would freeze the task text while Orma's whole premise is
+that the instruction changes every day.
+
+Record `calle_call_id` and the returned `status`. The response shape is already
+committed at `testdata/calle/call-completed.json`, so build against that rather
+than guessing: `structured_result` sits at task level, transcript turns live at
+`recipients[0].attempts[0].transcript_turns`, and attempts carry `started_at` and
+`completed_at` rather than a duration.
 
 A 409 means the key was reused with different inputs. That is a bug. Log it loudly, leave the run in a state a human can see, and never retry with a fresh key.
 
 Refuse to dispatch for a profile without a live `outbound_calls` consent and a confirmed number. The check belongs here, at the last moment before the call, not only in the UI.
 
-**Done when:** dispatch against a mock returns a run id and pins the spec, a replayed key returns the original run rather than placing a second call, a 409 surfaces as a visible failure, and a profile without consent is refused with a recorded reason.
+**Done when:** dispatch against a mock returns a call id, a replayed key returns the original call rather than placing a second one, a 409 surfaces as a visible failure, and a profile without consent is refused with a recorded reason.
 
 ---
 
@@ -106,7 +119,7 @@ status:     not-started
 ```
 Webhooks get dropped. Polling is the safety net that makes that survivable.
 
-A run entering `awaiting_result` gets `poll_after` set 60 seconds out, then 10 seconds per pass. The tick advances it. Follow-up crosses tick boundaries rather than sitting in a loop, because a free Edge Function allows 150 seconds of wall clock and 2 seconds of CPU per request.
+A run entering `awaiting_result` gets `poll_after` set 60 seconds out, then 10 seconds per pass, and the tick advances it by re-fetching `GET /v1/calls/{call_id}`. The first real call reached a terminal state at about 140 seconds, so the window has to allow for well over two minutes. Follow-up crosses tick boundaries rather than sitting in a loop, because a free Edge Function allows 150 seconds of wall clock and 2 seconds of CPU per request.
 
 Whichever of the webhook and the poll arrives first wins. The other is a no-op.
 
