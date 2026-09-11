@@ -11,7 +11,8 @@ Where a phase document and specification conflict, the specification wins. Recor
 
 Each document provides complete context for an engineer starting cold.
 
-**Current status:** P0 is complete. P1 is next and nothing blocks it.
+**Current status:** P0 is complete. T1.1 and T1.4 have frozen the schema and
+fixtures. T1.2 and T1.3 are next.
 
 P0 is complete. What exists is listed in [PHASE-0-ground.md](PHASE-0-ground.md): the repository, the Supabase project with its extensions and secrets, the deployed app and front door, the bot, verified email, and a proven CALL-E path. Start at P1.
 
@@ -155,7 +156,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | Phase | Tasks complete | Status |
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
-| P1 | 0 / 6 | Not started. Nothing blocks it. Start here. |
+| P1 | 2 / 6 | T1.1 and T1.4 complete. T1.2 and T1.3 can run now. |
 | P2 | 0 / 9 | Not started. Blocked on P1. |
 | P3 | 0 / 5 | Not started. Blocked on T1.1 and T1.2. Bot @orma_tele_bot is registered. |
 | P4 | 0 / 3 | Not started. Blocked on T1.1, T1.2, T1.3. |
@@ -302,3 +303,16 @@ is true rather than invent one.
 
 The last entry records what worked, because the survey rewards specifics in both
 directions. The extraction grading its own call unprompted is the unusual one.
+
+### 2026-09-11 · T1.1 and T1.4 complete
+
+**T1.1 Core migrations.** The thirteen contract tables, constraints, indexes,
+and `profiles.updated_at` trigger are frozen. An isolated database runner proves
+the phone check and idempotency key reject invalid rows. It also proves the tick
+uses `call_runs_state_scheduled_for_idx`. This unblocks T1.2 and T1.3.
+
+**T1.4 CALL-E fixtures.** The masked completed, events, transcript, and failed
+payloads now load through the typed fixture loader. The failed probe made one
+accepted CallTask. It ended `call_failed` after no answer. The vocabulary lives
+in `docs/calle-call.md`, and provider friction is recorded in `feedback.md`.
+This unblocks T1.5.
