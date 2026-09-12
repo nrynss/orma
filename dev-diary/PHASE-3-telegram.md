@@ -51,8 +51,8 @@ A message from a chat with no linked profile gets the linking prompt instead, ne
 requires:   T3.2
 fixture-ok: yes
 size:       M · frontier
-owns:       supabase/functions/telegram/voice.ts
-status:     claimed:orma
+owns:       supabase/functions/telegram/voice.ts (+ voice_rest/telegram/vertex + voice_tests*)
+status:     done
 ```
 Impulse capture is the case where talking is the only reason the thought gets recorded at all, so this path has to feel instant.
 
