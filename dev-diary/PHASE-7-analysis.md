@@ -64,7 +64,24 @@ The report goes in writing because nobody wants a trend report read aloud. The c
 
 Write a `deliveries` row before the attempt and record the outcome after.
 
-**Done when:** a scheduled run delivers to both channels, respects each channel's toggle, and records success and failure distinguishably.
+**P3 handoff (2026-09-12).** Telegram channel delivery is already implemented.
+Do not rewrite it. Call it.
+
+- Import `deliverPatternTelegram` from
+  `supabase/functions/_shared/deliver-telegram.ts`.
+- Pass `{ userId, prose }` where `prose` is the T7.2 validated report text.
+- Pass deps `{ apiUrl: ORMA_API_URL, serviceRoleKey, botToken, fetch }`.
+  Never a `*.supabase.co` host.
+- Skip behaviour is inside the helper. If `profiles.telegram_receipts` is false
+  or `telegram_chat_id` is null, it returns `skipped` with no `deliveries` row.
+- On send it inserts `deliveries` (`channel=telegram`, `kind=pattern`) before
+  `sendMessage`, then sets `sent_at` or `error`.
+
+This task still owns email: land `deliver-email.ts` and respect
+`profiles.email_receipts`. Own `analysis/index.ts` for the weekly cron entry.
+Do not edit `deliver-telegram.ts` unless a contract change is required.
+
+**Done when:** a scheduled run delivers to both channels, respects each channel's toggle, and records success and failure distinguishably. Pin Telegram by calling `deliverPatternTelegram` with fixture prose and counting the `deliveries` row outcome.
 
 ---
 
@@ -81,5 +98,25 @@ Immediately after ingestion: what the call captured, what it retired, and what w
 A run with no result still sends one. The receipt reads like Orma was paying attention regardless, because the user answered the phone and that is all they know about it.
 
 This is a receipt and never a prompt. It reports on a call that already happened and asks for nothing.
+
+**P3 handoff (2026-09-12).** A thin starter already lives in this owns path.
+Extend it. Do not replace the Telegram send path.
+
+- `deliverIngestionReceipt` in `receipt.ts` already calls
+  `deliverPostCallTelegram` with `capturedTexts` and resolved `retiredTexts`.
+- Use `capturedTextsFromStructured` and `retiredItemIdsFromStructured` from
+  `deliver-telegram.ts`. Resolve retirement ids to item texts via a
+  `resolveRetiredText` callback (PostgREST on `items` through `ORMA_API_URL`).
+- Never invent counts. Never ask. Never reveal extraction failure to the user.
+- For `answered_no_result` / invalid structured result, still send a receipt
+  that does not expose the failure (for example empty captured and retired
+  lists, or a calm "we logged the call" line with no CTA).
+- Commitments from structured results should be named when present.
+- T2.7 must call `deliverIngestionReceipt` (or the expanded export) right after
+  ingestion. That call site is outside this owns line. Raise a contract note if
+  T2.7 is not ready, rather than editing T2.7 from here.
+
+Pin locally:
+`deno test --allow-read supabase/functions/_shared/receipt.ts supabase/functions/_shared/receipt_tests.ts`
 
 **Done when:** the completed fixture produces a receipt naming captures and retirements, the invalid-result fixture produces one that does not reveal the failure, and neither contains a call to action.
