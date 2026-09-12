@@ -206,3 +206,39 @@ export async function captureVoiceNote(args: {
     };
   }
 }
+
+export function createMemoryVoiceStore(
+  seed: Array<{ id: string; telegramChatId?: number | null }> = [],
+): VoiceStore {
+  const profiles = new Map<string, CaptureProfile & { telegramChatId: number | null }>();
+  const items: VoiceItem[] = [];
+  for (const profile of seed) {
+    profiles.set(profile.id, {
+      id: profile.id,
+      telegramChatId: profile.telegramChatId ?? null,
+    });
+  }
+
+  return {
+    async findProfileByChatId(chatId) {
+      for (const profile of profiles.values()) {
+        if (profile.telegramChatId === chatId) return { id: profile.id };
+      }
+      return null;
+    },
+    async insertVoiceItem(input) {
+      const item: VoiceItem = {
+        id: input.id,
+        userId: input.userId,
+        text: input.text,
+        source: ITEM_SOURCE_TELEGRAM,
+        audioUrl: itemAudioUrl("https://orma-api.nryn.dev", input.userId, input.id),
+      };
+      items.push(item);
+      return { ...item };
+    },
+    async listItemsByUser(userId) {
+      return items.filter((item) => item.userId === userId).map((item) => ({ ...item }));
+    },
+  };
+}
