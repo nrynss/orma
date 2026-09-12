@@ -49,9 +49,9 @@ This allows almost the whole system to be built offline. The web app, the MCP se
      │
   P1 contracts ─┬─▶ P2 call engine ─┬─▶ P7 analysis ─┐
                 ├─▶ P3 telegram ────┘                │
-                ├─▶ P4 mcp ──────────────────────────┤
+                ├─▶ P4 mcp ─────────────────────────┤
                 │                                    ├─▶ P8 ship
-                └─▶ P5 auth shell ─▶ P6 web app ─────┘
+                └─▶ P5 auth shell ─▶ P6 web app ────┘
 ```
 
 P1 is the only bottleneck left. Once the schema and the CALL-E fixtures freeze,
@@ -158,7 +158,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
 | P1 | 7 / 7 | Complete. Contracts are frozen. |
 | P2 | 0 / 9 | Not started. T2.1, T2.2 and T2.3 can start. |
-| P3 | 5 / 5 | **Complete.** Text, voice, linking, and receipt delivery helpers landed. |
+| P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 0 / 3 | T4.1 can start. |
 | P5 | 0 / 4 | T5.1 can start. |
 | P6 | 0 / 6 | Not started. Blocked on T5.3. |
@@ -400,3 +400,27 @@ Unblocks nothing new on the critical path. T3.4 receipts can start from T3.1.
 **T3.4 Receipt delivery.** Shared `deliver-telegram.ts` sends post-call and
 pattern receipts over Telegram with injected fetch. Disabled receipts skip with
 no row. Round 1 APPROVE. Unblocks T7.3 and T7.4. P3 is now 5 / 5.
+
+### 2026-09-12 · P3 e2e clean
+
+**Live webhook wiring.** `telegram/index.ts` now calls `completeLink`,
+`captureTextMessage`, and `captureVoiceNote`. Bare `/start` still uses
+`START_LINK_PROMPT` from `link.ts`. `voice_ok:` answers so Confirm does not spin.
+
+**Schema file on phase-3.** `20260912130243_telegram_link_audio.sql` matches
+live: `telegram_link_tokens` with owner RLS, nullable `items.audio_url`, and
+private bucket `item-audio`. Do not re-apply. Live already has this name.
+
+**Types.** Both `database.types.ts` copies include `telegram_link_tokens` and
+`items.audio_url`. Regenerated from the live project.
+
+**Receipt.** Thin `receipt.ts` builds captured and retired texts and calls
+`deliverPostCallTelegram`. T7.3 still owns `deliverPatternTelegram`. T7.4 still
+owns a fuller post-ingestion receipt.
+
+**Settings.** `web/src/lib/telegram-link.ts` and `web/src/routes/app/settings/+page.svelte`
+mint and unlink through `ORMA_API_URL`. T5.3 session client is not landed, so
+mint needs a signed-in JWT until that shell exists.
+
+P3 e2e is clean for capture, link, and voice wiring. See
+`adversarial-review/p3-e2e-round2.md`.
