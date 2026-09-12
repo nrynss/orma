@@ -135,7 +135,7 @@ requires:   T1.4, T2.4
 fixture-ok: yes
 size:       M · frontier
 owns:       supabase/functions/calle-webhook/index.ts, testdata/calle/webhook-*.json, supabase/config.toml
-status:     claimed:gpt-5
+status:     done
 ```
 CALL-E webhooks carry no signature. The only identifier is a `CALL-E-Event-Id` header, which is a de-duplication key and not authentication. The body is therefore a notification and never a fact.
 

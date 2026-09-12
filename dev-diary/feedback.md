@@ -325,3 +325,50 @@ per-request callback feature unreliable for production workflows.
 **Suggested fix.** Expose delivery attempts, response status, and retry state
 in the call event stream. If a per-call callback is accepted, send a terminal
 event or return a validation error that explains why delivery is disabled.
+
+---
+
+**Update, 13 September 2026. The callback reaches a public sink but never reaches Orma.**
+
+A second control run proved the provider does send. The same run proved it does
+not send to Orma. Both controls used the documented per-request `webhook_url`.
+
+**The sink test.** `call_iDGTQWVCt9IhS-Om8NdnTQ` pointed its `webhook_url` at an
+independent public sink (a `webhook.site` token). The call reached terminal
+`call.failed` when the recipient did not answer. The sink received a real POST
+at 20:25:00Z. The body was 1886 bytes of the documented `call.failed` envelope,
+with `data.id` equal to the call id. The `CALL-E-Event-Id` header equalled the
+body `id` (`evt_245e7b10d5a75ce14d0d8e9d`). The sender agent was
+`python-httpx/0.28.1`. So the per-request callback works, and it fires for a
+failed task as well as a completed one.
+
+**The Orma control.** `call_42_jJMl3YrwnMNaPj8bVgA` pointed the same shape of
+`webhook_url` at `https://orma-api.nryn.dev/functions/v1/calle-webhook/<secret>`.
+The call rang, the recipient answered, and it completed with
+`structured_result {"heard":"yes"}`. No request reached the receiver.
+
+**The diagnostic.** To rule out a wrong method, a wrong path or a rejected
+header, we deployed a temporary receiver that records every arrival before any
+gate and always answers 200. `call_H99Ye0-Lu3VWhx6YPwYZlA` pointed its
+`webhook_url` at that receiver. Over five minutes past terminal state, the
+receiver recorded zero arrivals. Not even a health probe arrived.
+
+**Orma accepts the real thing.** We replayed the exact captured bytes and
+headers against the production receiver. It answered 200. Direct POSTs from
+curl, from `python-httpx` and with an empty user agent also answered 200. The
+path secret is 40 alphanumeric characters and needs no URL encoding.
+
+**Reachability.** Six `check-host.net` nodes (Canada, Germany, France, Iran,
+Singapore, United States) each fetched the same Orma URL and received 200 from
+Cloudflare's edge. The host is reachable worldwide.
+
+**What CALL-E never tells you.** The create response echoes no `webhook_url`.
+The terminal CallTask carries no delivery field. The call event stream records
+no callback attempt, response or retry. The API surface has no delivery-log or
+endpoint-health route. A caller cannot tell an accepted callback that will
+never fire from one that will.
+
+**Suggested fix.** Expose delivery attempts with response status and retry
+state in the call event stream. Validate `webhook_url` at create time and
+return an error when the destination cannot be dialled. Until then the
+per-request callback is not trustworthy for a production workflow.

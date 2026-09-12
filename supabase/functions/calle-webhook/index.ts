@@ -6,11 +6,17 @@
  * item, result, or billing state is ever taken from the webhook body.
  */
 
+import { recordCallEvent } from "../_shared/events.ts";
+
 const EVENT_ID_HEADER = "call-e-event-id";
 const MAX_BODY_BYTES = 128 * 1024;
 const EVENT_ID_PATTERN = /^evt_[A-Za-z0-9_-]+$/;
 const CALL_ID_PATTERN = /^call_[A-Za-z0-9_-]+$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// A claim is reclaimed once this much wall clock has passed without a
+// terminal state, so a killed or failed invocation cannot strand an id.
+const REFRESH_LEASE_MS = 5 * 60 * 1000;
 const TERMINAL_EVENT_TYPES = new Set([
   "call.completed",
   "call.failed",
@@ -40,6 +46,7 @@ type WebhookEnvelope = {
 
 type AuthoritativeCall = {
   id: string;
+  status: string;
   metadata: { call_run_id: string };
 };
 
@@ -118,6 +125,8 @@ function parseAuthoritativeCall(value: unknown, expectedCallId: string): Authori
   const call = value as Partial<AuthoritativeCall>;
   if (
     call.id !== expectedCallId ||
+    typeof call.status !== "string" ||
+    call.status.trim().length === 0 ||
     !call.metadata ||
     typeof call.metadata !== "object" ||
     typeof call.metadata.call_run_id !== "string" ||
@@ -149,12 +158,16 @@ async function insertPendingEvent(deps: WebhookDeps, eventId: string): Promise<v
   if (response.status !== 409 && !response.ok) throw new Error("webhook event record failed");
 }
 
-async function claimPendingEvent(deps: WebhookDeps, eventId: string): Promise<boolean> {
-  const query = new URLSearchParams({ event_id: `eq.${eventId}`, type: `eq.${PENDING}` });
+async function claimPendingEvent(deps: WebhookDeps, eventId: string, now = Date.now()): Promise<boolean> {
+  const staleBefore = new Date(now - REFRESH_LEASE_MS).toISOString();
+  const query = new URLSearchParams({
+    event_id: `eq.${eventId}`,
+    or: `(type.eq.${PENDING},and(type.eq.${REFRESHING},received_at.lt.${staleBefore}))`,
+  });
   const response = await deps.fetch(restUrl(deps.apiUrl, "webhook_events", query.toString()), {
     method: "PATCH",
     headers: serviceHeaders(deps.serviceRoleKey, "return=representation"),
-    body: JSON.stringify({ type: REFRESHING }),
+    body: JSON.stringify({ type: REFRESHING, received_at: new Date(now).toISOString() }),
   });
   if (!response.ok) throw new Error("webhook event claim failed");
   const rows: unknown = await response.json();
@@ -221,6 +234,19 @@ export function createWebhookHandler(deps: WebhookDeps): (request: Request) => P
           await setEventState(deps, envelope.id, IGNORED);
           return new Response(null, { status: 200 });
         }
+        const eventDeps = { apiUrl: deps.apiUrl, serviceRoleKey: deps.serviceRoleKey, fetch: deps.fetch };
+        await recordCallEvent(
+          call.metadata.call_run_id,
+          "webhook_received",
+          { calle_call_id: call.id, event_type: envelope.type },
+          eventDeps,
+        );
+        await recordCallEvent(
+          call.metadata.call_run_id,
+          "refetched",
+          { calle_call_id: call.id, event_type: envelope.type, state: call.status },
+          eventDeps,
+        );
         await setEventState(deps, envelope.id, REFETCHED);
         return new Response(null, { status: 200 });
       } catch (error) {
@@ -269,17 +295,45 @@ if (typeof testFn === "function" && !import.meta.main) {
     if (response.status !== 400) throw new Error("header and body ids must match");
   });
 
-  testFn("accepts each documentation-derived terminal contract fixture", async () => {
+  testFn("accepts and re-fetches each terminal contract fixture, documented and recorded", async () => {
     const fixtures = [
       "webhook-call-completed.documented.json",
       "webhook-call-failed.documented.json",
       "webhook-result-validation-failed.documented.json",
+      "webhook-call-failed.recorded.json",
     ];
     for (const fixture of fixtures) {
       const raw = await Deno.readTextFile(new URL(`../../../testdata/calle/${fixture}`, import.meta.url));
-      const value = JSON.parse(raw) as { headers: { "call-e-event-id": string }; body: unknown };
-      if (!parseWebhookEnvelope(JSON.stringify(value.body), value.headers["call-e-event-id"])) {
-        throw new Error(`documented fixture ${fixture} did not match the receiver contract`);
+      const value = JSON.parse(raw) as {
+        headers: { "call-e-event-id": string };
+        body: { id: string; data: { id: string } };
+      };
+      const body = JSON.stringify(value.body);
+      if (!parseWebhookEnvelope(body, value.headers["call-e-event-id"])) {
+        throw new Error(`fixture ${fixture} did not match the receiver contract`);
+      }
+      const refetched: string[] = [];
+      const handler = createWebhookHandler(baseDeps(async (input, init) => {
+        const current = new Request(input, init);
+        if (current.url.endsWith("/webhook_events") && current.method === "POST") return new Response(null, { status: 201 });
+        if (current.url.includes("/webhook_events?") && current.method === "PATCH") {
+          return Response.json([{ event_id: value.headers["call-e-event-id"] }]);
+        }
+        if (current.url.endsWith("/call_events") && current.method === "POST") return new Response(null, { status: 201 });
+        if (current.url.endsWith(`/v1/calls/${value.body.data.id}`)) {
+          refetched.push(value.body.data.id);
+          return Response.json({ id: value.body.data.id, status: "completed", metadata: { call_run_id: "11111111-1111-4111-8111-111111111111" } });
+        }
+        if (current.url.includes("/call_runs?")) return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
+        throw new Error(`unexpected request ${current.method} ${current.url} while driving ${fixture}`);
+      }));
+      const response = await handler(new Request(
+        "https://orma-api.nryn.dev/functions/v1/calle-webhook/path-secret",
+        { method: "POST", headers: { [EVENT_ID_HEADER]: value.headers["call-e-event-id"] }, body },
+      ));
+      if (response.status !== 200) throw new Error(`fixture ${fixture} was not acknowledged`);
+      if (refetched.length !== 1 || refetched[0] !== value.body.data.id) {
+        throw new Error(`fixture ${fixture} did not re-fetch its own call id`);
       }
     }
   });
@@ -291,9 +345,10 @@ if (typeof testFn === "function" && !import.meta.main) {
       requests.push(current);
       if (current.url.endsWith("/webhook_events") && current.method === "POST") return new Response(null, { status: 201 });
       if (current.url.includes("/webhook_events?") && current.method === "PATCH") return Response.json([{ event_id: "evt_terminal" }]);
+      if (current.url.endsWith("/call_events") && current.method === "POST") return new Response(null, { status: 201 });
       if (current.url.endsWith("/v1/calls/call_terminal")) {
         if (current.headers.get("authorization") !== "Bearer calle-key") throw new Error("CALL-E key missing");
-        return Response.json({ id: "call_terminal", metadata: { call_run_id: "11111111-1111-4111-8111-111111111111" } });
+        return Response.json({ id: "call_terminal", status: "completed", metadata: { call_run_id: "11111111-1111-4111-8111-111111111111" } });
       }
       if (current.url.includes("/call_runs?")) return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
       throw new Error(`unexpected request ${current.method} ${current.url}`);
@@ -324,6 +379,7 @@ if (typeof testFn === "function" && !import.meta.main) {
     let pending = true;
     const handler = createWebhookHandler(baseDeps(async (input, init) => {
       const current = new Request(input, init);
+      if (current.url.endsWith("/call_events") && current.method === "POST") return new Response(null, { status: 201 });
       if (current.method === "POST") return new Response(null, { status: callFetches === 0 ? 201 : 409 });
       if (current.url.includes("/webhook_events?") && current.method === "PATCH") {
         const payload = JSON.parse(await current.text()) as { type: string };
@@ -335,7 +391,7 @@ if (typeof testFn === "function" && !import.meta.main) {
       if (current.url.endsWith("/v1/calls/call_terminal")) {
         callFetches++;
         if (callFetches === 1) return new Response(null, { status: 503 });
-        return Response.json({ id: "call_terminal", metadata: { call_run_id: "11111111-1111-4111-8111-111111111111" } });
+        return Response.json({ id: "call_terminal", status: "completed", metadata: { call_run_id: "11111111-1111-4111-8111-111111111111" } });
       }
       if (current.url.includes("/call_runs?")) return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
       throw new Error(`unexpected request ${current.method} ${current.url}`);
@@ -343,4 +399,123 @@ if (typeof testFn === "function" && !import.meta.main) {
     if ((await handler(request())).status !== 500) throw new Error("failed re-fetch must request a retry");
     if ((await handler(request())).status !== 200 || callFetches !== 2) throw new Error("retry must re-fetch after recovery");
   });
+
+  testFn("writes webhook_received and refetched timeline rows for the matched run", async () => {
+    const callEvents: { call_run_id: string; kind: string; detail: Record<string, unknown> }[] = [];
+    const handler = createWebhookHandler(baseDeps(async (input, init) => {
+      const current = new Request(input, init);
+      if (current.url.endsWith("/webhook_events") && current.method === "POST") return new Response(null, { status: 201 });
+      if (current.url.includes("/webhook_events?") && current.method === "PATCH") return Response.json([{ event_id: "evt_terminal" }]);
+      if (current.url.endsWith("/call_events") && current.method === "POST") {
+        callEvents.push(JSON.parse(await current.text()));
+        return new Response(null, { status: 201 });
+      }
+      if (current.url.endsWith("/v1/calls/call_terminal")) {
+        return Response.json({ id: "call_terminal", status: "completed", metadata: { call_run_id: "11111111-1111-4111-8111-111111111111" } });
+      }
+      if (current.url.includes("/call_runs?")) return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
+      throw new Error(`unexpected request ${current.method} ${current.url}`);
+    }));
+    const response = await handler(request({ ...event(), type: "call.failed" }));
+    if (response.status !== 200) throw new Error("matched terminal event must be acknowledged");
+    const kinds = callEvents.map((row) => row.kind);
+    if (callEvents.length !== 2 || !kinds.includes("webhook_received") || !kinds.includes("refetched")) {
+      throw new Error(`expected the webhook_received and refetched rows, saw ${JSON.stringify(kinds)}`);
+    }
+    for (const row of callEvents) {
+      if (row.call_run_id !== "11111111-1111-4111-8111-111111111111") throw new Error("timeline row used the wrong run");
+      if (row.detail.calle_call_id !== "call_terminal") throw new Error("timeline row must carry the provider call id");
+      if (row.detail.event_type !== "call.failed") throw new Error("timeline row must record the notification type");
+    }
+    const refetchedRow = callEvents.find((row) => row.kind === "refetched");
+    if (refetchedRow?.detail.state !== "completed") {
+      throw new Error(`refetched row must carry the authoritative state, saw ${JSON.stringify(refetchedRow?.detail.state)}`);
+    }
+    if (callEvents.some((row) => row.detail.state === "call.failed")) {
+      throw new Error("no timeline row may carry the webhook body type as state");
+    }
+  });
+
+  testFn("reclaims a refreshing event stranded past its lease and re-fetches once", async () => {
+    const staleReceivedAt = new Date(Date.now() - REFRESH_LEASE_MS - 60_000).toISOString();
+    const row = { event_id: "evt_terminal", type: REFRESHING, received_at: staleReceivedAt };
+    let callFetches = 0;
+    const handler = createWebhookHandler(baseDeps(async (input, init) => {
+      const current = new Request(input, init);
+      if (current.url.endsWith("/webhook_events") && current.method === "POST") return new Response(null, { status: 409 });
+      if (current.url.endsWith("/call_events") && current.method === "POST") return new Response(null, { status: 201 });
+      if (current.url.includes("/webhook_events?") && current.method === "PATCH") {
+        const params = new URL(current.url).searchParams;
+        const payload = JSON.parse(await current.text()) as { type: string; received_at: string };
+        if (params.has("or")) {
+          const cutoff = /received_at\.lt\.([^,)]+)/.exec(params.get("or") ?? "")?.[1] ?? "";
+          if (row.type !== PENDING && !(row.type === REFRESHING && row.received_at < cutoff)) return Response.json([]);
+        } else if (row.type !== (params.get("type") ?? "").replace("eq.", "")) {
+          return Response.json([]);
+        }
+        row.type = payload.type;
+        row.received_at = payload.received_at ?? row.received_at;
+        return Response.json([{ ...row }]);
+      }
+      if (current.url.endsWith("/v1/calls/call_terminal")) {
+        callFetches++;
+        return Response.json({ id: "call_terminal", status: "completed", metadata: { call_run_id: "11111111-1111-4111-8111-111111111111" } });
+      }
+      if (current.url.includes("/call_runs?")) return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
+      throw new Error(`unexpected request ${current.method} ${current.url}`);
+    }));
+    const response = await handler(request());
+    if (response.status !== 200) throw new Error("stranded event must be reclaimed and acknowledged");
+    if (callFetches !== 1) throw new Error(`stale claim must re-fetch exactly once, saw ${callFetches}`);
+    if (row.type !== REFETCHED) throw new Error(`row must leave refreshing, saw ${row.type}`);
+  });
+
+  testFn("ignores a re-fetch that carries no usable status and writes no timeline row", async () => {
+    const states: string[] = [];
+    const handler = createWebhookHandler(baseDeps(async (input, init) => {
+      const current = new Request(input, init);
+      if (current.url.endsWith("/webhook_events") && current.method === "POST") return new Response(null, { status: 201 });
+      if (current.url.includes("/webhook_events?") && current.method === "PATCH") {
+        states.push((JSON.parse(await current.text()) as { type: string }).type);
+        return Response.json([{ event_id: "evt_terminal" }]);
+      }
+      if (current.url.endsWith("/v1/calls/call_terminal")) {
+        return Response.json({ id: "call_terminal", metadata: { call_run_id: "11111111-1111-4111-8111-111111111111" } });
+      }
+      throw new Error(`unexpected request ${current.method} ${current.url}`);
+    }));
+    const response = await handler(request());
+    if (response.status !== 200) throw new Error("a re-fetch without status must be acknowledged");
+    if (!states.includes(IGNORED)) throw new Error(`the event must be marked ignored, saw ${JSON.stringify(states)}`);
+  });
+
+  testFn("rejects a non-POST request with 405 before any dependency", async () => {
+    const handler = createWebhookHandler(baseDeps(async () => { throw new Error("non-POST reached a dependency"); }));
+    const response = await handler(new Request("https://orma-api.nryn.dev/functions/v1/calle-webhook/path-secret", { method: "GET" }));
+    if (response.status !== 405) throw new Error("non-POST must be rejected");
+    if (response.headers.get("allow") !== "POST") throw new Error("405 must advertise POST");
+  });
+
+  testFn("rejects a request without the event id header before any dependency", async () => {
+    const handler = createWebhookHandler(baseDeps(async () => { throw new Error("missing header reached a dependency"); }));
+    const response = await handler(new Request("https://orma-api.nryn.dev/functions/v1/calle-webhook/path-secret", {
+      method: "POST", body: "x".repeat(MAX_BODY_BYTES + 1),
+    }));
+    if (response.status !== 400) throw new Error("missing event id header must be rejected before the body gate");
+  });
+
+  testFn("rejects a body over 128 KiB before any dependency", async () => {
+    const handler = createWebhookHandler(baseDeps(async () => { throw new Error("oversized body reached a dependency"); }));
+    const response = await handler(new Request("https://orma-api.nryn.dev/functions/v1/calle-webhook/path-secret", {
+      method: "POST", headers: { [EVENT_ID_HEADER]: "evt_terminal" }, body: "x".repeat(MAX_BODY_BYTES + 1),
+    }));
+    if (response.status !== 413) throw new Error("oversized body must be rejected");
+  });
+
+  testFn("rejects an envelope whose type is not terminal before any dependency", async () => {
+    const handler = createWebhookHandler(baseDeps(async () => { throw new Error("non-terminal type reached a dependency"); }));
+    const response = await handler(request({ ...event(), type: "call.ringing" }));
+    if (response.status !== 400) throw new Error("non-terminal type must be rejected");
+  });
+
 }

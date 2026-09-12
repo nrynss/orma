@@ -157,7 +157,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
 | P1 | 7 / 7 | Complete. Contracts are frozen. |
-| P2 | 4 / 9 | T2.1 through T2.4 complete. T2.9 remains in progress. |
+| P2 | 5 / 9 | T2.1 through T2.4 and T2.6 complete. T2.8 and T2.9 remain in progress. T2.5 and T2.7 are not started. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 0 / 3 | T4.1 can start. |
 | P5 | 0 / 4 | T5.1 can start. |
@@ -450,3 +450,54 @@ database read. Six Deno checks passed. Round 3 APPROVE found zero findings.
 The operator must add `ORMA_MATERIALISE_SECRET_KEY` to database Vault before
 deploying the scheduler. The repository inventory and bootstrap now name it.
 T2.3 can start.
+
+### 2026-09-12 · T2.6 complete
+
+**T2.6 Webhook receiver.** `calle-webhook` de-duplicates a CALL-E event in
+`webhook_events`, claims it with one conditional `PATCH`, re-fetches the
+authoritative call, and acts only on that re-fetch. The webhook body is a
+notification and never a fact.
+
+Five gates run in order. A non-POST gets 405, a missing path secret 401, a
+missing `call-e-event-id` header 400, a body over 128 KiB 413, and a
+non-terminal type 400. The claim moves both `type` and `received_at`, so a row
+stranded in `refreshing` is reclaimed after a five minute lease. A failed
+re-fetch releases the event to `pending` and returns 500, because a 200 would
+lose the event for good.
+
+A matched run gains a `webhook_received` row and a `refetched` row. The
+`refetched` row carries the authoritative state taken from the re-fetch. No
+body value may populate `state`. The only body values that reach a stored row
+are the event id, the call id and the terminal type.
+
+Sixteen in-file checks pass. Each of the five gates and both timeline writes has
+a pin that fails when its code is reverted. Round 6 APPROVE found zero findings
+at every severity, with a zero-residue claim against rounds 1 through 5.
+
+The fixtures are three `*.documented.json` contract files and one
+`*.recorded.json` file. The recorded one is a real provider delivery captured at
+an independent sink, with its phone masked. The documented ones cover the two
+terminal types never observed live. All four drive the same handler.
+
+Deployed as `calle-webhook` version 2 with `verify_jwt` false. A live probe
+against the deployed function returned 401 without the secret, 400 without the
+header, 400 for a non-terminal type, 405 for a GET, and 200 for a byte-identical
+replay of the recorded body. The replay inserted one event and the second send
+re-fetched nothing.
+
+**The live delivery to our endpoint is blocked on CALL-E.** CALL-E delivers a
+terminal event to an independent public sink. It has never delivered a POST to
+`orma-api.nryn.dev`, across a real call, a control call and a receiver that
+logged every method and path before any gate. The endpoint is reachable from six
+check-host nodes and accepts a replay, so the fault is not ours to fix. The
+evidence is `dev-diary/feedback.md` issue 13 and
+`dev-diary/adversarial-review/t2.6-contract-change.md`.
+
+This does not block the task. Spec section 5 is re-fetch based, so a body is
+never a fact. Polling in T2.5 reconciles any call that no webhook reports. The
+matched path was proven in-file and by reviewer probes, not live, because the
+live database holds no `call_runs` row yet.
+
+T2.7 result ingestion can start. It depends on T2.6 for the `calle_call_id` link
+and on the re-fetch, not on a live callback. T2.9 owns both timeline kinds this
+receiver now produces.
