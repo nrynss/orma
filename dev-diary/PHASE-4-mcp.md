@@ -20,7 +20,7 @@ requires:   T1.2, T1.3
 fixture-ok: yes
 size:       M · mid
 owns:       supabase/functions/mcp/index.ts
-status:     not-started
+status:     claimed:orma-impl
 ```
 Streamable HTTP in stateless mode, served at `orma-api.nryn.dev/mcp`. Stateless suits a function, because there is no session to hold between requests.
 
