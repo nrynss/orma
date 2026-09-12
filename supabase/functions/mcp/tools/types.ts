@@ -2,8 +2,9 @@
  * Shared MCP tool constants and result helpers for T4.2.
  *
  * Item source for this surface is always `mcp`.
- * Retirement records surface `mcp` in `retired_reason`.
- * Reversible from the web by clearing status and retired fields.
+ * Retirement stores durable who and surface in `retired_reason`
+ * as `mcp:<userId>` or `mcp:<userId>:<note>`.
+ * Web restore clears status and retired fields via the user client.
  */
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2"
@@ -49,6 +50,34 @@ export function toolErr(message: string): ToolContentResult {
   return {
     content: [{ type: "text", text: message }],
     isError: true,
+  }
+}
+
+/** Durable attribution: mcp:<userId> or mcp:<userId>:<note>. */
+export function encodeRetiredReason(userId: string, note?: string): string {
+  const who = userId.trim()
+  const base = `${RETIRE_SURFACE_MCP}:${who}`
+  const trimmed = note?.trim() ?? ""
+  return trimmed === "" ? base : `${base}:${trimmed}`
+}
+
+export function parseRetiredReason(value: string | null | undefined): {
+  surface: string | null
+  who: string | null
+  note: string | null
+} {
+  if (!value) return { surface: null, who: null, note: null }
+  const parts = value.split(":")
+  if (parts[0] !== RETIRE_SURFACE_MCP) {
+    return { surface: parts[0] ?? null, who: null, note: null }
+  }
+  if (parts.length < 2 || parts[1] === "") {
+    return { surface: RETIRE_SURFACE_MCP, who: null, note: null }
+  }
+  return {
+    surface: RETIRE_SURFACE_MCP,
+    who: parts[1],
+    note: parts.length > 2 ? parts.slice(2).join(":") : null,
   }
 }
 
