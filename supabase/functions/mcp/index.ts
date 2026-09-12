@@ -1,1 +1,2 @@
-PLACEHOLDER_LOAD_FROM_FILE
+export type T = Array<string>;
+const testFn = 1;
