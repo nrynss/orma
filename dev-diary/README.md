@@ -158,11 +158,11 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
 | P1 | 7 / 7 | Complete. Contracts are frozen. |
 | P2 | 0 / 9 | Not started. T2.1, T2.2 and T2.3 can start. |
-| P3 | 0 / 5 | T3.1 can start. Bot @orma_tele_bot is registered. |
+| P3 | 5 / 5 | **Complete.** Text, voice, linking, and receipt delivery helpers landed. |
 | P4 | 0 / 3 | T4.1 can start. |
 | P5 | 0 / 4 | T5.1 can start. |
 | P6 | 0 / 6 | Not started. Blocked on T5.3. |
-| P7 | 0 / 4 | Not started. Blocked on T1.1, and on T3.4 for delivery. |
+| P7 | 0 / 4 | Not started. Soft-blocked on P2. T3.4 delivery is ready. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
 
 ---
@@ -377,3 +377,26 @@ causing the classification rather than failing to prevent it. A number that
 places one call and is never seen again, from a pool, to a stranger, is close to
 the signature these classifiers are built to catch, and reputation cannot accrue
 to a line that is discarded after one use.
+
+### 2026-09-12 · T3.3 complete
+
+**T3.3 Voice capture.** `supabase/functions/telegram/voice.ts` acks first,
+transcribes through Vertex Gemini, edits the ack with the transcript and Confirm,
+and stores Opus under `item-audio` with `audio_url` via `ORMA_API_URL`.
+
+Round 1 found H: after a successful insert, a throwing `editMessage` showed
+`VOICE_FAIL_TEXT` while the item existed. Remediation separates insert success
+from edit. On edit failure the helper sends a follow-up success message with
+Confirm, or leaves the ack, and still returns `captured`. Round 2 APPROVE with
+zero residue. Pins: `deno test --allow-read supabase/functions/telegram/voice.ts`
+(29 passed).
+
+Contract gaps remain for T3.1 (`captureVoiceNote` wiring and env), a T1.1
+migration for `items.audio_url` plus bucket `item-audio`, and regenerated types.
+Unblocks nothing new on the critical path. T3.4 receipts can start from T3.1.
+
+### 2026-09-12 · T3.4 complete
+
+**T3.4 Receipt delivery.** Shared `deliver-telegram.ts` sends post-call and
+pattern receipts over Telegram with injected fetch. Disabled receipts skip with
+no row. Round 1 APPROVE. Unblocks T7.3 and T7.4. P3 is now 5 / 5.
