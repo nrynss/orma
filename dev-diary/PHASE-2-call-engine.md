@@ -81,8 +81,8 @@ Schedule it with `pg_cron` every minute.
 requires:   T1.4, T1.5, T2.2, T2.3
 fixture-ok: yes
 size:       L · frontier
-owns:       supabase/functions/_shared/calle.ts
-status:     not-started
+owns:       supabase/functions/_shared/calle.ts, supabase/functions/tick/index.ts, supabase/migrations/20260912170000_schedule_tick.sql, supabase/config.toml, .env.example, .github/workflows/_env-example.yml, scripts/bootstrap-env.sh
+status:     done
 ```
 The client. `POST /v1/calls` with the assembled `task`, the E.164 number in
 `recipients`, the inline `result_schema` from
@@ -209,7 +209,7 @@ requires:   T2.3
 fixture-ok: yes
 size:       S · mid
 owns:       supabase/functions/_shared/events.ts
-status:     not-started
+status:     claimed:gpt-5
 ```
 Write a `call_events` row at every transition: materialised, claimed, dispatched, polled, webhook received, re-fetched, ingested, finalised. Include enough detail to answer what happened without opening the logs.
 

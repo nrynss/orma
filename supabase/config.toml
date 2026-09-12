@@ -8,3 +8,8 @@ verify_jwt = false
 # API key, which @supabase/server validates in the handler.
 [functions.materialise]
 verify_jwt = false
+
+# T2.4 owns this block. The minute cron uses the same named Vault scheduler
+# key as Materialise, which @supabase/server validates in the handler.
+[functions.tick]
+verify_jwt = false

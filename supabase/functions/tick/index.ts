@@ -2,13 +2,14 @@
  * Claims due call runs. PostgreSQL owns the claim so concurrent cron requests
  * cannot send the same run to CALL-E twice.
  *
- * Dispatch arrives in T2.4. Until then, tick must not claim runs because a
- * claim cannot be put back after it commits.
+ * T2.4 wires each claimed run to the guarded CALL-E dispatcher.
  *
  * Pin with: deno test --allow-env --allow-net supabase/functions/tick/index.ts
  */
 
 import { withSupabase } from "npm:@supabase/server@1.6.0";
+import { dispatchClaimedRun, depsFromEnv as calleDepsFromEnv } from "../_shared/calle.ts";
+import { recordCallEvent } from "../_shared/events.ts";
 
 const CLAIM_LIMIT = 20;
 
@@ -18,11 +19,17 @@ export type TickRun = {
   poll_after: string | null;
 };
 
+export type ClaimedTickRun = TickRun & {
+  user_id: string;
+  idempotency_key: string;
+  slot_id: string | null;
+};
+
 export type TickDeps = {
   apiUrl: string;
   serviceRoleKey: string;
   fetch: typeof fetch;
-  dispatchClaimed?: (run: TickRun) => Promise<void>;
+  dispatchClaimed?: (run: ClaimedTickRun) => Promise<void>;
   pollDue: (run: TickRun) => Promise<void>;
   finalise: (run: TickRun) => Promise<void>;
   now: () => Date;
@@ -53,13 +60,12 @@ export function depsFromEnv(
   getEnv: (key: string) => string | undefined = (key) => Deno.env.get(key),
   fetchImpl: typeof fetch = fetch,
 ): TickDeps {
+  const calleDeps = calleDepsFromEnv(getEnv, fetchImpl);
   return {
     apiUrl: requireNamedEnv("ORMA_API_URL", getEnv),
     serviceRoleKey: requireNamedEnv("SUPABASE_SERVICE_ROLE_KEY", getEnv),
     fetch: fetchImpl,
-    // T2.4 supplies dispatch. An absent dispatcher leaves scheduled rows
-    // untouched, which is safe while this seam is deployed independently.
-    dispatchClaimed: undefined,
+    dispatchClaimed: (run) => dispatchClaimedRun(run, calleDeps),
     pollDue: unavailable("poll"),
     finalise: unavailable("finalisation"),
     now: () => new Date(),
@@ -97,7 +103,7 @@ async function readRows(
 /** Calls the only SQL boundary allowed to claim runs. Do not replace this with
  * a REST PATCH: PostgREST cannot provide a `FOR UPDATE SKIP LOCKED` claim.
  */
-export async function claimDueRuns(deps: TickDeps): Promise<TickRun[]> {
+export async function claimDueRuns(deps: TickDeps): Promise<ClaimedTickRun[]> {
   const response = await deps.fetch(
     restUrl(deps.apiUrl, "rpc/claim_due_call_runs"),
     {
@@ -107,7 +113,7 @@ export async function claimDueRuns(deps: TickDeps): Promise<TickRun[]> {
     },
   );
   if (!response.ok) throw new Error("due call_runs claim failed");
-  return await response.json() as TickRun[];
+  return await response.json() as ClaimedTickRun[];
 }
 
 export async function duePolls(deps: TickDeps): Promise<TickRun[]> {
@@ -135,7 +141,10 @@ export async function terminalRuns(deps: TickDeps): Promise<TickRun[]> {
 export async function tick(deps: TickDeps): Promise<TickResult> {
   const claimed = deps.dispatchClaimed ? await claimDueRuns(deps) : [];
   if (deps.dispatchClaimed) {
-    await Promise.all(claimed.map((run) => deps.dispatchClaimed!(run)));
+    await Promise.all(claimed.map(async (run) => {
+      await recordCallEvent(run.id, "claimed", { state: run.state }, deps);
+      await deps.dispatchClaimed!(run);
+    }));
   }
 
   const polls = await duePolls(deps);
@@ -173,7 +182,7 @@ export function createTickHandler(
 export function createAuthenticatedTickHandler(
   deps: TickDeps,
 ): (request: Request) => Promise<Response> {
-  // The minute cron shares the scheduler credential created by T2.1.
+  // The minute cron shares the Vault-backed scheduler credential from T2.1.
   return withSupabase({ auth: "secret:materialise" }, createTickHandler(deps));
 }
 
@@ -258,4 +267,81 @@ if (typeof testFn === "function" && !import.meta.main) {
       }
     },
   );
+
+  testFn(
+    "configured tick claims a due run and reaches CALL-E dispatch",
+    async () => {
+      const requests: Request[] = [];
+      const fetchStub: typeof fetch = async (input, init) => {
+        const request = new Request(String(input), init);
+        requests.push(request);
+        if (request.url.endsWith("/rpc/claim_due_call_runs")) {
+          return Response.json([{
+            id: "run-1",
+            state: "claimed",
+            poll_after: null,
+            user_id: "user-1",
+            idempotency_key: "orma:user-1:2026-09-12:morning:v1",
+            slot_id: "slot-1",
+          }]);
+        }
+        if (request.url.includes("/profiles")) {
+          return Response.json([{ id: "user-1", phone_e164: "+919999999999", phone_confirmed_at: "2026-09-01T00:00:00Z" }]);
+        }
+        if (request.url.includes("/consents")) return Response.json([{ id: "consent-1" }]);
+        if (request.url.includes("/slots")) return Response.json([{ local_time: "08:00" }]);
+        if (request.url.includes("assemble_briefing")) {
+          return Response.json({ user_name: "Narayan", open_count: 0, lead_line: "Nothing urgent today.", open_items: "Nothing open.", last_call_summary: "", slot_local_time: "08:00" });
+        }
+        if (request.url.endsWith("/v1/calls")) {
+          return Response.json({ id: "call-1", status: "queued", completion_confidence: null });
+        }
+        return Response.json([]);
+      };
+      const env: Record<string, string> = {
+        ORMA_API_URL: "https://orma-api.nryn.dev",
+        SUPABASE_SERVICE_ROLE_KEY: "service-key",
+        CALLE_API_BASE: "https://api.call-e.test",
+        CALLE_API_KEY: "calle-key",
+        ORMA_WEBHOOK_SECRET: "webhook-secret",
+      };
+      const result = await tick(depsFromEnv((key) => env[key], fetchStub));
+      if (result.claimed !== 1) throw new Error("configured tick did not claim the due run");
+      if (!requests.some((request) => request.url.endsWith("/v1/calls"))) {
+        throw new Error("configured tick did not dispatch the claimed run to CALL-E");
+      }
+    },
+  );
+
+  testFn("only the named scheduler secret API key reaches tick", async () => {
+    const oldUrl = Deno.env.get("SUPABASE_URL");
+    const oldKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
+    const oldPublishableKeys = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS");
+    Deno.env.set("SUPABASE_URL", "https://orma-api.nryn.dev");
+    Deno.env.set("SUPABASE_SECRET_KEYS", JSON.stringify({ materialise: "fixture-materialise-key" }));
+    Deno.env.set("SUPABASE_PUBLISHABLE_KEYS", JSON.stringify({ default: "fixture-publishable-key" }));
+    let reads = 0;
+    const handler = createAuthenticatedTickHandler({
+      ...baseDeps(async () => {
+        reads += 1;
+        return Response.json([]);
+      }),
+      dispatchClaimed: undefined,
+    });
+    try {
+      const rejected = await handler(new Request("https://orma-api.nryn.dev/functions/v1/tick", { method: "POST" }));
+      if (rejected.status !== 401 || reads !== 0) throw new Error("missing secret must not reach tick");
+      const accepted = await handler(new Request("https://orma-api.nryn.dev/functions/v1/tick", {
+        method: "POST", headers: { apikey: "fixture-materialise-key" },
+      }));
+      if (accepted.status !== 200 || Number(reads) !== 2) {
+        throw new Error("named scheduler secret must authenticate tick");
+      }
+    } finally {
+      if (oldUrl === undefined) Deno.env.delete("SUPABASE_URL"); else Deno.env.set("SUPABASE_URL", oldUrl);
+      if (oldKeys === undefined) Deno.env.delete("SUPABASE_SECRET_KEYS"); else Deno.env.set("SUPABASE_SECRET_KEYS", oldKeys);
+      if (oldPublishableKeys === undefined) Deno.env.delete("SUPABASE_PUBLISHABLE_KEYS");
+      else Deno.env.set("SUPABASE_PUBLISHABLE_KEYS", oldPublishableKeys);
+    }
+  });
 }
