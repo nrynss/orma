@@ -242,3 +242,11 @@ export function createMemoryVoiceStore(
     },
   };
 }
+
+export type { RestVoiceStoreDeps } from "./voice_rest.ts";
+export { createRestVoiceStore } from "./voice_rest.ts";
+export type { TelegramVoiceChatDeps } from "./voice_telegram.ts";
+export { createTelegramVoiceChat } from "./voice_telegram.ts";
+export type { VertexTranscriberDeps } from "./voice_vertex.ts";
+export { createVertexTranscriber, vertexTranscriberFromEnv } from "./voice_vertex.ts";
+import "./voice_tests.ts";
