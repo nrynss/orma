@@ -278,3 +278,50 @@ the 422 response. Show `{ "phones": ["+XXXXXXXXXXXX"] }` beside the field.
 Expose every dial attempt, its reason, and a cost amount on the CallTask. That
 would let an integrator distinguish one task with provider retries from two
 dispatches.
+
+---
+
+## 12. Accepted tasks can fail before any recipient-visible ring
+
+**Severity: high.**
+
+**What happened.** Two authorised webhook-capture probes were accepted and
+entered `in_progress`. Neither rang the configured recipient. One ended with
+provider failure `404`. The other ended with attempt failure `408` and
+`NO ANSWER (Hangup by: bot)`. Both recorded zero seconds and no transcript.
+
+**Evidence.** Each task returned a provider call id and terminal
+`call_failed`. The recipient observed no incoming call. Neither task produced
+a webhook event at Orma's deployed capture endpoint.
+
+**Cost to us.** The probes cost time and blocked webhook-contract capture,
+polling proof, result ingestion and dry-run end-to-end validation. The API's
+terminal vocabulary cannot distinguish routing failure from a real no-answer.
+
+**Suggested fix.** Expose a recipient-visible dial state and a provider routing
+diagnostic. Deliver a webhook for every terminal task, including a failure that
+occurs before a call can ring.
+
+---
+
+## 13. Accepted per-call webhook URL produced no delivery
+
+**Severity: high.**
+
+**What happened.** A control CallTask included the documented HTTPS
+`webhook_url`, rang the recipient, was answered, and completed normally. The
+deployed receiver was reachable by an independent POST, but recorded no
+CALL-E event.
+
+**Evidence.** `call_sY36Xr07vuAsq0RmsGOX7A` completed after a real
+conversation. Its developer event stream contained the terminal call event.
+Neither the receiver's `webhook_events` table nor the stream showed a callback
+delivery or retry.
+
+**Cost to us.** This blocked genuine webhook fixtures and the proof that a
+terminal result reaches Orma without polling. It also leaves the documented
+per-request callback feature unreliable for production workflows.
+
+**Suggested fix.** Expose delivery attempts, response status, and retry state
+in the call event stream. If a per-call callback is accepted, send a terminal
+event or return a validation error that explains why delivery is disabled.
