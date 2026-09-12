@@ -151,4 +151,58 @@ export async function captureVoiceNote(args: {
     }
 
     const itemId = crypto.randomUUID();
-    const item = await args.store.inse
+    const item = await args.store.insertVoiceItem({
+      id: itemId,
+      userId: profile.id,
+      text,
+      audio: file.bytes,
+      mimeType: file.mimeType,
+    });
+    if (item.userId !== profile.id) {
+      throw new Error("inserted voice item user must match the linked profile");
+    }
+    if (item.source !== ITEM_SOURCE_TELEGRAM) {
+      throw new Error("inserted voice item source must be telegram");
+    }
+    if (item.text !== text) {
+      throw new Error("inserted voice item text must match the transcript");
+    }
+    if (!item.audioUrl.includes(item.id)) {
+      throw new Error("inserted voice item must carry a storage link for this item");
+    }
+
+    const editText = recordedVoiceReply(item.text);
+    const markup = voiceConfirmMarkup(item.id);
+    try {
+      await args.chat.editMessage(
+        args.chatId,
+        ack.messageId,
+        editText,
+        markup,
+      );
+    } catch {
+      try {
+        await args.chat.sendMessage(args.chatId, editText, markup);
+      } catch {
+        // Item is stored. Leave the ack rather than show VOICE_FAIL_TEXT.
+      }
+    }
+    return {
+      status: "captured",
+      ackMessageId: ack.messageId,
+      item,
+      editText,
+    };
+  } catch {
+    try {
+      await args.chat.editMessage(args.chatId, ack.messageId, VOICE_FAIL_TEXT);
+    } catch {
+      // Best effort on the fail path. Status is already failed.
+    }
+    return {
+      status: "failed",
+      ackMessageId: ack.messageId,
+      editText: VOICE_FAIL_TEXT,
+    };
+  }
+}
