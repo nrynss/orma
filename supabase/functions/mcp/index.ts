@@ -1,1 +1,1 @@
-LOADING_FROM_DISK
+file:///workspace/agent-tools/cu-content-only.txt
