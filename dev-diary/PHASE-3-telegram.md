@@ -19,7 +19,7 @@ parallel: [P2, P4, P5, P6]
 requires:   []
 fixture-ok: yes
 size:       S · mid
-owns:       supabase/functions/telegram/index.ts
+owns:       supabase/functions/telegram/index.ts, supabase/config.toml ([functions.telegram])
 status:     claimed:orma
 ```
 Register the bot, set the webhook to the function URL with `TELEGRAM_WEBHOOK_SECRET` in the path, and stand up grammY on Deno.

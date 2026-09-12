@@ -28,6 +28,8 @@ status:     not-started
 ```
 Enable email magic link. Configure Resend as the sender over its HTTP API, because Supabase's built-in mailer is rate limited to a handful of messages an hour and Edge Functions block outbound ports 25 and 587.
 
+Do not edit `[functions.telegram]`. T3.1 owns that block and sets `verify_jwt = false`.
+
 Set the site URL and the allowed redirect list to the Pages domain. A redirect list that is wrong in production is the classic way this fails after everything worked locally.
 
 **Done when:** a magic link arrives from the Orma domain, signs in, and lands on the app; and ten requests in a minute do not exhaust a rate limit.

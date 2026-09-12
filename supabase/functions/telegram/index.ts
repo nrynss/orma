@@ -12,7 +12,7 @@
  * `deno test --allow-net --allow-env --allow-read supabase/functions/telegram/index.ts`
  *
  * Live forged POST against the front door should be 401 with an empty body.
- * JWT verification must be off at deploy time. T5.1 owns `config.toml`.
+ * JWT verification is off in `supabase/config.toml` `[functions.telegram]`.
  */
 import { Bot, webhookCallback } from "npm:grammy@1.38.3";
 
@@ -58,11 +58,7 @@ export function presentedWebhookSecret(pathname: string): string | null {
   if (index === -1) return null;
   const rest = pathname.slice(index + marker.length).replace(/\/+$/, "");
   if (!rest) return null;
-  try {
-    return decodeURIComponent(rest);
-  } catch {
-    return null;
-  }
+  return rest;
 }
 
 export function webhookSecretsMatch(presented: string, expected: string): boolean {
@@ -257,5 +253,47 @@ if (typeof testFn === "function" && !import.meta.main) {
     if (!response.ok) throw new Error(`expected grammY to accept the update, got ${response.status}`);
     const matched = sendBodies.some((body) => body.includes(START_LINK_PROMPT));
     if (!matched) throw new Error("Bot API was not asked to send the linking prompt");
+  });
+
+  testFn("path secret with a percent sequence matches registration and POST", async () => {
+    const percentSecret = "abc%2Fdef";
+    const registered = telegramWebhookUrl(apiUrl, percentSecret);
+    const fromPath = presentedWebhookSecret(new URL(registered).pathname);
+    if (fromPath !== percentSecret) {
+      throw new Error("presented secret must equal the registered path segment");
+    }
+    if (fromPath === decodeURIComponent(percentSecret)) {
+      throw new Error("matcher must not decode percent sequences in the secret");
+    }
+    let capturedUrl: string | undefined;
+    const handler = createTelegramHandler({
+      botToken,
+      webhookSecret: percentSecret,
+      apiUrl,
+      fetch: async (_input, init) => {
+        const parsed = JSON.parse(String(init?.body ?? "{}")) as { url?: string };
+        capturedUrl = parsed.url;
+        return new Response(JSON.stringify({ ok: true, result: true }), {
+          headers: { "content-type": "application/json" },
+        });
+      },
+    });
+    const getResponse = await handler(new Request(registered));
+    if (getResponse.status !== 200) {
+      throw new Error(`expected 200 on GET, got ${getResponse.status}`);
+    }
+    if (capturedUrl !== registered) {
+      throw new Error("setWebhook url must keep the percent sequence in the secret");
+    }
+    const postResponse = await handler(
+      new Request(registered, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: startUpdate(),
+      }),
+    );
+    if (postResponse.status === 401) {
+      throw new Error("POST with the percent secret must pass the matcher");
+    }
   });
 }

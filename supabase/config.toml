@@ -1,0 +1,5 @@
+# T3.1 owns [functions.telegram]. Telegram posts webhooks with no JWT.
+# T5.1 owns the [auth] block only. It must not change verify_jwt here.
+
+[functions.telegram]
+verify_jwt = false
