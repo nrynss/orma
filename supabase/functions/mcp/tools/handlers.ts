@@ -6,10 +6,12 @@
  */
 
 import {
+  encodeRetiredReason,
   ITEM_SOURCE_MCP,
   ITEM_STATUS_OPEN,
   ITEM_STATUS_RETIRED,
   PARTS_OF_DAY,
+  parseRetiredReason,
   RETIRE_SURFACE_MCP,
   toolErr,
   toolOk,
@@ -33,6 +35,10 @@ export type RetireItemArgs = {
   reason?: string
 }
 
+export type RestoreItemArgs = {
+  item_id: string
+}
+
 export type SetSlotArgs = {
   local_time: string
   part_of_day: PartOfDay
@@ -51,6 +57,9 @@ function normalizeLocalTime(value: string): string | null {
 function isPartOfDay(value: string): value is PartOfDay {
   return (PARTS_OF_DAY as readonly string[]).includes(value)
 }
+
+const ITEM_SELECT =
+  "id,user_id,text,status,source,since_date,created_at,retired_at,retired_reason,seeded"
 
 export async function addItem(
   client: UserScopedClient,
@@ -79,7 +88,7 @@ export async function addItem(
   const { data, error } = await client
     .from("items")
     .insert(insert)
-    .select("id,user_id,text,status,source,since_date,created_at,retired_at,retired_reason,seeded")
+    .select(ITEM_SELECT)
     .single()
 
   if (error) return toolErr(`add_item failed: ${error.message}`)
@@ -99,7 +108,7 @@ export async function listItems(
 ): Promise<ToolContentResult> {
   const { data, error } = await client
     .from("items")
-    .select("id,user_id,text,status,source,since_date,created_at,retired_at,retired_reason,seeded")
+    .select(ITEM_SELECT)
     .eq("status", ITEM_STATUS_OPEN)
 
   if (error) return toolErr(`list_items failed: ${error.message}`)
@@ -115,10 +124,11 @@ export async function retireItem(
   if (itemId === "") return toolErr("retire_item requires item_id")
 
   const retiredAt = new Date().toISOString()
-  const reason =
+  const note =
     typeof args.reason === "string" && args.reason.trim() !== ""
-      ? `${RETIRE_SURFACE_MCP}:${args.reason.trim()}`
-      : RETIRE_SURFACE_MCP
+      ? args.reason.trim()
+      : undefined
+  const reason = encodeRetiredReason(user.userId, note)
 
   const { data, error } = await client
     .from("items")
@@ -129,7 +139,7 @@ export async function retireItem(
     })
     .eq("id", itemId)
     .eq("status", ITEM_STATUS_OPEN)
-    .select("id,user_id,text,status,source,since_date,created_at,retired_at,retired_reason,seeded")
+    .select(ITEM_SELECT)
     .maybeSingle()
 
   if (error) return toolErr(`retire_item failed: ${error.message}`)
@@ -146,15 +156,61 @@ export async function retireItem(
   if (!row.retired_at) {
     return toolErr("retire_item must set retired_at")
   }
-  if (!row.retired_reason || !row.retired_reason.startsWith(RETIRE_SURFACE_MCP)) {
-    return toolErr("retire_item must record surface mcp")
+  const parsed = parseRetiredReason(row.retired_reason)
+  if (parsed.surface !== RETIRE_SURFACE_MCP || parsed.who !== user.userId) {
+    return toolErr("retire_item must record surface mcp and who on the row")
   }
+  const reversible =
+    row.status === ITEM_STATUS_RETIRED &&
+    Boolean(row.retired_at) &&
+    Boolean(row.retired_reason)
   return toolOk({
     ...row,
-    retired_by: user.userId,
-    retired_surface: RETIRE_SURFACE_MCP,
-    reversible: true,
+    retired_by: parsed.who,
+    retired_surface: parsed.surface,
+    reversible,
   })
+}
+
+/**
+ * Web-style restore: clear status and retired fields under RLS.
+ * Not an MCP tool. Models the reversible path from the product web UI.
+ */
+export async function restoreRetiredItem(
+  client: UserScopedClient,
+  user: ToolUser,
+  args: RestoreItemArgs,
+): Promise<ToolContentResult> {
+  const itemId = args.item_id?.trim() ?? ""
+  if (itemId === "") return toolErr("restore requires item_id")
+
+  const { data, error } = await client
+    .from("items")
+    .update({
+      status: ITEM_STATUS_OPEN,
+      retired_at: null,
+      retired_reason: null,
+    })
+    .eq("id", itemId)
+    .eq("status", ITEM_STATUS_RETIRED)
+    .select(ITEM_SELECT)
+    .maybeSingle()
+
+  if (error) return toolErr(`restore failed: ${error.message}`)
+  if (!data) {
+    return toolErr("restore failed: item not found, not retired, or not owned")
+  }
+  const row = data as ItemRow
+  if (row.user_id !== user.userId) {
+    return toolErr("restore refused: cross-user row")
+  }
+  if (row.status !== ITEM_STATUS_OPEN) {
+    return toolErr("restore must set status open")
+  }
+  if (row.retired_at !== null || row.retired_reason !== null) {
+    return toolErr("restore must clear retired fields")
+  }
+  return toolOk(row)
 }
 
 export async function setSlot(
