@@ -28,6 +28,8 @@ status:     not-started
 ```
 Enable email magic link. Configure Resend as the sender over its HTTP API, because Supabase's built-in mailer is rate limited to a handful of messages an hour and Edge Functions block outbound ports 25 and 587.
 
+Do not edit `[functions.telegram]`. T3.1 owns that block and sets `verify_jwt = false`.
+
 Set the site URL and the allowed redirect list to the Pages domain. A redirect list that is wrong in production is the classic way this fails after everything worked locally.
 
 **Done when:** a magic link arrives from the Orma domain, signs in, and lands on the app; and ten requests in a minute do not exhaust a rate limit.
@@ -78,9 +80,27 @@ rendered and talks to PostgREST through the front door.
 The publishable key is the only key in the bundle. A build check fails if the
 secret key appears anywhere under `web/`.
 
+**P3 handoff (2026-09-12).** Telegram Start press from Settings is blocked only
+on a session JWT from this task. P3 already landed:
+
+- `web/src/lib/telegram-link.ts` with `mintLinkToken`, `unlinkTelegram`, and
+  `loadTelegramLinkState`. Callers pass `{ accessToken, userId }` from the
+  signed-in session. Posts go to `ORMA_API_URL/rest/v1`. Hash only, never the
+  raw token in storage. Bot username is `orma_tele_bot`.
+- `web/src/routes/app/settings/+page.svelte` mint and unlink UI.
+- Live table `public.telegram_link_tokens` with owner RLS.
+- Live bot webhook (telegram Edge Function v3) already runs `completeLink` on
+  `/start <token>` and binds `profiles.telegram_chat_id`.
+
+When this task lands, wire Settings to `supabase.auth.getSession()` (or the
+session helper you export). Pass `session.access_token` and `session.user.id`
+into `mintLinkToken` / `unlinkTelegram`. Do not put the service role in `web/`.
+Do not invent a second mint path. Reuse those helpers.
+
 **Done when:** a signed-out visitor to an app route lands on login, a signed-in
 reload keeps the session, and no request in the browser network tab goes to a
-`supabase.co` host.
+`supabase.co` host. Also pin: Settings mint with that JWT inserts one
+`telegram_link_tokens` row for the user, and the deep link opens the live bot.
 
 ---
 

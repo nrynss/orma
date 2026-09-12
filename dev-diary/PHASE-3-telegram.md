@@ -12,6 +12,8 @@ parallel: [P2, P4, P5, P6]
 
 **Why it matters:** The call fixes review. Telegram fixes capture. It is also the only inbound surface that works from a phone with no browser, and the Start press is what makes the bot able to message a user at all.
 
+**E2E status:** Clean for capture, link, and voice wiring. See `adversarial-review/p3-e2e-round2.md`.
+
 ---
 
 ### T3.1: Bot registration and webhook
@@ -19,12 +21,14 @@ parallel: [P2, P4, P5, P6]
 requires:   []
 fixture-ok: yes
 size:       S · mid
-owns:       supabase/functions/telegram/index.ts
-status:     not-started
+owns:       supabase/functions/telegram/index.ts, supabase/config.toml ([functions.telegram])
+status:     done
 ```
 Register the bot, set the webhook to the function URL with `TELEGRAM_WEBHOOK_SECRET` in the path, and stand up grammY on Deno.
 
 Verify the secret on every update before parsing anything. An unverified update is discarded without a reply.
+
+The handler now wires `completeLink`, `captureTextMessage`, `captureVoiceNote`, and `voice_ok`.
 
 **Done when:** a message to the bot reaches the function, an update forged without the secret is rejected, and the bot answers `/start` with the linking prompt from T3.5.
 
@@ -36,7 +40,7 @@ requires:   T1.1, T3.1, T3.5
 fixture-ok: yes
 size:       S · mid
 owns:       supabase/functions/telegram/capture.ts
-status:     not-started
+status:     done
 ```
 A plain message becomes an item with `source = 'telegram'`, and the bot replies with exactly what it recorded so a misheard thought is caught immediately.
 
@@ -51,8 +55,8 @@ A message from a chat with no linked profile gets the linking prompt instead, ne
 requires:   T3.2
 fixture-ok: yes
 size:       M · frontier
-owns:       supabase/functions/telegram/voice.ts
-status:     not-started
+owns:       supabase/functions/telegram/voice.ts (+ voice_rest/telegram/vertex + voice_tests*)
+status:     done
 ```
 Impulse capture is the case where talking is the only reason the thought gets recorded at all, so this path has to feel instant.
 
@@ -72,7 +76,7 @@ requires:   T1.1, T3.1
 fixture-ok: yes
 size:       M · mid
 owns:       supabase/functions/_shared/deliver-telegram.ts
-status:     not-started
+status:     done
 ```
 The outbound half. Telegram carries the post-call summary, what was captured and retired, and the pattern report. It never asks for anything and never chases.
 
@@ -90,7 +94,7 @@ requires:   T1.1, T3.1
 fixture-ok: yes
 size:       M · frontier
 owns:       supabase/functions/telegram/link.ts
-status:     not-started
+status:     done
 ```
 A bot cannot message a user who has never messaged it, so the Start press is a product requirement rather than a nicety.
 
@@ -99,3 +103,13 @@ Linking runs in one direction only: the web app issues a short-lived single-use 
 A chat id already bound to another profile is refused. A token is consumed on first use and expires quickly.
 
 **Done when:** a fresh link binds the chat, a replayed token is refused, a token older than its window is refused, and unlinking from settings clears the binding on both sides.
+
+---
+
+## P3 e2e close
+
+Live webhook on `phase-3` now binds Start tokens, captures text, and acks voice.
+Schema has `telegram_link_tokens`, `items.audio_url`, and private `item-audio`.
+Types include those names. Thin `receipt.ts` calls `deliverPostCallTelegram`.
+
+Residuals: T7.3 pattern caller, and T5.3 session before Settings mint is one click.
