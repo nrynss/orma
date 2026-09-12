@@ -164,7 +164,7 @@ requires:   T1.1, T1.2
 fixture-ok: yes
 size:       S · light
 owns:       supabase/seed.sql
-status:     claimed:gpt-5.6-sol
+status:     done
 ```
 A local database that resets into a usable state. One profile, one slot, four items of varying age, one completed call run with a transcript and mentions.
 
