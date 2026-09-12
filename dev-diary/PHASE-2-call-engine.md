@@ -134,8 +134,8 @@ This task needs one live call to prove the timing against the real service.
 requires:   T1.4, T2.4
 fixture-ok: yes
 size:       M · frontier
-owns:       supabase/functions/calle-webhook/index.ts, testdata/calle/webhook-*.json
-status:     not-started
+owns:       supabase/functions/calle-webhook/index.ts, testdata/calle/webhook-*.json, supabase/config.toml
+status:     claimed:gpt-5
 ```
 CALL-E webhooks carry no signature. The only identifier is a `CALL-E-Event-Id` header, which is a de-duplication key and not authentication. The body is therefore a notification and never a fact.
 
@@ -187,11 +187,11 @@ On a null result, fall back to the raw transcript for analysis, mark the run `an
 
 ### T2.8: Dry-run mode ★
 ```yaml
-requires:   T2.4
+requires:   T2.4, T2.7
 fixture-ok: yes
 size:       M · mid
-owns:       supabase/functions/_shared/dispatch-mode.ts
-status:     not-started
+owns:       supabase/functions/_shared/dispatch-mode.ts, supabase/functions/_shared/calle.ts
+status:     claimed:gpt-5
 ```
 A first-class mode, not a flag bolted on for the submission checklist.
 

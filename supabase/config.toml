@@ -13,3 +13,8 @@ verify_jwt = false
 # key as Materialise, which @supabase/server validates in the handler.
 [functions.tick]
 verify_jwt = false
+
+# T2.6 owns this block. CALL-E sends no Supabase JWT, so the handler gates
+# every request with ORMA_WEBHOOK_SECRET embedded in its webhook path.
+[functions.calle-webhook]
+verify_jwt = false
