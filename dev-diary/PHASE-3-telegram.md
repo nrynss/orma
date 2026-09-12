@@ -12,6 +12,8 @@ parallel: [P2, P4, P5, P6]
 
 **Why it matters:** The call fixes review. Telegram fixes capture. It is also the only inbound surface that works from a phone with no browser, and the Start press is what makes the bot able to message a user at all.
 
+**E2E status:** Clean for capture, link, and voice wiring. See `adversarial-review/p3-e2e-round2.md`.
+
 ---
 
 ### T3.1: Bot registration and webhook
@@ -25,6 +27,8 @@ status:     done
 Register the bot, set the webhook to the function URL with `TELEGRAM_WEBHOOK_SECRET` in the path, and stand up grammY on Deno.
 
 Verify the secret on every update before parsing anything. An unverified update is discarded without a reply.
+
+The handler now wires `completeLink`, `captureTextMessage`, `captureVoiceNote`, and `voice_ok`.
 
 **Done when:** a message to the bot reaches the function, an update forged without the secret is rejected, and the bot answers `/start` with the linking prompt from T3.5.
 
@@ -99,3 +103,13 @@ Linking runs in one direction only: the web app issues a short-lived single-use 
 A chat id already bound to another profile is refused. A token is consumed on first use and expires quickly.
 
 **Done when:** a fresh link binds the chat, a replayed token is refused, a token older than its window is refused, and unlinking from settings clears the binding on both sides.
+
+---
+
+## P3 e2e close
+
+Live webhook on `phase-3` now binds Start tokens, captures text, and acks voice.
+Schema has `telegram_link_tokens`, `items.audio_url`, and private `item-audio`.
+Types include those names. Thin `receipt.ts` calls `deliverPostCallTelegram`.
+
+Residuals: T7.3 pattern caller, and T5.3 session before Settings mint is one click.
