@@ -157,7 +157,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
 | P1 | 7 / 7 | Complete. Contracts are frozen. |
-| P2 | 0 / 9 | Not started. T2.1, T2.2 and T2.3 can start. |
+| P2 | 1 / 9 | T2.1 complete. T2.2 and T2.3 can start. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 0 / 3 | T4.1 can start. |
 | P5 | 0 / 4 | T5.1 can start. |
@@ -435,3 +435,18 @@ Round 4 APPROVE found zero C, H, M, or L findings. Linked migration history
 matches through `20260912131612`. Fresh type generation passes, and both copies
 include `graphql_public`. The security advisor no longer reports a mutable
 function search path. It retains only the known `pg_net` advisory.
+
+### 2026-09-12 · T2.1 complete
+
+**T2.1 Materialise runs.** The nightly materialiser builds a visible 48-hour
+window from active slots. It converts local slot times with DST handling and
+uses durable idempotency keys. Deactivating a slot removes only its future
+scheduled runs.
+
+`materialise-runs` schedules at 00:10 UTC. It reads its named secret key from
+Vault at execution. The function authorizes that key in its handler before any
+database read. Six Deno checks passed. Round 3 APPROVE found zero findings.
+
+The operator must add `ORMA_MATERIALISE_SECRET_KEY` to database Vault before
+deploying the scheduler. The repository inventory and bootstrap now name it.
+T2.3 can start.

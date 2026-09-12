@@ -3,3 +3,8 @@
 
 [functions.telegram]
 verify_jwt = false
+
+# T2.1 owns this block. pg_cron authenticates with the named materialise secret
+# API key, which @supabase/server validates in the handler.
+[functions.materialise]
+verify_jwt = false

@@ -19,8 +19,8 @@ parallel: [P3, P4, P5, P7]
 requires:   T1.1
 fixture-ok: yes
 size:       M · mid
-owns:       supabase/functions/materialise/index.ts
-status:     not-started
+owns:       supabase/functions/materialise/index.ts, supabase/migrations/20260912150000_schedule_materialise.sql, supabase/config.toml, .env.example, .github/workflows/_env-example.yml, scripts/bootstrap-env.sh
+status:     done
 ```
 A nightly job that writes the next 48 hours of `call_runs` from active slots, converting `local_time` in the profile's timezone into an absolute `scheduled_for`.
 
