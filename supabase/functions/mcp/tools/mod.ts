@@ -27,9 +27,11 @@ import {
 } from "./types.ts"
 
 export {
+  encodeRetiredReason,
   ITEM_SOURCE_MCP,
   ITEM_STATUS_OPEN,
   ITEM_STATUS_RETIRED,
+  parseRetiredReason,
   RETIRE_SURFACE_MCP,
   TOOL_NAMES,
   toolErr,
@@ -51,6 +53,7 @@ export {
   getLastCall,
   getPatterns,
   listItems,
+  restoreRetiredItem,
   retireItem,
   setSlot,
 } from "./handlers.ts"
@@ -94,7 +97,7 @@ export function registerOrmaTools(
     "retire_item",
     {
       description:
-        "Retire an open item. Records surface mcp. Reversible from the web.",
+        "Retire an open item. Records surface mcp and who. Reversible from the web.",
       inputSchema: {
         item_id: z.string().describe("UUID of the item to retire"),
         reason: z
