@@ -1,1 +1,1 @@
-PLACEHOLDER
+file:///tmp/cu_content.txt
