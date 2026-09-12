@@ -21,6 +21,17 @@ supabase/.branches/
 .DS_Store
 *.swp
 
+# Machine-local agent tool configs
+.claude/
+.codex/
+.cursor/
+.entire/
+.factory/
+.gemini/
+.opencode/
+.pi/
+.github/hooks/
+
 # Wrangler local cache
 .wrangler/
 
