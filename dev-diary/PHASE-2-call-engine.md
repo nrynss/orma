@@ -62,7 +62,7 @@ requires:   T1.1, T2.1
 fixture-ok: yes
 size:       M · frontier
 owns:       supabase/functions/tick/index.ts, supabase/migrations/20260912161000_tick.sql, supabase/migrations/test-tick-claims.sh
-status:     claimed:gpt-5
+status:     done
 ```
 The minute loop. Claim due runs with `FOR UPDATE SKIP LOCKED`, move them to `claimed`, and hand them to the dispatcher.
 
