@@ -424,3 +424,14 @@ mint needs a signed-in JWT until that shell exists.
 
 P3 e2e is clean for capture, link, and voice wiring. See
 `adversarial-review/p3-e2e-round2.md`.
+
+### 2026-09-12 · P1 closure review clean on merged main
+
+P1 was re-reviewed after P3 merged. The review restored the local copy of the
+Telegram audio and linking migration, regenerated both database type consumers,
+and hardened `public.set_updated_at` with `search_path = ''`.
+
+Round 4 APPROVE found zero C, H, M, or L findings. Linked migration history
+matches through `20260912131612`. Fresh type generation passes, and both copies
+include `graphql_public`. The security advisor no longer reports a mutable
+function search path. It retains only the known `pg_net` advisory.
