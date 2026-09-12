@@ -20,7 +20,7 @@ requires:   []
 fixture-ok: yes
 size:       S · mid
 owns:       supabase/functions/telegram/index.ts, supabase/config.toml ([functions.telegram])
-status:     claimed:orma
+status:     done
 ```
 Register the bot, set the webhook to the function URL with `TELEGRAM_WEBHOOK_SECRET` in the path, and stand up grammY on Deno.
 
@@ -90,7 +90,7 @@ requires:   T1.1, T3.1
 fixture-ok: yes
 size:       M · frontier
 owns:       supabase/functions/telegram/link.ts
-status:     not-started
+status:     claimed:orma
 ```
 A bot cannot message a user who has never messaged it, so the Start press is a product requirement rather than a nicety.
 
