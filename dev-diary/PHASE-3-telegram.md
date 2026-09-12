@@ -72,7 +72,7 @@ requires:   T1.1, T3.1
 fixture-ok: yes
 size:       M · mid
 owns:       supabase/functions/_shared/deliver-telegram.ts
-status:     claimed:orma
+status:     done
 ```
 The outbound half. Telegram carries the post-call summary, what was captured and retired, and the pattern report. It never asks for anything and never chases.
 
