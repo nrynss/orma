@@ -125,8 +125,8 @@ if (typeof testFn === "function" && !import.meta.main) {
             JSON.stringify({
               candidates: [{ content: { parts: [{ text: thought }] } }],
             }),
-            { headers: { "content-type": "application/json" } },
-          );
+            { headers: { "content-type": "application/json" },
+          });
         }
         throw new Error(`unexpected ${url}`);
       },
@@ -138,4 +138,53 @@ if (typeof testFn === "function" && !import.meta.main) {
     if (generate !== expected) throw new Error("generateContent url must use Vertex project and model");
   });
 
+  testFn("after insert an edit failure still returns captured and never VOICE_FAIL_TEXT", async () => {
+    const log: string[] = [];
+    const store = createMemoryVoiceStore([{ id: userA, telegramChatId: chatA }]);
+    const chat = recordingChat(log);
+    const originalEdit = chat.editMessage.bind(chat);
+    chat.editMessage = async (chatId, messageId, text, replyMarkup) => {
+      if (text.startsWith("Recorded:")) {
+        throw new Error("editMessageText failed");
+      }
+      return originalEdit(chatId, messageId, text, replyMarkup);
+    };
+    const result = await captureVoiceNote({
+      store,
+      chat,
+      transcribe: async () => thought,
+      chatId: chatA,
+      messageId: 3,
+      fileId: "file-1",
+    });
+    if (result.status !== "captured") throw new Error(`expected captured, got ${result.status}`);
+    if (result.editText !== recordedVoiceReply(thought)) {
+      throw new Error("captured result must still carry the recorded transcript");
+    }
+    if (log.some((line) => line.includes(VOICE_FAIL_TEXT))) {
+      throw new Error("must not show VOICE_FAIL_TEXT after a successful insert");
+    }
+    if (!log.some((line) => line.startsWith(`send:${recordedVoiceReply(thought)}`))) {
+      throw new Error("edit failure after insert must send a follow-up success message");
+    }
+    if (!log.some((line) => line.startsWith("send-markup:voice_ok:"))) {
+      throw new Error("follow-up success message must carry the confirm control");
+    }
+    const owned = await store.listItemsByUser(userA);
+    if (owned.length !== 1) throw new Error("item must remain after edit failure");
+  });
+
+  testFn("vertexTranscriberFromEnv throws when GEMINI_MODEL is missing", async () => {
+    try {
+      vertexTranscriberFromEnv((name) => {
+        if (name === "GEMINI_MODEL") return undefined;
+        return "present";
+      });
+      throw new Error("expected missing GEMINI_MODEL");
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== "missing GEMINI_MODEL") {
+        throw new Error("must name the missing GEMINI_MODEL variable");
+      }
+    }
+  });
 }
