@@ -39,8 +39,8 @@ Schedule it with `pg_cron` at 00:10 UTC.
 requires:   T1.1
 fixture-ok: yes
 size:       L · frontier
-owns:       supabase/functions/_shared/briefing.ts
-status:     not-started
+owns:       supabase/functions/_shared/briefing.ts, supabase/migrations/20260912160000_briefing.sql, supabase/migrations/test-briefing.sh
+status:     done
 ```
 The heart of the product. Given a user and a moment, produce the substitutions the task template in [docs/calle-call.md](../docs/calle-call.md) expects: `user_name`, `lead_line`, `open_items`, `last_call_summary` and `slot_local_time`.
 
@@ -61,8 +61,8 @@ Store the assembled object on `call_runs.briefing` before dispatch, so any claim
 requires:   T1.1, T2.1
 fixture-ok: yes
 size:       M · frontier
-owns:       supabase/functions/tick/index.ts
-status:     not-started
+owns:       supabase/functions/tick/index.ts, supabase/migrations/20260912161000_tick.sql, supabase/migrations/test-tick-claims.sh
+status:     claimed:gpt-5
 ```
 The minute loop. Claim due runs with `FOR UPDATE SKIP LOCKED`, move them to `claimed`, and hand them to the dispatcher.
 
