@@ -36,7 +36,7 @@ requires:   T1.1, T3.1, T3.5
 fixture-ok: yes
 size:       S · mid
 owns:       supabase/functions/telegram/capture.ts
-status:     claimed:orma
+status:     done
 ```
 A plain message becomes an item with `source = 'telegram'`, and the bot replies with exactly what it recorded so a misheard thought is caught immediately.
 
@@ -52,7 +52,7 @@ requires:   T3.2
 fixture-ok: yes
 size:       M · frontier
 owns:       supabase/functions/telegram/voice.ts
-status:     not-started
+status:     claimed:orma
 ```
 Impulse capture is the case where talking is the only reason the thought gets recorded at all, so this path has to feel instant.
 
