@@ -54,12 +54,37 @@ export interface LinkStore {
   insertToken(row: LinkTokenRow): Promise<void>;
   findToken(tokenHash: string): Promise<LinkTokenRow | null>;
   markTokenConsumed(tokenHash: string, consumedAt: Date): Promise<boolean>;
+  unmarkTokenConsumed(tokenHash: string): Promise<void>;
+  replaceOpenTokenForUser(row: LinkTokenRow): Promise<void>;
   deleteOpenTokensForUser(userId: string): Promise<void>;
   deleteTokensForUser(userId: string): Promise<void>;
   findProfileById(userId: string): Promise<ProfileTelegramRow | null>;
   findProfileByChatId(chatId: number): Promise<ProfileTelegramRow | null>;
   bindChatId(userId: string, chatId: number): Promise<BindChatResult>;
   clearChatId(userId: string): Promise<void>;
+}
+
+const mintLockByUser = new Map<string, Promise<void>>();
+
+async function runSerializedMint<T>(userId: string, work: () => Promise<T>): Promise<T> {
+  const previous = mintLockByUser.get(userId) ?? Promise.resolve();
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  mintLockByUser.set(
+    userId,
+    previous.then(
+      () => held,
+      () => held,
+    ),
+  );
+  await previous.catch(() => undefined);
+  try {
+    return await work();
+  } finally {
+    release();
+  }
 }
 
 export type LinkOutcome =
@@ -122,20 +147,24 @@ export async function mintLinkToken(args: {
   const now = args.now ?? new Date();
   const ttlMs = args.ttlMs ?? LINK_TOKEN_TTL_MS;
   const entropy = args.entropy ?? crypto.getRandomValues(new Uint8Array(LINK_TOKEN_BYTES));
+  if (entropy.length !== LINK_TOKEN_BYTES) {
+    throw new Error(`link token entropy must be ${LINK_TOKEN_BYTES} bytes`);
+  }
   const token = encodeLinkToken(entropy);
   if (!LINK_TOKEN_PATTERN.test(token)) {
     throw new Error("minted token is not a valid Telegram start payload");
   }
   const tokenHash = await hashLinkToken(token);
   const expiresAt = new Date(now.getTime() + ttlMs);
-  await args.store.deleteOpenTokensForUser(args.userId);
-  await args.store.insertToken({
-    tokenHash,
-    userId: args.userId,
-    expiresAt,
-    consumedAt: null,
+  return await runSerializedMint(args.userId, async () => {
+    await args.store.replaceOpenTokenForUser({
+      tokenHash,
+      userId: args.userId,
+      expiresAt,
+      consumedAt: null,
+    });
+    return { token, expiresAt, tokenHash };
   });
-  return { token, expiresAt, tokenHash };
 }
 
 export async function completeLink(args: {
@@ -157,18 +186,27 @@ export async function completeLink(args: {
   const claimed = await args.store.markTokenConsumed(tokenHash, now);
   if (!claimed) return { status: "replay" };
 
-  const bound = await args.store.bindChatId(row.userId, args.chatId);
-  if (bound === "taken") return { status: "taken" };
-  if (bound === "missing") return { status: "invalid" };
-  return { status: "bound", userId: row.userId, chatId: args.chatId };
+  try {
+    const bound = await args.store.bindChatId(row.userId, args.chatId);
+    if (bound === "taken") return { status: "taken" };
+    if (bound === "missing") return { status: "invalid" };
+    return { status: "bound", userId: row.userId, chatId: args.chatId };
+  } catch (error) {
+    try {
+      await args.store.unmarkTokenConsumed(tokenHash);
+    } catch {
+      // Keep the bind error. A failed rollback still surfaces the PATCH failure.
+    }
+    throw error;
+  }
 }
 
 export async function unlinkTelegram(args: {
   store: LinkStore;
   userId: string;
 }): Promise<void> {
-  await args.store.clearChatId(args.userId);
   await args.store.deleteTokensForUser(args.userId);
+  await args.store.clearChatId(args.userId);
 }
 
 export function createMemoryLinkStore(
@@ -186,6 +224,7 @@ export function createMemoryLinkStore(
   return {
     async insertToken(row) {
       if (tokens.has(row.tokenHash)) throw new Error("token hash already stored");
+      dropOpenTokensForUser(tokens, row.userId, row.consumedAt);
       tokens.set(row.tokenHash, { ...row, expiresAt: new Date(row.expiresAt), consumedAt: row.consumedAt });
     },
     async findToken(tokenHash) {
@@ -204,10 +243,17 @@ export function createMemoryLinkStore(
       row.consumedAt = new Date(consumedAt);
       return true;
     },
+    async unmarkTokenConsumed(tokenHash) {
+      const row = tokens.get(tokenHash);
+      if (row) row.consumedAt = null;
+    },
+    async replaceOpenTokenForUser(row) {
+      dropOpenTokensForUser(tokens, row.userId, null);
+      if (tokens.has(row.tokenHash)) throw new Error("token hash already stored");
+      tokens.set(row.tokenHash, { ...row, expiresAt: new Date(row.expiresAt), consumedAt: row.consumedAt });
+    },
     async deleteOpenTokensForUser(userId) {
-      for (const [hash, row] of tokens) {
-        if (row.userId === userId && row.consumedAt === null) tokens.delete(hash);
-      }
+      dropOpenTokensForUser(tokens, userId, null);
     },
     async deleteTokensForUser(userId) {
       for (const [hash, row] of tokens) {
@@ -237,6 +283,17 @@ export function createMemoryLinkStore(
       if (profile) profile.telegramChatId = null;
     },
   };
+}
+
+function dropOpenTokensForUser(
+  tokens: Map<string, LinkTokenRow>,
+  userId: string,
+  consumedAt: Date | null,
+): void {
+  if (consumedAt !== null) return;
+  for (const [hash, row] of tokens) {
+    if (row.userId === userId && row.consumedAt === null) tokens.delete(hash);
+  }
 }
 
 function cloneProfile(profile: ProfileTelegramRow | undefined): ProfileTelegramRow | null {
@@ -310,6 +367,21 @@ export function createRestLinkStore(deps: RestLinkStoreDeps): LinkStore {
       if (!response.ok) throw new Error("telegram_link_tokens consume failed");
       const rows = (await response.json()) as RestTokenRow[];
       return rows.length === 1;
+    },
+    async unmarkTokenConsumed(tokenHash) {
+      const response = await deps.fetch(
+        url("telegram_link_tokens", `token_hash=eq.${encodeURIComponent(tokenHash)}`),
+        {
+          method: "PATCH",
+          headers: headers("return=minimal"),
+          body: JSON.stringify({ consumed_at: null }),
+        },
+      );
+      if (!response.ok) throw new Error("telegram_link_tokens consume rollback failed");
+    },
+    async replaceOpenTokenForUser(row) {
+      await this.deleteOpenTokensForUser(row.userId);
+      await this.insertToken(row);
     },
     async deleteOpenTokensForUser(userId) {
       const response = await deps.fetch(
@@ -552,6 +624,100 @@ if (typeof testFn === "function" && !import.meta.main) {
     if (!insert.body.includes(minted.tokenHash)) throw new Error("insert must post the hash");
     if (!insert.url.startsWith("https://orma-api.nryn.dev/rest/v1/")) {
       throw new Error("rest calls must use ORMA_API_URL");
+    }
+  });
+
+  testFn("a failed bind rolls back consume so retry is not replay", async () => {
+    const store = createMemoryLinkStore([{ id: userA }]);
+    const minted = await mintLinkToken({ store, userId: userA, now });
+    const bind = store.bindChatId;
+    store.bindChatId = async () => {
+      throw new Error("profiles PATCH failed");
+    };
+    let threw = false;
+    try {
+      await completeLink({ store, token: minted.token, chatId: chatA, now });
+    } catch (error) {
+      threw = error instanceof Error && error.message === "profiles PATCH failed";
+    }
+    if (!threw) throw new Error("completeLink must surface the bind failure");
+    const burned = await store.findToken(minted.tokenHash);
+    if (burned?.consumedAt !== null) {
+      throw new Error("failed bind must not leave consumed_at set");
+    }
+    const profile = await store.findProfileById(userA);
+    if (profile?.telegramChatId !== null) {
+      throw new Error("failed bind must leave telegram_chat_id null");
+    }
+    store.bindChatId = bind;
+    const retry = await completeLink({ store, token: minted.token, chatId: chatA, now });
+    if (retry.status !== "bound") {
+      throw new Error(`expected bound retry, got ${retry.status}`);
+    }
+    const linked = await store.findProfileById(userA);
+    if (linked?.telegramChatId !== chatA) {
+      throw new Error("retry after rolled-back consume must bind the chat");
+    }
+  });
+
+  testFn("overlapping mints leave one live open token for a user", async () => {
+    const store = createMemoryLinkStore([{ id: userA }]);
+    const entropyA = new Uint8Array(LINK_TOKEN_BYTES).fill(3);
+    const entropyB = new Uint8Array(LINK_TOKEN_BYTES).fill(4);
+    const [first, second] = await Promise.all([
+      mintLinkToken({ store, userId: userA, now, entropy: entropyA }),
+      mintLinkToken({ store, userId: userA, now, entropy: entropyB }),
+    ]);
+    if (first.tokenHash === second.tokenHash) {
+      throw new Error("overlapping mints must use distinct hashes");
+    }
+    const rowA = await store.findToken(first.tokenHash);
+    const rowB = await store.findToken(second.tokenHash);
+    const live = [rowA, rowB].filter((row) => row !== null && row.consumedAt === null);
+    if (live.length !== 1) {
+      throw new Error(`expected one live open token, got ${live.length}`);
+    }
+  });
+
+  testFn("a failed token delete does not clear chat while leaving a usable token", async () => {
+    const store = createMemoryLinkStore([{ id: userA }]);
+    const minted = await mintLinkToken({ store, userId: userA, now });
+    const linked = await completeLink({ store, token: minted.token, chatId: chatA, now });
+    if (linked.status !== "bound") throw new Error("setup bind failed");
+    const leftover = await mintLinkToken({ store, userId: userA, now });
+    store.deleteTokensForUser = async () => {
+      throw new Error("token delete failed");
+    };
+    let threw = false;
+    try {
+      await unlinkTelegram({ store, userId: userA });
+    } catch (error) {
+      threw = error instanceof Error && error.message === "token delete failed";
+    }
+    if (!threw) throw new Error("unlink must surface the token delete failure");
+    const profile = await store.findProfileById(userA);
+    if (profile?.telegramChatId !== chatA) {
+      throw new Error("failed unlink must not clear telegram_chat_id");
+    }
+    const leftoverRow = await store.findToken(leftover.tokenHash);
+    if (leftoverRow === null) throw new Error("failed unlink must leave the leftover hash stored");
+    if (profile?.telegramChatId === null && leftoverRow.consumedAt === null) {
+      throw new Error("partial unlink must not clear chat while a live token remains");
+    }
+  });
+
+  testFn("mint rejects entropy shorter than LINK_TOKEN_BYTES", async () => {
+    const store = createMemoryLinkStore([{ id: userA }]);
+    let threw = false;
+    try {
+      await mintLinkToken({ store, userId: userA, now, entropy: new Uint8Array([1]) });
+    } catch (error) {
+      threw = error instanceof Error && error.message.includes(`${LINK_TOKEN_BYTES}`);
+    }
+    if (!threw) throw new Error("one-byte entropy must be rejected");
+    const outcome = await completeLink({ store, token: "AQ", chatId: chatA, now });
+    if (outcome.status === "bound") {
+      throw new Error("short entropy must not mint a bindable start payload");
     }
   });
 }
