@@ -21,3 +21,11 @@ Talk to me about colours. Palette. Text.
 1. Which accent is good for eyes?
 2. Which is the best option?
 3. both
+
+---
+
+We will go wtih Plum. Draft now.
+
+---
+
+Things can be in this branch. Just commit your work alone.
