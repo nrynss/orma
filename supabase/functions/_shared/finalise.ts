@@ -32,9 +32,10 @@
  * budget, and a lost append is named on the run row.
  *
  * After the `finalised` row lands, and only when this pass did the
- * ingestion, the module sends the T7.4 post-call receipt over Telegram. A
- * failure on that path is logged with the run id and never un-finalises the
- * run. A replay returns before the receipt path.
+ * ingestion, the module sends the T7.4 post-call receipt over Telegram. The
+ * receipt names user content, so text the no-CTA guard refuses falls back to
+ * the seam's generic receipt. Any other failure is logged with the run id
+ * and never un-finalises the run. A replay returns before the receipt path.
  *
  * A dry run never reaches this module. `dispatch-mode.ts` replays its recorded
  * fixture into ingestion inside the dispatch step, and ingestion completes the
@@ -325,10 +326,29 @@ async function attemptFailed(
 }
 
 /**
+ * The message the receipt seam throws when composed text asks or chases. The
+ * seam refuses the text before it reads the profile or writes a deliveries
+ * row, so a refused attempt leaves nothing behind.
+ */
+const CTA_REFUSAL_MESSAGE = "receipt text must not ask or chase";
+
+/** True when a receipt attempt failed on the no-CTA guard alone. */
+function isCtaRefusal(error: unknown): boolean {
+  return error instanceof Error && error.message === CTA_REFUSAL_MESSAGE;
+}
+
+/**
  * Sends the T7.4 post-call receipt once the finalised row stands. The
  * receipt is bookkeeping beside the call, so any failure is logged with the
  * run id, never a key, and swallowed, and the run stays finalised. A caller
  * that threads no bot token keeps the pre-T7.5 behaviour of sending none.
+ *
+ * The named texts are user content, so any of them can carry a question or
+ * a polite phrase the no-CTA guard refuses. That refusal lands before the
+ * profile read and any deliveries row, so the wrapper retries once with no
+ * named texts and the seam sends its own honest generic receipt. The retry
+ * asks for nothing and reveals nothing. Every other failure keeps the old
+ * silence, and no path here repeats ingestion or un-finalises the run.
  */
 async function sendPostCallReceipt(
   run: FinaliseRun,
@@ -348,10 +368,28 @@ async function sendPostCallReceipt(
       receiptDeps(deps, botToken),
     );
   } catch (error) {
-    console.error(
-      `post-call receipt failed for run ${run.id}`,
-      error instanceof Error ? error.message : "unknown error",
-    );
+    if (!isCtaRefusal(error)) {
+      console.error(
+        `post-call receipt failed for run ${run.id}`,
+        error instanceof Error ? error.message : "unknown error",
+      );
+      return;
+    }
+    // One receipt attempt path, not a second receipt. The refusal is thrown
+    // before the seam inserts a row, so this retry cannot duplicate one.
+    try {
+      await deliverIngestionReceipt(
+        { userId: run.user_id, callRunId: run.id, structured: null },
+        receiptDeps(deps, botToken),
+      );
+    } catch (fallbackError) {
+      console.error(
+        `post-call receipt failed for run ${run.id}`,
+        fallbackError instanceof Error
+          ? fallbackError.message
+          : "unknown error",
+      );
+    }
   }
 }
 
@@ -1201,6 +1239,104 @@ if (typeof testFn === "function") {
       const row = await event!.json() as { kind: string };
       if (row.kind !== "finalised") {
         throw new Error("the finalised row must stand");
+      }
+    },
+  );
+
+  testFn(
+    "unsafe user text still sends one generic post_call receipt",
+    async () => {
+      const { seen, deps } = driver(
+        payload({
+          structured_result: {
+            captured_items: [{
+              text: "Should I renew the passport again?",
+              evidence_offset_seconds: 12,
+            }],
+            retired_items: [{
+              item_id: "item-1",
+              evidence_offset_seconds: 30,
+            }],
+          },
+        }),
+        summary({
+          counts: { items: 1, mentions: 1, retirements: 1, commitments: 0 },
+        }),
+        {
+          botToken: BOT_TOKEN,
+          items: { "item-1": "Please cancel the old card" },
+        },
+      );
+      const ingested = await finaliseRun(RUN, deps);
+      if (ingested.alreadyIngested) {
+        throw new Error("the fixture must be a fresh ingest");
+      }
+      const ingests = seen.filter((request) =>
+        request.url.endsWith("/rpc/ingest_call_result")
+      );
+      if (ingests.length !== 1) {
+        throw new Error(
+          `the fallback must never repeat ingestion, saw ${ingests.length}`,
+        );
+      }
+      const sends = seen.filter((request) =>
+        new URL(request.url).host === TELEGRAM_HOST
+      );
+      if (sends.length !== 1) {
+        throw new Error(`one generic receipt must go out, saw ${sends.length}`);
+      }
+      const send = await sends[0].json() as { chat_id: number; text: string };
+      if (send.chat_id !== 424242) {
+        throw new Error("the fallback went to the wrong chat");
+      }
+      if (send.text.includes("?")) {
+        throw new Error(`the fallback must not ask: ${JSON.stringify(send.text)}`);
+      }
+      for (
+        const unsafe of [
+          "Should I renew the passport again?",
+          "Please cancel the old card",
+        ]
+      ) {
+        if (send.text.includes(unsafe)) {
+          throw new Error(
+            `the fallback printed unsafe text: ${JSON.stringify(unsafe)}`,
+          );
+        }
+      }
+      if (send.text !== "Call summary\nCaptured: none\nRetired: none") {
+        throw new Error(
+          `the fallback must be the generic summary: ${JSON.stringify(send.text)}`,
+        );
+      }
+      const posts = seen.filter((request) =>
+        request.method === "POST" &&
+        new URL(request.url).pathname === "/rest/v1/deliveries"
+      );
+      if (posts.length !== 1) {
+        throw new Error(`the fallback must write one row, saw ${posts.length}`);
+      }
+      const post = await posts[0].json() as {
+        kind: string;
+        call_run_id: string;
+        payload: { text: string };
+      };
+      if (post.kind !== "post_call" || post.call_run_id !== RUN.id) {
+        throw new Error(`the fallback row lost its identity: ${JSON.stringify(post)}`);
+      }
+      if (post.payload.text !== "Call summary\nCaptured: none\nRetired: none") {
+        throw new Error(
+          `the fallback row must not carry the refused text: ${JSON.stringify(post.payload)}`,
+        );
+      }
+      const patch = seen.find((request) =>
+        request.method === "PATCH" && request.url.includes("/rest/v1/deliveries")
+      );
+      if (!patch) throw new Error("the fallback must be marked sent");
+      const event = seen.find((request) => request.url.endsWith("/call_events"));
+      const timeline = await event!.json() as { kind: string };
+      if (timeline.kind !== "finalised") {
+        throw new Error("the fallback must leave the finalised row standing");
       }
     },
   );
