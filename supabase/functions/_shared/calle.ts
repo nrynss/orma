@@ -7,9 +7,11 @@
  */
 
 import { assembleBriefing, renderCallTask, storeBriefing } from "./briefing.ts";
+import { dryRunFixture, executeDryRun, isDryRun } from "./dispatch-mode.ts";
 import { recordCallEvent } from "./events.ts";
 import type { CallStatus, CallTaskFixture } from "./fixtures.ts";
 import { loadCallFixtures } from "./fixtures.ts";
+import { ingestTerminalRun } from "./ingest.ts";
 
 const POLL_DELAY_MS = 60_000;
 
@@ -19,6 +21,7 @@ export type ClaimedRun = {
   idempotency_key: string;
   state: string;
   slot_id: string | null;
+  dry_run: boolean;
 };
 
 type DispatchProfile = {
@@ -38,6 +41,8 @@ export type CalleDeps = {
   webhookUrl: string;
   fetch: typeof fetch;
   now: () => Date;
+  /** Read only for the dry-mode decision, which fails closed when unset. */
+  getEnv?: (name: string) => string | undefined;
 };
 
 export type CalleCallRequest = {
@@ -131,6 +136,7 @@ export function depsFromEnv(
     webhookUrl: `${apiUrl.replace(/\/+$/, "")}/functions/v1/calle-webhook/${webhookSecret}`,
     fetch: fetchImpl,
     now: () => new Date(),
+    getEnv,
   };
 }
 
@@ -266,6 +272,28 @@ export async function dispatchClaimedRun(run: ClaimedRun, deps: CalleDeps): Prom
     fetch: deps.fetch,
   });
   const body = buildCallRequest(run.id, profile.phone_e164, renderCallTask(briefing), deps.webhookUrl);
+  const requestBody = JSON.stringify(body);
+
+  // Dry mode is decided here, ahead of anything that can reach the network, and
+  // it reuses the serialized body the live path would send. A run is dry when
+  // the run says so, or when ORMA_DRY_RUN is unset or true.
+  if (isDryRun(run.dry_run, deps.getEnv)) {
+    await executeDryRun(run.id, run.user_id, requestBody, dryRunFixture(), {
+      recordEvent: async (event) => {
+        await recordCallEvent(event.callRunId, event.kind, event.detail, deps);
+      },
+      updateRun: (callRunId, patch) => updateRun(deps, callRunId, patch),
+      ingest: (source) =>
+        ingestTerminalRun(source, {
+          apiUrl: deps.apiUrl,
+          serviceRoleKey: deps.serviceRoleKey,
+          fetch: deps.fetch,
+        }),
+      now: deps.now,
+    });
+    return;
+  }
+
   const response = await deps.fetch(`${deps.calleApiBase.replace(/\/+$/, "")}/v1/calls`, {
     method: "POST",
     headers: {
@@ -273,7 +301,7 @@ export async function dispatchClaimedRun(run: ClaimedRun, deps: CalleDeps): Prom
       "content-type": "application/json",
       "idempotency-key": run.idempotency_key,
     },
-    body: JSON.stringify(body),
+    body: requestBody,
   });
   if (response.status === 409) {
     await updateRun(deps, run.id, {
@@ -314,14 +342,27 @@ const testFn = (Deno as { test?: (name: string, fn: () => void | Promise<void>) 
 if (typeof testFn === "function") {
   const run: ClaimedRun = {
     id: "run-1", user_id: "user-1", idempotency_key: "orma:user-1:2026-09-12:morning:v1",
-    state: "claimed", slot_id: "slot-1",
+    state: "claimed", slot_id: "slot-1", dry_run: false,
   };
+  // Live dispatch is the explicit opt-in, so every live test says so.
   const baseDeps = (fetchImpl: typeof fetch): CalleDeps => ({
     apiUrl: "https://orma-api.nryn.dev", serviceRoleKey: "service-key",
     calleApiBase: "https://api.call-e.test", calleApiKey: "calle-key",
     webhookUrl: "https://orma-api.nryn.dev/functions/v1/calle-webhook/secret",
     fetch: fetchImpl, now: () => new Date("2026-09-12T00:00:00.000Z"),
+    getEnv: () => "false",
   });
+  const stubFetch = (requests: Request[]): typeof fetch => async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    if (request.url.includes("/profiles")) return Response.json([{ id: "user-1", phone_e164: "+919999999999", phone_confirmed_at: "2026-09-01T00:00:00Z" }]);
+    if (request.url.includes("/consents")) return Response.json([{ id: "consent-1" }]);
+    if (request.url.includes("/slots")) return Response.json([{ local_time: "08:00" }]);
+    if (request.url.includes("assemble_briefing")) return Response.json({ user_name: "Narayan", open_count: 0, lead_line: "Nothing urgent today.", open_items: "Nothing open.", last_call_summary: "", slot_local_time: "08:00" });
+    if (request.url.includes("ingest_call_result")) return Response.json({ already_ingested: false, disposition: "answered_extracted", counts: { items: 1, mentions: 1, retirements: 0, commitments: 0 }, slot_change_requested: null });
+    if (request.url.endsWith("/v1/calls")) return Response.json({ id: "call-1", status: "queued", completion_confidence: null });
+    return new Response(null, { status: 204 });
+  };
 
   testFn("dispatch sends the durable key and records the returned CALL-E id", async () => {
     const requests: Request[] = [];
@@ -427,6 +468,50 @@ if (typeof testFn === "function") {
     const deps = depsFromEnv((key) => values[key]);
     if (deps.webhookUrl !== "https://orma-api.nryn.dev/functions/v1/calle-webhook/webhook-secret") {
       throw new Error("webhook URL must derive from canonical runtime names");
+    }
+  });
+
+  testFn("a dry run records the exact body the live path would send", async () => {
+    const live: Request[] = [];
+    await dispatchClaimedRun(run, baseDeps(stubFetch(live)));
+    const liveRequest = live.find((candidate) => candidate.url.endsWith("/v1/calls"));
+    if (!liveRequest) throw new Error("the live path did not call CALL-E");
+    const liveBody = await liveRequest.text();
+
+    const dry: Request[] = [];
+    await dispatchClaimedRun({ ...run, dry_run: true }, baseDeps(stubFetch(dry)));
+    if (dry.some((candidate) => candidate.url.endsWith("/v1/calls"))) {
+      throw new Error("a dry run called CALL-E");
+    }
+    const posted = await Promise.all(
+      dry.filter((candidate) => candidate.url.includes("call_events")).map(async (candidate) => await candidate.json()),
+    );
+    const dispatched = posted.find((event) => event.kind === "dispatched");
+    if (!dispatched) throw new Error("a dry run recorded no dispatch");
+    if (dispatched.detail.request_body !== liveBody) {
+      throw new Error("the dry run recorded a different body than the live path sends");
+    }
+    if (dispatched.detail.outbound_request_made !== false) {
+      throw new Error("the dry run claimed an outbound request");
+    }
+  });
+
+  testFn("a dry run replays the recording into the ingestion seam", async () => {
+    const seen: Request[] = [];
+    await dispatchClaimedRun({ ...run, dry_run: true }, baseDeps(stubFetch(seen)));
+    const ingest = seen.find((candidate) => candidate.url.includes("ingest_call_result"));
+    if (!ingest) throw new Error("a dry run never reached the ingestion seam");
+    const payload = await ingest.json() as Record<string, unknown>;
+    if (payload.p_result_valid !== true) throw new Error("the recorded extraction was rejected");
+    if ((payload.p_transcript_turns as unknown[]).length !== 27) throw new Error("the dry run lost the recorded transcript");
+    const structured = payload.p_structured as { captured_items: Array<{ text: string }> };
+    if (structured?.captured_items?.[0]?.text !== "Continental") throw new Error("the dry run lost the recorded extraction");
+    if (payload.p_state !== "completed" || payload.p_disposition !== "answered_extracted") {
+      throw new Error("the dry run synthesized the wrong terminal state");
+    }
+    const moved = seen.filter((candidate) => candidate.method === "PATCH").at(-1);
+    if (!moved || !(await moved.text()).includes('"billable":false')) {
+      throw new Error("a dry run did not move the run without billing it");
     }
   });
 }

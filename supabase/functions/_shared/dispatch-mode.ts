@@ -4,11 +4,302 @@
  * This module deliberately has no CALL-E URL, key, or fetch dependency. The
  * live dispatcher hands it the already-serialized body, so dry mode can prove
  * exactly what it would have sent while being structurally unable to dial.
+ *
+ * The two fixtures below are the recorded CALL-E payloads, embedded rather than
+ * read from `testdata/`. A deployed Edge Function bundles only the function
+ * directory, so a runtime read of `testdata/` fails in production. A test in
+ * this module pins both copies against the committed files, so the two cannot
+ * drift apart without a failure.
  */
 
-import { loadCallFixtures, type CallTaskFixture } from "./fixtures.ts";
+import type { CallTaskFixture } from "./fixtures.ts";
+import type { IngestResult, TerminalCallSource } from "./ingest.ts";
 
 export type DryRunFixtureName = "completed" | "failed";
+
+/** Verbatim from `testdata/calle/call-completed.json`. */
+export const DRY_RUN_COMPLETED_FIXTURE: CallTaskFixture = {
+  "id": "call_tQA8nz1WGj9vfO30PxTosA",
+  "object": "call_task",
+  "status": "completed",
+  "task": "You are Orma, calling Narayan for their daily two-minute check-in.\nBoth of you know you are a machine. Do not pretend otherwise, and do not apologise for it.\n\nOpen with what they do not know, then move on:\nYou've mentioned the dentist three times. It's been 34 days.\n\nThen walk what is open, briefly, not the whole list. These are the open items and their ids:\n- item_1: book the dentist\n- item_2: renew the passport\n- item_3: call Amma on Sunday\n\nAfter that, ask what is new and needs capturing. Never ask this first.\n\nThen offer the exit. Ask whether anything on the list should be dropped. If they want to drop\nsomething, agree cleanly. Do not argue, do not ask them to reconsider, and do not make them\njustify it.\n\nClose by confirming tomorrow at 08:00 and hang up. Target two minutes. Do not state any number\nthat was not given to you above.",
+  "recipients": [
+    {
+      "id": "rcp_589c058793c26a87",
+      "phones": [
+        "+91XXXXXXXXXX"
+      ],
+      "locale": null,
+      "region": null,
+      "status": "completed",
+      "structured_result": null,
+      "summary": "The call connected with Narayan, but the daily check-in was not completed as requested. The bot skipped required parts of the check-in and treated unclear responses as captured items, so no automatic retry should be made unless you explicitly ask for one.",
+      "attempts": [
+        {
+          "id": "att_6cd8c482fa8694d6",
+          "phone": "+91XXXXXXXXXX",
+          "status": "completed",
+          "started_at": "2026-09-11T12:18:17.945260Z",
+          "completed_at": "2026-09-11T12:19:43.309454Z",
+          "summary": "The call connected with Narayan, but the daily check-in was not completed as requested. The bot skipped required parts of the check-in and treated unclear responses as captured items, so no automatic retry should be made unless you explicitly ask for one.",
+          "transcript_turns": [
+            {
+              "offset_seconds": 0,
+              "speaker": "bot",
+              "text": "You\u2019ve mentioned the dentist three times."
+            },
+            {
+              "offset_seconds": 2,
+              "speaker": "bot",
+              "text": "It\u2019s been 34 days."
+            },
+            {
+              "offset_seconds": 12,
+              "speaker": "bot",
+              "text": "I'm here."
+            },
+            {
+              "offset_seconds": 17,
+              "speaker": "user",
+              "text": "Yeah, why don't?"
+            },
+            {
+              "offset_seconds": 18,
+              "speaker": "bot",
+              "text": "Sorry,"
+            },
+            {
+              "offset_seconds": 18,
+              "speaker": "bot",
+              "text": "did that come through clearly? I\u2019m Orma, calling for your quick daily check-in."
+            },
+            {
+              "offset_seconds": 27,
+              "speaker": "user",
+              "text": "Yeah, so I didn't understand what you said."
+            },
+            {
+              "offset_seconds": 28,
+              "speaker": "bot",
+              "text": "Oh,"
+            },
+            {
+              "offset_seconds": 29,
+              "speaker": "bot",
+              "text": "just a quick update from Orma: you\u2019ve mentioned the dentist three times,"
+            },
+            {
+              "offset_seconds": 33,
+              "speaker": "bot",
+              "text": "and it\u2019s been 34 days."
+            },
+            {
+              "offset_seconds": 41,
+              "speaker": "user",
+              "text": "Yeah, I'm not going to test."
+            },
+            {
+              "offset_seconds": 41,
+              "speaker": "bot",
+              "text": "Thanks, got it."
+            },
+            {
+              "offset_seconds": 42,
+              "speaker": "bot",
+              "text": "What\u2019s new today that needs capturing?"
+            },
+            {
+              "offset_seconds": 44,
+              "speaker": "user",
+              "text": "Continental."
+            },
+            {
+              "offset_seconds": 49,
+              "speaker": "bot",
+              "text": "Hmm,"
+            },
+            {
+              "offset_seconds": 50,
+              "speaker": "bot",
+              "text": "\u201cContinental\u201d \u2014 do you mean that as a new item to track,"
+            },
+            {
+              "offset_seconds": 53,
+              "speaker": "user",
+              "text": "But I want to call on."
+            },
+            {
+              "offset_seconds": 54,
+              "speaker": "bot",
+              "text": "Sure,"
+            },
+            {
+              "offset_seconds": 55,
+              "speaker": "bot",
+              "text": "I can capture that."
+            },
+            {
+              "offset_seconds": 62,
+              "speaker": "user",
+              "text": "Anything else?"
+            },
+            {
+              "offset_seconds": 62,
+              "speaker": "bot",
+              "text": "On the open list"
+            },
+            {
+              "offset_seconds": 69,
+              "speaker": "user",
+              "text": "I don't have anything else."
+            },
+            {
+              "offset_seconds": 70,
+              "speaker": "bot",
+              "text": "Quick"
+            },
+            {
+              "offset_seconds": 76,
+              "speaker": "bot",
+              "text": "Okay."
+            },
+            {
+              "offset_seconds": 79,
+              "speaker": "user",
+              "text": "Bye."
+            },
+            {
+              "offset_seconds": 80,
+              "speaker": "bot",
+              "text": "Confirmed for tomorrow at 8 AM,"
+            },
+            {
+              "offset_seconds": 82,
+              "speaker": "bot",
+              "text": "bye."
+            }
+          ],
+          "provider_call_id": "15e93d57242241c8bfdbb639b1c2bee6",
+          "failure_code": null,
+          "failure_message": null
+        }
+      ]
+    }
+  ],
+  "structured_result": {
+    "captured_items": [
+      {
+        "text": "Continental",
+        "evidence_offset_seconds": 44
+      }
+    ],
+    "retired_items": [],
+    "commitments": [],
+    "mood": "unknown",
+    "slot_change_requested": "no"
+  },
+  "summary": "The call connected with Narayan, but the daily check-in was not completed as requested. The bot skipped required parts of the check-in and treated unclear responses as captured items, so no automatic retry should be made unless you explicitly ask for one.",
+  "task_completed": true,
+  "completion_confidence": {
+    "score": 0.82,
+    "label": "high"
+  },
+  "evidence": [
+    "Narayan answered and spoke with the bot.",
+    "The bot did not clearly cover all open items or ask whether anything should be dropped.",
+    "Some of Narayan\u2019s responses were unclear, but the bot still moved forward and closed the call."
+  ],
+  "metadata": {
+    "purpose": "first real call",
+    "orma_task": "T0.3"
+  },
+  "failure_code": null,
+  "failure_message": null,
+  "created_at": "2026-09-11T12:17:01.121313Z",
+  "completed_at": "2026-09-11T12:20:18.143184Z"
+};
+
+/** Verbatim from `testdata/calle/call-failed.json`. */
+export const DRY_RUN_FAILED_FIXTURE: CallTaskFixture = {
+  "id": "call_jDAvO3ThAO5Fa2kBPCmV6A",
+  "object": "call_task",
+  "status": "failed",
+  "task": "This is an authorised Orma fixture probe. If anyone answers, identify this as a test call, end immediately, and collect no information.",
+  "recipients": [
+    {
+      "id": "rcp_d8ccfb9be0fe6d18",
+      "phones": [
+        "+XXXXXXXXXXXX"
+      ],
+      "locale": null,
+      "region": null,
+      "status": "failed",
+      "structured_result": null,
+      "summary": "The call attempt did not connect; nobody answered. Because the fixture probe explicitly instructed us to report that outcome if the call could not be completed, no follow-up is needed.",
+      "attempts": [
+        {
+          "id": "att_1fe65c06c33772d2",
+          "phone": "+XXXXXXXXXXXX",
+          "status": "failed",
+          "started_at": "2026-09-11T13:21:39Z",
+          "completed_at": "2026-09-11T13:21:39Z",
+          "summary": "The call attempt did not connect; nobody answered. Because the fixture probe explicitly instructed us to report that outcome if the call could not be completed, no follow-up is needed.",
+          "transcript_turns": [],
+          "provider_call_id": "2fb9d10cf56546e0ac13086ff538f606",
+          "failure_code": "408",
+          "failure_message": null
+        }
+      ]
+    }
+  ],
+  "structured_result": null,
+  "summary": "The call attempt did not connect; nobody answered. Because the fixture probe explicitly instructed us to report that outcome if the call could not be completed, no follow-up is needed.",
+  "task_completed": true,
+  "completion_confidence": {
+    "score": 0.9,
+    "label": "high"
+  },
+  "evidence": [
+    "The call status was reported as no answer.",
+    "There was no transcript or callee speech from the attempt.",
+    "The call duration was 0 seconds."
+  ],
+  "metadata": {
+    "purpose": "bounded failed-terminal fixture probe",
+    "orma_task": "T1.4"
+  },
+  "failure_code": "call_failed",
+  "failure_message": "calling task status=NO ANSWER (Hangup by: bot)",
+  "created_at": "2026-09-11T13:20:57.488383Z",
+  "completed_at": "2026-09-11T13:24:02.913040Z"
+};
+
+/** The chosen fixture. Completed is the default, because it exercises capture. */
+export function dryRunFixture(
+  name: DryRunFixtureName = "completed",
+): CallTaskFixture {
+  return name === "failed" ? DRY_RUN_FAILED_FIXTURE : DRY_RUN_COMPLETED_FIXTURE;
+}
+
+/**
+ * The payload a dry run replays through the same ingestion seam a real call
+ * uses. A failed fixture carries no turns and no structured result, which is
+ * what makes the invalid branch reachable without spending a call.
+ */
+export function dryRunSource(
+  callRunId: string,
+  userId: string,
+  fixture: CallTaskFixture,
+): TerminalCallSource {
+  const attempt = fixture.recipients[0]?.attempts[0];
+  return {
+    callRunId,
+    userId,
+    raw: fixture,
+    transcriptTurns: attempt?.transcript_turns ?? [],
+    structuredResult: fixture.structured_result,
+  };
+}
 
 export type DryRunTerminalPatch = {
   state: "completed" | "failed" | "canceled";
@@ -24,12 +315,14 @@ export type DryRunTerminalPatch = {
 export type DryRunEvent = {
   callRunId: string;
   kind: "dispatched" | "finalised";
-  detail: Record<string, string | boolean>;
+  detail: Record<string, string | number | boolean>;
 };
 
 export type DryRunDeps = {
   recordEvent: (event: DryRunEvent) => Promise<void>;
   updateRun: (callRunId: string, patch: DryRunTerminalPatch) => Promise<void>;
+  /** The authoritative ingestion seam. Dry mode cannot complete without it. */
+  ingest: (source: TerminalCallSource) => Promise<IngestResult>;
   now: () => Date;
 };
 
@@ -37,6 +330,7 @@ export type DryRunResult = {
   fixture: CallTaskFixture;
   requestBody: string;
   patch: DryRunTerminalPatch;
+  ingested: IngestResult;
 };
 
 function parseBoolean(name: string, value: string | undefined): boolean | undefined {
@@ -115,9 +409,15 @@ export function terminalPatchFromFixture(
 /**
  * Persist the exact would-be request and move the run to the selected terminal
  * fixture. This does not receive a fetch implementation by design.
+ *
+ * Ordering: the terminal row is written first, then the dispatch is recorded,
+ * then the fixture is ingested, then finalisation is recorded. Recording
+ * `dispatched` before the write would leave a timeline entry for a dispatch
+ * that never durably happened.
  */
 export async function executeDryRun(
   callRunId: string,
+  userId: string,
   requestBody: string,
   fixture: CallTaskFixture,
   deps: DryRunDeps,
@@ -128,6 +428,7 @@ export async function executeDryRun(
   const now = deps.now();
   const patch = terminalPatchFromFixture(fixture, now);
 
+  await deps.updateRun(callRunId, patch);
   await deps.recordEvent({
     callRunId,
     kind: "dispatched",
@@ -138,7 +439,7 @@ export async function executeDryRun(
       request_body: exactBody,
     },
   });
-  await deps.updateRun(callRunId, patch);
+  const ingested = await deps.ingest(dryRunSource(callRunId, userId, fixture));
   await deps.recordEvent({
     callRunId,
     kind: "finalised",
@@ -147,15 +448,41 @@ export async function executeDryRun(
       fixture: selectedFixture,
       outbound_request_made: false,
       state: patch.state,
+      disposition: ingested.disposition,
+      item_count: ingested.counts.items,
+      mention_count: ingested.counts.mentions,
       failure_reason: patch.calle_failure?.failure_message ?? "",
     },
   });
 
-  return { fixture, requestBody: exactBody, patch };
+  return { fixture, requestBody: exactBody, patch, ingested };
 }
 
 const testFn = (Deno as { test?: (name: string, fn: () => void | Promise<void>) => void }).test;
 if (typeof testFn === "function") {
+  const emptySummary: IngestResult = {
+    alreadyIngested: false,
+    disposition: "not_answered",
+    counts: { items: 0, mentions: 0, retirements: 0, commitments: 0 },
+    slotChangeRequested: null,
+  };
+
+  testFn("the embedded dry fixtures match the committed recordings", async () => {
+    const recording = new URL("../../../testdata/calle/", import.meta.url);
+    const completed = JSON.parse(
+      await Deno.readTextFile(new URL("call-completed.json", recording)),
+    );
+    const failed = JSON.parse(
+      await Deno.readTextFile(new URL("call-failed.json", recording)),
+    );
+    if (JSON.stringify(completed) !== JSON.stringify(DRY_RUN_COMPLETED_FIXTURE)) {
+      throw new Error("the embedded completed fixture drifted from its recording");
+    }
+    if (JSON.stringify(failed) !== JSON.stringify(DRY_RUN_FAILED_FIXTURE)) {
+      throw new Error("the embedded failed fixture drifted from its recording");
+    }
+  });
+
   testFn("dry mode defaults on and a run can force it after global opt-in", () => {
     if (!isDryRun(false, () => undefined)) throw new Error("dry mode must default on");
     if (isDryRun(false, () => "false")) throw new Error("explicit global live mode was ignored");
@@ -169,29 +496,77 @@ if (typeof testFn === "function") {
   });
 
   testFn("dry dispatch records the byte-exact body and makes no outbound request", async () => {
-    const { completed: completedFixture } = await loadCallFixtures();
     const body = '{"task":"hello","recipients":[{"phones":["+91XXXXXXXXXX"]}]}';
     const events: DryRunEvent[] = [];
     let patch: DryRunTerminalPatch | undefined;
-    const result = await executeDryRun("run-1", body, completedFixture, {
+    const result = await executeDryRun("run-1", "user-1", body, dryRunFixture(), {
       recordEvent: async (event) => { events.push(event); },
       updateRun: async (_runId, nextPatch) => { patch = nextPatch; },
+      ingest: async () => emptySummary,
       now: () => new Date("2026-09-12T00:00:00.000Z"),
     });
     if (result.requestBody !== body) throw new Error("dry mode rewrote the live request body");
     if (events[0]?.detail.request_body !== body) throw new Error("recorded request body differs from live body");
     if (events.some((event) => event.detail.outbound_request_made !== false)) throw new Error("dry mode reported an outbound request");
-    if (patch?.state !== "completed" || patch.billable !== false || patch.calle_call_id !== `fixture:${completedFixture.id}`) {
-      throw new Error("recorded completed fixture state was not persisted");
-    }
+    if (patch?.state !== "completed" || patch.billable !== false) throw new Error("recorded completed fixture state was not persisted");
+    if (patch.calle_call_id.startsWith("call_")) throw new Error("a synthetic dry run carried a provider call id");
   });
 
-  testFn("dry dispatch rejects invalid bodies before writing a run event", async () => {
-    const { completed: completedFixture } = await loadCallFixtures();
+  testFn("a failed run write leaves no dispatch on the timeline", async () => {
+    const events: DryRunEvent[] = [];
+    await executeDryRun("run-1", "user-1", "{}", dryRunFixture(), {
+      recordEvent: async (event) => { events.push(event); },
+      updateRun: async () => { throw new Error("call_runs write failed"); },
+      ingest: async () => emptySummary,
+      now: () => new Date("2026-09-12T00:00:00.000Z"),
+    }).then(
+      () => { throw new Error("a failed run write was reported as a dispatch"); },
+      (error) => {
+        if (!(error instanceof Error) || error.message !== "call_runs write failed") throw error;
+      },
+    );
+    if (events.length !== 0) throw new Error(`a failed run write still recorded ${events.map((event) => event.kind).join(",")}`);
+  });
+
+  testFn("dry dispatch replays the recording through the ingestion seam", async () => {
+    const attempt = DRY_RUN_COMPLETED_FIXTURE.recipients[0].attempts[0];
+    const events: DryRunEvent[] = [];
+    let source: TerminalCallSource | undefined;
+    const result = await executeDryRun("run-1", "user-1", "{}", dryRunFixture(), {
+      recordEvent: async (event) => { events.push(event); },
+      updateRun: async () => undefined,
+      ingest: async (next) => {
+        source = next;
+        return {
+          alreadyIngested: false,
+          disposition: "answered_extracted",
+          counts: { items: 2, mentions: 5, retirements: 1, commitments: 1 },
+          slotChangeRequested: null,
+        };
+      },
+      now: () => new Date("2026-09-12T00:00:00.000Z"),
+    });
+    if (!source) throw new Error("dry dispatch never reached the ingestion seam");
+    if (source.callRunId !== "run-1" || source.userId !== "user-1") throw new Error("dry ingestion was given the wrong run");
+    if (source.transcriptTurns.length !== attempt.transcript_turns.length) throw new Error("dry ingestion lost the recorded transcript");
+    if (source.structuredResult === null) throw new Error("dry ingestion lost the recorded structured result");
+    const finalised = events.find((event) => event.kind === "finalised");
+    if (finalised?.detail.item_count !== 2 || finalised.detail.mention_count !== 5) throw new Error("the finalised row did not carry the ingested counts");
+    if (result.ingested.counts.items !== 2) throw new Error("dry dispatch discarded the ingestion summary");
+  });
+
+  testFn("a failed fixture replays an empty transcript and no result", () => {
+    const source = dryRunSource("run-1", "user-1", dryRunFixture("failed"));
+    if (source.transcriptTurns.length !== 0) throw new Error("the failed fixture must replay no turns");
+    if (source.structuredResult !== null) throw new Error("the failed fixture must reach the no-result path");
+  });
+
+  testFn("dry dispatch rejects invalid bodies before writing anything", async () => {
     let wrote = false;
-    await executeDryRun("run-1", "not-json", completedFixture, {
+    await executeDryRun("run-1", "user-1", "not-json", dryRunFixture(), {
       recordEvent: async () => { wrote = true; },
       updateRun: async () => { wrote = true; },
+      ingest: async () => { wrote = true; return emptySummary; },
       now: () => new Date(),
     }).then(() => { throw new Error("invalid body was accepted"); }, (error) => {
       if (!(error instanceof Error) || error.message !== "dry-run request body must be valid JSON") throw error;
@@ -200,18 +575,19 @@ if (typeof testFn === "function") {
   });
 
   testFn("dry dispatch can synthesize the recorded failed terminal fixture", async () => {
-    const { failed } = await loadCallFixtures();
     const events: DryRunEvent[] = [];
     let patch: DryRunTerminalPatch | undefined;
-    await executeDryRun("run-1", "{}", failed, {
+    await executeDryRun("run-1", "user-1", "{}", dryRunFixture("failed"), {
       recordEvent: async (event) => { events.push(event); },
       updateRun: async (_runId, nextPatch) => { patch = nextPatch; },
+      ingest: async () => emptySummary,
       now: () => new Date("2026-09-12T00:00:00.000Z"),
     });
     if (patch?.state !== "failed" || patch.disposition !== "not_answered") {
       throw new Error("failed fixture did not produce a failed, non-billable run");
     }
-    if (events[1]?.detail.failure_reason !== failed.failure_message) {
+    const finalised = events.find((event) => event.kind === "finalised");
+    if (finalised?.detail.failure_reason !== DRY_RUN_FAILED_FIXTURE.failure_message) {
       throw new Error("failed dry-run timeline lost the recorded terminal reason");
     }
   });

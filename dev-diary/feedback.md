@@ -372,3 +372,67 @@ never fire from one that will.
 state in the call event stream. Validate `webhook_url` at create time and
 return an error when the destination cannot be dialled. Until then the
 per-request callback is not trustworthy for a production workflow.
+
+---
+
+## 14. The result schema cannot constrain a field's format
+
+**Severity: medium.**
+
+The supported keyword list for `result_schema` is `type`, `properties`,
+`required`, `enum`, nested objects, simple `array.items`, `description` and
+`additionalProperties: false`. There is no `format`, no `pattern`, and no
+`minimum` or `maximum`.
+
+**Cost to us.** Orma's extraction schema asks for a commitment's `due` as a
+free string, described as "when they said they would do it, in their own words",
+because no keyword can express a timestamp. A call saying "Thursday, around
+five" is a perfectly good extraction and an unusable database value. We have to
+parse it ourselves, or reject it, or store it as text and never query it.
+
+The same gap bites numeric fields. `evidence_offset_seconds` is declared
+`{"type": "integer"}` and nothing stops a null, a negative, or an offset past
+the end of the call. Every one of those has to be caught client-side, and each
+client will catch a different subset.
+
+**Evidence.** The generated payload is in `docs/calle-call.md` section 5, where
+`due` and `slot_change_time` both read "in their own words". The boundary is
+pinned in `supabase/functions/_shared/ingest.ts`, which has to re-validate
+everything the provider accepted before writing a row.
+
+**Suggested fix.** Support `format` for at least `date-time` and `date`, and
+`minimum`/`maximum` for numbers. A schema that cannot say "this is a timestamp"
+pushes a typed problem into every integrator's string parsing, which is where
+the bugs live.
+
+---
+
+## 15. A call that never connected reports high confidence
+
+**Severity: medium.**
+
+Our recorded failed call is a task that never connected. The provider hung up
+after zero seconds, the attempt carries `failure_code: 408` and an empty
+`transcript_turns`. The task around it still reads `status: failed` with
+`task_completed: true` and `completion_confidence: {"score": 0.9, "label":
+"high"}`.
+
+**Cost to us.** `task_completed` and `completion_confidence` describe whether
+the agent accomplished what it was asked to do, not whether anyone spoke to it.
+Nothing in the field name says so. An integrator who reads `high` as "this call
+went well" stores a 0.9 against a call with no audio, and any ranking or review
+built on it is wrong from the first row.
+
+Orma copies `completion_confidence` onto `call_runs.calle_confidence` on every
+terminal write, including the failed one. The value is faithful to the payload
+and misleading to a reader.
+
+**Evidence.** `testdata/calle/call-failed.json`, read directly. The same file
+shows the contradiction in its own `evidence` array, which says "The call
+status was reported as no answer" and "There was no transcript or callee speech
+from the attempt" while the confidence sits at 0.9.
+
+**Suggested fix.** Add a call-level boolean such as `connected`, or return
+`completion_confidence` as null when no attempt connected. Failing that, name
+the field for what it measures. `task_completed` reads like a statement about
+the call, and it is not one.

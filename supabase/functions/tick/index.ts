@@ -28,6 +28,8 @@ export type ClaimedTickRun = TickRun & {
   user_id: string;
   idempotency_key: string;
   slot_id: string | null;
+  /** The claim RPC returns the whole row, so dry mode is decided per run. */
+  dry_run: boolean;
 };
 
 export type TickDeps = {
@@ -332,6 +334,7 @@ if (typeof testFn === "function" && !import.meta.main) {
             user_id: "user-1",
             idempotency_key: "orma:user-1:2026-09-12:morning:v1",
             slot_id: "slot-1",
+            dry_run: false,
           }]);
         }
         if (request.url.includes("/profiles")) {
@@ -345,6 +348,59 @@ if (typeof testFn === "function" && !import.meta.main) {
         if (request.url.endsWith("/v1/calls")) {
           return Response.json({ id: "call-1", status: "queued", completion_confidence: null });
         }
+        if (request.url.includes("ingest_call_result")) {
+          return Response.json({ already_ingested: false, disposition: "answered_extracted", counts: { items: 1, mentions: 1, retirements: 0, commitments: 0 }, slot_change_requested: null });
+        }
+        return Response.json([]);
+      };
+      const env: Record<string, string> = {
+        ORMA_API_URL: "https://orma-api.nryn.dev",
+        SUPABASE_SERVICE_ROLE_KEY: "service-key",
+        CALLE_API_BASE: "https://api.call-e.test",
+        CALLE_API_KEY: "calle-key",
+        ORMA_WEBHOOK_SECRET: "webhook-secret",
+        ORMA_DRY_RUN: "false",
+      };
+      const result = await tick(depsFromEnv((key) => env[key], fetchStub));
+      if (result.claimed !== 1) throw new Error("configured tick did not claim the due run");
+      if (!requests.some((request) => request.url.endsWith("/v1/calls"))) {
+        throw new Error("configured tick did not dispatch the claimed run to CALL-E");
+      }
+    },
+  );
+
+  testFn(
+    "a tick with no dry-run setting never reaches CALL-E",
+    async () => {
+      const requests: Request[] = [];
+      const fetchStub: typeof fetch = async (input, init) => {
+        const request = new Request(String(input), init);
+        requests.push(request);
+        if (request.url.endsWith("/rpc/claim_due_call_runs")) {
+          return Response.json([{
+            id: "run-1",
+            state: "claimed",
+            poll_after: null,
+            user_id: "user-1",
+            idempotency_key: "orma:user-1:2026-09-12:morning:v1",
+            slot_id: "slot-1",
+            dry_run: false,
+          }]);
+        }
+        if (request.url.includes("/profiles")) {
+          return Response.json([{ id: "user-1", phone_e164: "+919999999999", phone_confirmed_at: "2026-09-01T00:00:00Z" }]);
+        }
+        if (request.url.includes("/consents")) return Response.json([{ id: "consent-1" }]);
+        if (request.url.includes("/slots")) return Response.json([{ local_time: "08:00" }]);
+        if (request.url.includes("assemble_briefing")) {
+          return Response.json({ user_name: "Narayan", open_count: 0, lead_line: "Nothing urgent today.", open_items: "Nothing open.", last_call_summary: "", slot_local_time: "08:00" });
+        }
+        if (request.url.includes("ingest_call_result")) {
+          return Response.json({ already_ingested: false, disposition: "answered_extracted", counts: { items: 1, mentions: 1, retirements: 0, commitments: 0 }, slot_change_requested: null });
+        }
+        if (request.url.endsWith("/v1/calls")) {
+          return Response.json({ id: "call-1", status: "queued", completion_confidence: null });
+        }
         return Response.json([]);
       };
       const env: Record<string, string> = {
@@ -354,10 +410,19 @@ if (typeof testFn === "function" && !import.meta.main) {
         CALLE_API_KEY: "calle-key",
         ORMA_WEBHOOK_SECRET: "webhook-secret",
       };
-      const result = await tick(depsFromEnv((key) => env[key], fetchStub));
-      if (result.claimed !== 1) throw new Error("configured tick did not claim the due run");
-      if (!requests.some((request) => request.url.endsWith("/v1/calls"))) {
-        throw new Error("configured tick did not dispatch the claimed run to CALL-E");
+      await tick(depsFromEnv((key) => env[key], fetchStub));
+      if (requests.some((request) => request.url.endsWith("/v1/calls"))) {
+        throw new Error("an unset dry-run setting placed a real call");
+      }
+      if (!requests.some((request) => request.url.includes("ingest_call_result"))) {
+        throw new Error("a dry run reached no result ingestion");
+      }
+      const dispatched = await Promise.all(
+        requests.filter((request) => request.url.includes("call_events") && request.method === "POST")
+          .map(async (request) => await request.json()),
+      );
+      if (!dispatched.some((event) => event.kind === "dispatched" && event.detail.outbound_request_made === false)) {
+        throw new Error("the dry run did not record that it stayed inside the process");
       }
     },
   );
