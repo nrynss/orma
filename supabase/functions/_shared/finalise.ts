@@ -17,9 +17,11 @@
  * `finalise_after` into the future, so the tick skips the run for a wait and a
  * batch of stuck runs cannot hold every slot. After the last attempt this
  * module ends the run and names the reason on the timeline. A run with no
- * CALL-E call id has nothing to re-fetch, so it ends at once the same way.
+ * CALL-E call id has nothing to re-fetch, so it ends at once the same way. A
+ * rehearsal's call id is synthetic, and CALL-E never issued it, so that run
+ * ends at once too rather than asking CALL-E about a call that cannot exist.
  *
- * Those two give-up paths are the only place outside ingestion that writes
+ * Those give-up paths are the only place outside ingestion that writes
  * `completed_at`, and each writes a `finalised` row that names why.
  *
  * The re-fetch is the authority. A run the poll failed as unanswered is
@@ -59,6 +61,18 @@ export type FinaliseRun = {
 
 /** The reason a run with no provider call id is ended with. */
 export const NO_CALL_ID_REASON = "the run has no CALL-E call id to re-fetch";
+
+/** The reason a run whose call id is one of ours is ended with. */
+export const SYNTHETIC_CALL_ID_REASON =
+  "the run's call id is synthetic, so CALL-E cannot re-fetch it";
+
+/**
+ * A rehearsal's call id is invented by `dispatch-mode.ts` and carries the
+ * `fixture:` prefix. CALL-E never issued it, so a re-fetch can only fail.
+ */
+export function isSyntheticCallId(callId: string): boolean {
+  return callId.startsWith("fixture:");
+}
 
 /** Failed attempts this module spends on one run before it ends the run. */
 export const FINALISE_MAX_ATTEMPTS = 3;
@@ -318,6 +332,14 @@ export async function finaliseStep(
     await abandonRun(run, NO_CALL_ID_REASON, 0, deps, sleep);
     return null;
   }
+  if (isSyntheticCallId(run.calle_call_id)) {
+    // A rehearsal reaches this line only when its ingestion failed, because a
+    // rehearsal that ingested is already finished. Its call id is ours, so
+    // CALL-E can never answer for it, and three re-fetches would put three
+    // 404s on the wire for nothing before the same ending. End it now.
+    await abandonRun(run, SYNTHETIC_CALL_ID_REASON, 0, deps, sleep);
+    return null;
+  }
   try {
     return await finaliseRun(run, deps, sleep);
   } catch (error) {
@@ -560,6 +582,45 @@ if (typeof testFn === "function") {
     },
   );
 
+  testFn("a stranded rehearsal is ended without asking CALL-E about a fake id", async () => {
+    const { seen, deps } = stepDriver({ abandonWon: true });
+    const finished = await finaliseStep(
+      { ...RUN, state: "completed", calle_call_id: "fixture:call_recorded" },
+      deps,
+      instant,
+    );
+    if (finished !== null) throw new Error("a stranded rehearsal must report no ingest");
+    if (seen.some((request) => new URL(request.url).host === CALLE_HOST)) {
+      throw new Error("a synthetic call id must never reach CALL-E");
+    }
+    const abandon = seen.find((request) => request.url.endsWith("/rpc/abandon_call_run"));
+    const abandonBody = await abandon?.json() as { p_reason?: string } | undefined;
+    if (abandonBody?.p_reason !== SYNTHETIC_CALL_ID_REASON) {
+      throw new Error(`the rehearsal's ending lost its reason, saw ${JSON.stringify(abandonBody)}`);
+    }
+    if (seen.some((request) => request.url.endsWith("/rpc/record_finalise_failure"))) {
+      throw new Error("a synthetic call id must not spend a retry attempt");
+    }
+    const event = seen.find((request) => request.url.endsWith("/call_events"));
+    const row = await event?.json() as {
+      kind?: string;
+      detail?: Record<string, unknown>;
+    } | undefined;
+    if (row?.kind !== "finalised" || row.detail?.outcome !== "abandoned") {
+      throw new Error(`the rehearsal's ending must be on the timeline, saw ${JSON.stringify(row)}`);
+    }
+    if (row.detail?.state !== "completed") {
+      throw new Error("the row must name the state the run held, which the boundary replaces");
+    }
+  });
+
+  testFn("only a synthetic id is refused, so a real one is still re-fetched", () => {
+    if (isSyntheticCallId("call_real_1")) throw new Error("a provider call id was refused");
+    if (!isSyntheticCallId("fixture:call_recorded")) {
+      throw new Error("a rehearsal's call id was not recognised");
+    }
+  });
+
   testFn("the authoritative payload decides the state the timeline records", async () => {
     // The poll gave up on this call and stored `failed` with no completion time.
     // CALL-E later reports the call completed, and that is the truth the run takes.
@@ -704,6 +765,14 @@ if (typeof testFn === "function") {
       !abandonBody.p_reason.includes(`${FINALISE_MAX_ATTEMPTS} attempts`)
     ) {
       throw new Error(`the give-up lost its run or its reason: ${JSON.stringify(abandonBody)}`);
+    }
+    // The disposition and its billing are the SQL boundary's, because it is the
+    // last writer for this run. `test-ingest.sh` reads the pair back as
+    // `failed | not_answered | false`. This module must therefore send neither,
+    // so a future caller cannot smuggle a pair the boundary would ignore.
+    const abandonKeys = Object.keys(abandonBody).sort().join(",");
+    if (abandonKeys !== "p_call_run_id,p_reason") {
+      throw new Error(`the give-up must leave the disposition to the boundary, sent ${abandonKeys}`);
     }
     const event = seen.find((request) => request.url.endsWith("/call_events"));
     const row = await event!.json() as {

@@ -9,17 +9,19 @@
  * carries the webhook secret and the callee's full number, and the run's owner
  * may read the recorded row.
  *
- * The two fixtures below are the recorded CALL-E payloads, embedded rather than
- * read from `testdata/`. A deployed Edge Function bundles only the function
- * directory, so a runtime read of `testdata/` fails in production. A test in
- * this module pins both copies against the committed files, so the two cannot
- * drift apart without a failure.
+ * The recorded fixtures below are embedded rather than read from `testdata/`. A
+ * deployed Edge Function bundles only the function directory, so a runtime read
+ * of `testdata/` fails in production. A test in this module pins both recorded
+ * copies against the committed files, so the two cannot drift apart without a
+ * failure. The third rehearsal shape is the completed recording with CALL-E's
+ * validation-failure status and no extract, and its own test pins that
+ * derivation.
  */
 
-import type { CallTaskFixture } from "./fixtures.ts";
+import { RESULT_VALIDATION_FAILED, type CallTaskFixture } from "./fixtures.ts";
 import type { IngestResult, TerminalCallSource } from "./ingest.ts";
 
-export type DryRunFixtureName = "completed" | "failed";
+export type DryRunFixtureName = "completed" | "failed" | "no_result";
 
 /** Verbatim from `testdata/calle/call-completed.json`. */
 export const DRY_RUN_COMPLETED_FIXTURE: CallTaskFixture = {
@@ -278,22 +280,39 @@ export const DRY_RUN_FAILED_FIXTURE: CallTaskFixture = {
   "completed_at": "2026-09-11T13:24:02.913040Z"
 };
 
+/**
+ * The shape a call whose result failed validation reports, which is the shape
+ * that lands a run in the `no_result` terminal state. It is the completed
+ * recording with two fields changed. `status` becomes CALL-E's status for that
+ * case, and `structured_result` becomes null because there is no extract. The
+ * transcript and the call identity stay, so the rehearsal exercises the same
+ * ingestion path a real call would.
+ */
+export const DRY_RUN_NO_RESULT_FIXTURE: CallTaskFixture = {
+  ...DRY_RUN_COMPLETED_FIXTURE,
+  status: "result_validation_failed",
+  structured_result: null,
+};
+
 /** The chosen fixture. Completed is the default, because it exercises capture. */
 export function dryRunFixture(
   name: DryRunFixtureName = "completed",
 ): CallTaskFixture {
-  return name === "failed" ? DRY_RUN_FAILED_FIXTURE : DRY_RUN_COMPLETED_FIXTURE;
+  if (name === "failed") return DRY_RUN_FAILED_FIXTURE;
+  if (name === "no_result") return DRY_RUN_NO_RESULT_FIXTURE;
+  return DRY_RUN_COMPLETED_FIXTURE;
 }
 
 /**
  * The fixture an operator selected for the next dry dispatch.
  *
  * Set the function secret `ORMA_DRY_RUN_FIXTURE` to `failed` to rehearse the
- * failed terminal shape end to end. That shape carries no transcript turn and
- * no structured result, so it is the only way to reach the invalid-result path
- * without placing a call. Any other value selects the completed default, and an
- * unrecognised value is refused rather than guessed, because a rehearsal that
- * silently runs the wrong shape is worse than one that fails.
+ * failed terminal shape end to end, or to `no_result` to rehearse the shape a
+ * failed result validation reports. CALL-E's own two spellings for that second
+ * shape are accepted as well, so an operator who copies a CALL-E status gets
+ * the rehearsal they asked for. Any other value selects the completed default,
+ * and an unrecognised value is refused rather than guessed, because a rehearsal
+ * that silently runs the wrong shape is worse than one that fails.
  */
 export function dryRunFixtureName(
   getEnv: (name: string) => string | undefined = (name) => Deno.env.get(name),
@@ -301,7 +320,9 @@ export function dryRunFixtureName(
   const value = getEnv("ORMA_DRY_RUN_FIXTURE");
   if (value === undefined || value.trim() === "" || value === "completed") return "completed";
   if (value === "failed") return "failed";
-  throw new Error("ORMA_DRY_RUN_FIXTURE must be completed or failed");
+  if (value === "no_result") return "no_result";
+  if ((RESULT_VALIDATION_FAILED as readonly string[]).includes(value.trim())) return "no_result";
+  throw new Error("ORMA_DRY_RUN_FIXTURE must be completed, failed or no_result");
 }
 
 /**
@@ -339,7 +360,7 @@ export function dryRunSource(
  * theirs, so a reader never reads null as nobody having moved the run.
  */
 export type DryRunTerminalPatch = {
-  state: "completed" | "failed" | "canceled";
+  state: "completed" | "no_result" | "failed" | "canceled";
   disposition: "answered_extracted" | "answered_no_result" | "not_answered" | "canceled";
   calle_call_id: string;
   calle_confidence: CallTaskFixture["completion_confidence"];
@@ -454,6 +475,7 @@ function terminalState(fixture: CallTaskFixture): DryRunTerminalPatch["state"] {
   if (fixture.status === "completed") return "completed";
   if (fixture.status === "canceled") return "canceled";
   if (fixture.status === "failed") return "failed";
+  if ((RESULT_VALIDATION_FAILED as readonly string[]).includes(fixture.status)) return "no_result";
   throw new Error("dry-run fixture must be terminal");
 }
 
@@ -463,6 +485,7 @@ function dispositionFor(
 ): DryRunTerminalPatch["disposition"] {
   if (state === "canceled") return "canceled";
   if (state === "failed") return "not_answered";
+  if (state === "no_result") return "answered_no_result";
   return fixture.structured_result === null ? "answered_no_result" : "answered_extracted";
 }
 
@@ -486,6 +509,13 @@ export function terminalPatchFromFixture(
     terminal_writer: "dry_run",
     dispatched_at: now.toISOString(),
   };
+}
+
+/** The rehearsal shape a terminal patch came from, for the timeline rows. */
+function fixtureNameFor(state: DryRunTerminalPatch["state"]): DryRunFixtureName {
+  if (state === "failed") return "failed";
+  if (state === "no_result") return "no_result";
+  return "completed";
 }
 
 /**
@@ -515,9 +545,9 @@ export async function executeDryRun(
 ): Promise<DryRunResult> {
   if (!callRunId) throw new Error("dry-run dispatch requires a call run id");
   const exactBody = exactRequestBody(requestBody);
-  const selectedFixture: DryRunFixtureName = fixture.status === "completed" ? "completed" : "failed";
   const now = deps.now();
   const patch = terminalPatchFromFixture(fixture, now);
+  const selectedFixture = fixtureNameFor(patch.state);
 
   await deps.updateRun(callRunId, patch);
   await deps.recordEvent({
@@ -736,7 +766,69 @@ if (typeof testFn === "function") {
     }
   });
 
-  testFn("an operator selects the failed dry fixture by environment", () => {
+  testFn("the rehearsal can reach the no_result terminal shape", () => {
+    // The derived shape differs from the completed recording in exactly the two
+    // fields that make it a validation failure.
+    const rehearsal = dryRunFixture("no_result");
+    const changed = Object.entries(DRY_RUN_COMPLETED_FIXTURE)
+      .filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(
+        (rehearsal as unknown as Record<string, unknown>)[key],
+      ))
+      .map(([key]) => key)
+      .sort();
+    if (changed.join(",") !== "status,structured_result") {
+      throw new Error(`the no_result rehearsal changed ${changed.join(",") || "nothing"}`);
+    }
+    if (!(RESULT_VALIDATION_FAILED as readonly string[]).includes(rehearsal.status)) {
+      throw new Error(`the rehearsal carries the status ${rehearsal.status}`);
+    }
+    const patch = terminalPatchFromFixture(rehearsal, new Date("2026-09-13T00:00:00.000Z"));
+    if (patch.state !== "no_result" || patch.disposition !== "answered_no_result") {
+      throw new Error(`the rehearsal landed ${patch.state} ${patch.disposition}`);
+    }
+    if (patch.billable !== false || !patch.calle_call_id.startsWith("fixture:")) {
+      throw new Error("a rehearsal's synthetic call id must never bill");
+    }
+    const source = dryRunSource("run-1", "user-1", rehearsal, "2026-09-13T00:00:00.000Z");
+    if (source.structuredResult !== null) throw new Error("the rehearsal still carries an extract");
+    if ((source.raw as { status?: string }).status !== rehearsal.status) {
+      throw new Error("ingestion was handed a different status than the rehearsal carries");
+    }
+  });
+
+  testFn("a rehearsal reaches no_result end to end with its disposition", async () => {
+    const events: DryRunEvent[] = [];
+    let patch: DryRunTerminalPatch | undefined;
+    let source: TerminalCallSource | undefined;
+    await executeDryRun("run-1", "user-1", "{}", dryRunFixture("no_result"), {
+      recordEvent: async (event) => { events.push(event); },
+      updateRun: async (_runId, nextPatch) => { patch = nextPatch; },
+      ingest: async (next) => {
+        source = next;
+        return {
+          alreadyIngested: false,
+          disposition: "answered_no_result",
+          counts: { items: 0, mentions: 0, retirements: 0, commitments: 0 },
+          slotChangeRequested: null,
+        };
+      },
+      now: () => new Date("2026-09-13T00:00:00.000Z"),
+    });
+    if (patch?.state !== "no_result" || patch.disposition !== "answered_no_result") {
+      throw new Error(`the terminal patch read ${JSON.stringify(patch)}`);
+    }
+    if (!source) throw new Error("the rehearsal never reached the ingestion seam");
+    const dispatched = events.find((event) => event.kind === "dispatched");
+    const finalised = events.find((event) => event.kind === "finalised");
+    if (dispatched?.detail.fixture !== "no_result" || finalised?.detail.fixture !== "no_result") {
+      throw new Error(`the timeline named the wrong rehearsal: ${JSON.stringify(events.map((event) => event.detail.fixture))}`);
+    }
+    if (finalised?.detail.state !== "no_result" || finalised.detail.disposition !== "answered_no_result") {
+      throw new Error(`the finalised row read ${JSON.stringify(finalised.detail)}`);
+    }
+  });
+
+  testFn("an operator selects a dry fixture by environment", () => {
     if (dryRunFixtureName(() => undefined) !== "completed") {
       throw new Error("the completed fixture must be the default");
     }
@@ -746,11 +838,21 @@ if (typeof testFn === "function") {
     if (dryRunFixture(dryRunFixtureName(() => "failed")).status !== "failed") {
       throw new Error("the selected failed fixture did not reach the dispatcher");
     }
+    // Both of CALL-E's spellings, and the state name, select the shape a failed
+    // result validation reports.
+    for (const spelling of ["no_result", ...RESULT_VALIDATION_FAILED]) {
+      if (dryRunFixtureName(() => spelling) !== "no_result") {
+        throw new Error(`the rehearsal spelling ${spelling} did not select no_result`);
+      }
+      if (dryRunFixture(dryRunFixtureName(() => spelling)).structured_result !== null) {
+        throw new Error(`the rehearsal spelling ${spelling} selected a shape with an extract`);
+      }
+    }
     try {
       dryRunFixtureName(() => "no-answer");
       throw new Error("an unrecognised fixture name was accepted");
     } catch (error) {
-      if (!(error instanceof Error) || error.message !== "ORMA_DRY_RUN_FIXTURE must be completed or failed") throw error;
+      if (!(error instanceof Error) || error.message !== "ORMA_DRY_RUN_FIXTURE must be completed, failed or no_result") throw error;
     }
   });
 }

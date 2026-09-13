@@ -3,7 +3,9 @@
  *
  * `assemble_briefing` is the only source of counts and ages. It runs in
  * Postgres and returns completed strings. This module only validates, stores,
- * and substitutes those strings into the reviewed CALL-E task.
+ * and substitutes those strings into the reviewed CALL-E task. Every
+ * substitution is produced by the RPC, `last_call_summary` included, so no
+ * sentence CALL-E's own model wrote reaches the task.
  */
 
 export type Briefing = {
@@ -154,7 +156,7 @@ if (typeof testFn === "function") {
     open_count: 1,
     lead_line: "You've mentioned the dentist four times. It's been 34 days.",
     open_items: "- dentist (id: item-1)",
-    last_call_summary: "Yesterday you said you'd book it by Friday.",
+    last_call_summary: "Last call we wrote down 1 new item. You promised 1 thing.",
     slot_local_time: "08:00",
   };
 
@@ -187,7 +189,7 @@ Work through these seven steps in order. Do not skip any of them.
 
 4. Walk what is open, briefly. Name each item once. Do not read the list twice.
    - dentist (id: item-1)
-   Yesterday you said you'd book it by Friday.
+   Last call we wrote down 1 new item. You promised 1 thing.
 
 5. Ask what is new and needs capturing. Never ask this before step 4.
    Only treat something as a new item if they confirm it in their next reply. If their answer is unclear, ask once, and drop it if it is still unclear. Capturing something they did not mean is worse than capturing nothing.

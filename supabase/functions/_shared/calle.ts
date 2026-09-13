@@ -190,6 +190,30 @@ function failure(code: string, message: string): Record<string, string> {
 }
 
 /**
+ * The field set every dispatcher failure writes beside its code. `spec.md`
+ * section 3 maps a failed run to `not_answered`, and that disposition is never
+ * billed, so this is the only pair a failed dispatch may store. This module ends
+ * a run in three places, and one definition is what keeps a fourth from
+ * inventing its own.
+ */
+function failedDispatchFields(
+  code: string,
+  reason: string,
+): {
+  state: "failed";
+  disposition: "not_answered";
+  billable: false;
+  calle_failure: Record<string, string>;
+} {
+  return {
+    state: "failed",
+    disposition: "not_answered",
+    billable: false,
+    calle_failure: failure(code, reason),
+  };
+}
+
+/**
  * The row a dispatcher writes when it ends a run before any call exists. The
  * shape matches the finaliser's abandoned row, so one reader handles both, and
  * it satisfies the helper's terminal contract with a state and a reason.
@@ -382,8 +406,7 @@ async function dispatchOne(
   if (response.status === 409) {
     const reason = "CALL-E rejected this idempotency key with different inputs";
     await updateRun(deps, run.id, {
-      state: "failed",
-      calle_failure: failure("idempotency_conflict", reason),
+      ...failedDispatchFields("idempotency_conflict", reason),
       completed_at: deps.now().toISOString(),
     });
     await recordCallEvent(
@@ -397,8 +420,7 @@ async function dispatchOne(
   if (!response.ok) {
     const reason = `CALL-E dispatch returned HTTP ${response.status}`;
     await updateRun(deps, run.id, {
-      state: "failed",
-      calle_failure: failure("dispatch_failed", reason),
+      ...failedDispatchFields("dispatch_failed", reason),
       completed_at: deps.now().toISOString(),
     });
     await recordCallEvent(
@@ -480,10 +502,8 @@ async function recoverStrandedRun(
       return;
     }
     await updateRun(deps, run.id, {
-      state: "failed",
+      ...failedDispatchFields("dispatch_failed", reason),
       terminal_writer: RECOVERY_WRITER,
-      disposition: "not_answered",
-      calle_failure: failure("dispatch_failed", reason),
       completed_at: now.toISOString(),
     });
     await recordCallEvent(
@@ -613,6 +633,13 @@ if (typeof testFn === "function") {
         .map(async (request) => await request.text()),
     );
     if (!patches.some((body) => body.includes("idempotency_conflict"))) throw new Error("409 was not recorded");
+    const conflictPatch = patches.find((body) => body.includes("idempotency_conflict"));
+    if (
+      !conflictPatch?.includes('"disposition":"not_answered"') ||
+      !conflictPatch.includes('"billable":false')
+    ) {
+      throw new Error(`the 409 write must carry the pair for a failed run, saw ${String(conflictPatch)}`);
+    }
     if (patches.some((body) => body.includes("dispatch_recovery") || body.includes("awaiting_result"))) {
       throw new Error("the recovery overwrote a state another writer landed");
     }
@@ -630,6 +657,7 @@ if (typeof testFn === "function") {
     // The stub models the run, because the recovery must read the state the
     // rejected write landed and not write a second row for the same move.
     let state = "claimed";
+    const patches: { state?: string; disposition?: string; billable?: boolean }[] = [];
     const fetchStub: typeof fetch = async (input, init) => {
       const request = new Request(input, init);
       requests.push(request);
@@ -639,7 +667,12 @@ if (typeof testFn === "function") {
       if (request.url.includes("assemble_briefing")) return Response.json({ user_name: "Narayan", open_count: 0, lead_line: "Nothing urgent today.", open_items: "Nothing open.", last_call_summary: "", slot_local_time: "08:00" });
       if (request.url.endsWith("/v1/calls")) return new Response(null, { status: 503 });
       if (request.method === "PATCH") {
-        const patch = JSON.parse(await request.text()) as { state?: string };
+        const patch = JSON.parse(await request.text()) as {
+          state?: string;
+          disposition?: string;
+          billable?: boolean;
+        };
+        patches.push(patch);
         if (typeof patch.state === "string") state = patch.state;
         return new Response(null, { status: 204 });
       }
@@ -659,6 +692,10 @@ if (typeof testFn === "function") {
     }
     if (requests.some((request) => request.method === "PATCH" && request.url.includes("awaiting_result"))) {
       throw new Error("the recovery overwrote a state another writer landed");
+    }
+    const rejectedPatch = patches.find((patch) => patch.state === "failed");
+    if (rejectedPatch?.disposition !== "not_answered" || rejectedPatch.billable !== false) {
+      throw new Error(`the rejected dispatch must write the pair for a failed run, saw ${JSON.stringify(rejectedPatch)}`);
     }
   });
 

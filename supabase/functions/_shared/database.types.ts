@@ -79,6 +79,9 @@ export type Database = {
           dispatched_at: string | null
           disposition: string | null
           dry_run: boolean
+          finalise_after: string | null
+          finalise_attempts: number
+          finalise_error: string | null
           id: string
           idempotency_key: string
           local_date: string
@@ -103,6 +106,9 @@ export type Database = {
           dispatched_at?: string | null
           disposition?: string | null
           dry_run?: boolean
+          finalise_after?: string | null
+          finalise_attempts?: number
+          finalise_error?: string | null
           id?: string
           idempotency_key: string
           local_date: string
@@ -127,6 +133,9 @@ export type Database = {
           dispatched_at?: string | null
           disposition?: string | null
           dry_run?: boolean
+          finalise_after?: string | null
+          finalise_attempts?: number
+          finalise_error?: string | null
           id?: string
           idempotency_key?: string
           local_date?: string
@@ -614,6 +623,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      abandon_call_run: {
+        Args: { p_call_run_id: string; p_reason: string }
+        Returns: boolean
+      }
       assemble_briefing: {
         Args: { p_now?: string; p_slot_local_time: string; p_user_id: string }
         Returns: Json
@@ -632,6 +645,9 @@ export type Database = {
           dispatched_at: string | null
           disposition: string | null
           dry_run: boolean
+          finalise_after: string | null
+          finalise_attempts: number
+          finalise_error: string | null
           id: string
           idempotency_key: string
           local_date: string
@@ -666,6 +682,10 @@ export type Database = {
           p_transcript_turns: Json
           p_user_id: string
         }
+        Returns: Json
+      }
+      record_finalise_failure: {
+        Args: { p_call_run_id: string; p_error: string; p_wait_seconds: number }
         Returns: Json
       }
     }

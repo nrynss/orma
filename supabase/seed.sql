@@ -129,10 +129,18 @@ values (
   false
 );
 
+-- The eight `call_events` kinds are fixed, and `finalised` is the one a
+-- completed run ends on. Its detail carries the state the run reached, the
+-- disposition the spec gives that state, and the counts ingestion wrote.
 insert into public.call_events (call_run_id, at, kind, detail)
 values
   ('40000000-0000-4000-8000-000000000001', now() - interval '1 day', 'dispatched', '{"dry_run":true}'::jsonb),
-  ('40000000-0000-4000-8000-000000000001', now() - interval '23 hours', 'completed', '{"disposition":"answered_extracted"}'::jsonb);
+  (
+    '40000000-0000-4000-8000-000000000001',
+    now() - interval '23 hours',
+    'finalised',
+    '{"state":"completed","disposition":"answered_extracted","item_count":0,"mention_count":3,"retirement_count":0,"commitment_count":1,"failure_reason":""}'::jsonb
+  );
 
 insert into public.transcripts (call_run_id, turns, raw, fetched_at)
 values (

@@ -43,7 +43,9 @@ begin
   if p_user_id is null then
     raise exception 'ingest requires a user id';
   end if;
-  if p_state not in ('completed', 'failed', 'canceled') then
+  -- `no_result` is the terminal state `spec.md` section 3 names for a call
+  -- whose result failed validation. `answered_no_result` is its disposition.
+  if p_state not in ('completed', 'no_result', 'failed', 'canceled') then
     raise exception 'ingest requires a terminal state, got %', p_state;
   end if;
   if p_disposition not in ('answered_extracted', 'answered_no_result', 'not_answered', 'canceled') then
@@ -172,9 +174,15 @@ begin
     when v_run.calle_failure ->> 'failure_code' = 'poll_timeout' then null
     else v_run.calle_failure
   end;
+  -- `billable` follows the disposition, and only a call CALL-E actually placed
+  -- can bill. A rehearsal writes a synthetic `fixture:` call id, and a run with
+  -- no call id never reached the provider, so neither one can read as billed.
   update public.call_runs
      set state = p_state,
          disposition = p_disposition,
+         billable = p_disposition in ('answered_extracted', 'answered_no_result')
+           and v_run.calle_call_id is not null
+           and v_run.calle_call_id not like 'fixture:%',
          mood = p_mood,
          calle_failure = v_failure,
          completed_at = coalesce(p_completed_at, now())

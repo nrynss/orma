@@ -7,7 +7,6 @@
  */
 
 import { terminalStateFor } from "../_shared/poll.ts";
-import type { CallStatus } from "../_shared/fixtures.ts";
 import { recordCallEvent } from "../_shared/events.ts";
 
 const EVENT_ID_HEADER = "call-e-event-id";
@@ -214,7 +213,7 @@ async function terminaliseFromRefetch(
   call: AuthoritativeCall,
   eventTag: string,
 ): Promise<RefetchOutcome> {
-  const state = terminalStateFor(call.status as CallStatus);
+  const state = terminalStateFor(call.status);
   if (!state) return "not_terminal";
   const query = new URLSearchParams({
     id: `eq.${call.metadata.call_run_id}`,
@@ -522,6 +521,47 @@ if (typeof testFn === "function" && !import.meta.main) {
     }
     if (patch.body.terminal_writer !== "webhook:evt_terminal") {
       throw new Error(`the move must name the event that made it, saw ${JSON.stringify(patch.body.terminal_writer)}`);
+    }
+  });
+
+  testFn("a re-fetch that reports a failed result validation lands the run in no_result", async () => {
+    const terminalPatches: { url: string; body: Record<string, unknown> }[] = [];
+    const callEvents: { kind: string; detail: Record<string, unknown> }[] = [];
+    const handler = createWebhookHandler(baseDeps(async (input, init) => {
+      const current = new Request(input, init);
+      if (current.url.endsWith("/webhook_events") && current.method === "POST") return new Response(null, { status: 201 });
+      if (current.url.includes("/webhook_events?") && current.method === "PATCH") return Response.json([{ event_id: "evt_terminal" }]);
+      if (current.url.endsWith("/call_events") && current.method === "POST") {
+        callEvents.push(JSON.parse(await current.text()));
+        return new Response(null, { status: 201 });
+      }
+      if (current.url.endsWith("/v1/calls/call_terminal")) {
+        return Response.json({
+          id: "call_terminal",
+          status: "result_validation_failed",
+          metadata: { call_run_id: "11111111-1111-4111-8111-111111111111" },
+        });
+      }
+      if (current.url.includes("/call_runs?") && current.method === "GET") {
+        return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
+      }
+      if (current.url.includes("/call_runs?") && current.method === "PATCH") {
+        terminalPatches.push({ url: current.url, body: JSON.parse(await current.text()) });
+        return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
+      }
+      throw new Error(`unexpected request ${current.method} ${current.url}`);
+    }));
+    const response = await handler(request({ ...event(), type: "call.result_validation_failed" }));
+    if (response.status !== 200) throw new Error("a validation failure notification must be acknowledged");
+    if (terminalPatches.length !== 1) {
+      throw new Error(`the run must be moved exactly once, saw ${terminalPatches.length}`);
+    }
+    if (terminalPatches[0].body.state !== "no_result") {
+      throw new Error(`a failed result validation must land as no_result, saw ${JSON.stringify(terminalPatches[0].body.state)}`);
+    }
+    const refetchedRow = callEvents.find((row) => row.kind === "refetched");
+    if (refetchedRow?.detail.state !== "result_validation_failed") {
+      throw new Error("the refetched row must carry the provider's own status");
     }
   });
 

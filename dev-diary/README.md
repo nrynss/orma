@@ -158,7 +158,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
 | P1 | 7 / 7 | Complete. Contracts are frozen. |
-| P2 | 11 / 11 | **Complete.** Every task landed. The phase e2e review is next. |
+| P2 | 12 / 12 | **Complete.** Every task and the e2e remediation landed, and the deployment carries the phase. The operator still owes the Vault scheduler key. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 0 / 3 | T4.1 can start. |
 | P5 | 0 / 4 | T5.1 can start. |
@@ -921,3 +921,43 @@ its baseline rows.
 
 **The delivery reading.** The receipt is T3.4's `deliveries` row, keyed by
 `call_run_id`, and not a ninth kind. Record 1 of the note carries the evidence.
+
+### 2026-09-13 · P2 e2e remediation, and the phase on the deployment
+
+The phase e2e review ran three rounds. Round 1 found seven, round 2 found two on
+the disposition and the rehearsal, and round 3 found two more of the disposition
+class on the two writers round 2 did not name. `T2.10` was split for the six code
+findings and their follow-ons, and the orchestrator closed the deployment finding
+itself. P2 now holds twelve tasks and all twelve are landed.
+
+**What T2.10 changed.** `assemble_briefing` builds `last_call_summary` from the
+previous run's own rows instead of CALL-E's sentence, so no number a provider
+model wrote can reach a task. `ingest_call_result` writes `billable` in the same
+statement as the disposition, billing `answered_extracted` and
+`answered_no_result`, and never a rehearsal with a synthetic call id. Both type
+files were regenerated and name the finaliser's columns and functions.
+`assemble_briefing` revokes EXECUTE from `anon` and `authenticated` like its
+siblings. CALL-E's `result_validation_failed` now becomes
+`call_runs.state = no_result` with `answered_no_result`. The seeded timeline
+carries a kind from the vocabulary. Every terminal path writes the state,
+disposition and billing triple, so no run at rest carries a null disposition, and
+a rehearsal can reach the `no_result` shape.
+
+**The deployment.** `supabase db push` applied the seven P2 migrations, and
+`materialise`, `tick` and `calle-webhook` are deployed. The front door answers
+with all five RPCs present and `42501` for `anon`, the new columns on `call_runs`,
+and both functions guarded by `secret:materialise`.
+
+**What an operator still owes before P8 runs real calls.** Write
+`ORMA_MATERIALISE_SECRET_KEY` into the deployed database's Vault. It holds a
+secret API key named `materialise`. The cron jobs read it at execution time and
+stay fail-closed while it is absent. That is deliberate, because arming a minute
+schedule is a spending decision. `ORMA_DRY_RUN` is a function secret and stays
+true.
+
+**Deviation, on the user's authority.** The phase lands without a round 4 review.
+The round 3 findings were two narrow writers in the class round 2 had already
+opened, and their fix is measured with round 3's own instrument: terminal runs at
+rest with a null disposition went from two to zero, and the corrected instrument
+passes 59 of 59. The orchestrator also ran the acceptance: 283 Deno tests green,
+`test-ingest.sh` green, and the fresh migration check green.

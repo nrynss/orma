@@ -1,6 +1,27 @@
 /** Recorded CALL-E payloads for offline contract tests. */
 
-export type CallStatus = "queued" | "in_progress" | "completed" | "failed" | "canceled";
+/**
+ * The statuses a CALL-E call reports. `result_validation_failed` is the status
+ * `spec.md` section 3 names for a call whose result failed validation, and it
+ * is the one that lands a run in the `no_result` terminal state.
+ */
+export type CallStatus =
+  | "queued"
+  | "in_progress"
+  | "completed"
+  | "failed"
+  | "canceled"
+  | "result_validation_failed";
+
+/**
+ * The two spellings CALL-E uses for a failed result validation. The bare form
+ * is the call status. The namespaced form carries the event-type namespace, and
+ * a re-fetch or an operator selecting a rehearsal may repeat it.
+ */
+export const RESULT_VALIDATION_FAILED = [
+  "result_validation_failed",
+  "call.result_validation_failed",
+] as const;
 
 export interface TranscriptTurnFixture {
   offset_seconds: number;

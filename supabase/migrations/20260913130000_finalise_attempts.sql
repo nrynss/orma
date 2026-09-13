@@ -88,8 +88,12 @@ $$;
 
 -- The second give-up path. A run the finaliser can never finish is ended
 -- deliberately, and the reason is required here so no caller can end a run
--- without one. The guarded update returns true to the one writer that ended it,
--- which is the writer that appends the timeline row.
+-- without one. It is also the last writer for such a run, so it writes the whole
+-- pair the spec's table gives a failed run, the state included. A caller can
+-- arrive holding a state another writer set, a webhook-terminalised `completed`
+-- run or a rehearsal whose ingestion failed, and the give-up means `failed`
+-- whatever the run held. The guarded update returns true to the one writer that
+-- ended it, which is the writer that appends the timeline row.
 create function public.abandon_call_run(
   p_call_run_id uuid,
   p_reason text
@@ -110,7 +114,10 @@ begin
   end if;
 
   update public.call_runs
-     set completed_at = now(),
+     set state = 'failed',
+         completed_at = now(),
+         disposition = 'not_answered',
+         billable = false,
          finalise_error = p_reason
    where id = p_call_run_id
      and completed_at is null

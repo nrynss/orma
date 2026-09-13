@@ -273,3 +273,31 @@ Write a `call_events` row at every transition: materialised, claimed, dispatched
 Supabase logs are organised per invocation and a single call spans several, so this table is the only place the whole story is legible. It is also the demo video's one shot of visible machinery.
 
 **Done when:** a completed run reads as an ordered story from materialisation to delivery, and a failed run names where it stopped.
+
+---
+
+### T2.10: Phase e2e remediation
+```yaml
+requires:   T2.9
+fixture-ok: yes
+size:       M · frontier
+owns:       supabase/migrations/20260912160000_briefing.sql, supabase/functions/_shared/briefing.ts, supabase/migrations/20260912180000_ingest.sql, supabase/migrations/test-ingest.sh, supabase/functions/_shared/poll.ts, supabase/functions/calle-webhook/index.ts, supabase/functions/_shared/database.types.ts, web/src/lib/database.types.ts, supabase/seed.sql, supabase/migrations/20260913130000_finalise_attempts.sql, supabase/functions/_shared/finalise.ts, supabase/functions/_shared/dispatch-mode.ts, supabase/functions/_shared/fixtures.ts, supabase/functions/_shared/calle.ts
+status:     done
+```
+Split from the phase e2e review on 2026-09-13. The evidence for every finding is
+`dev-diary/adversarial-review/p2-e2e-round1.md`. The deployment finding stays with
+the orchestrator, which pushes the migrations and deploys the functions once this
+task lands. The six below are here.
+
+1. `last_call_summary` is CALL-E's own sentence, so a number its model wrote can
+   reach the next call with no row behind it.
+2. `call_runs.billable` is never true, although `spec.md` §3 bills
+   `answered_extracted` and `answered_no_result`.
+3. Both type files miss the finaliser's columns and functions.
+4. `assemble_briefing` keeps EXECUTE for `anon` and `authenticated`.
+5. `call_runs.state = no_result` has no producer, although `spec.md` §3 names it
+   for `call.result_validation_failed`.
+6. `seed.sql` writes a `call_events` kind outside the eight-kind vocabulary.
+
+**Done when:** each of the six is closed with a pin, and the phase e2e round 2
+review finds zero residue against round 1.

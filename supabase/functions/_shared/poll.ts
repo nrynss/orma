@@ -20,7 +20,7 @@
 
 import type { CalleDeps } from "./calle.ts";
 import { recordCallEvent } from "./events.ts";
-import type { CallStatus, CallTaskFixture } from "./fixtures.ts";
+import { RESULT_VALIDATION_FAILED, type CallTaskFixture } from "./fixtures.ts";
 
 /** The first follow-up is set by dispatch. Each pass after that waits ten. */
 export const POLL_INTERVAL_MS = 10_000;
@@ -32,8 +32,12 @@ export const POLL_INTERVAL_MS = 10_000;
  */
 export const POLL_GIVE_UP_MS = 15 * 60_000;
 
-/** The terminal states the provider can report, mapped onto `call_runs.state`. */
-export type TerminalState = "completed" | "failed" | "canceled";
+/**
+ * The terminal states CALL-E can report, mapped onto `call_runs.state`.
+ * `no_result` is the state `spec.md` section 3 names for a call whose result
+ * failed validation, which CALL-E reports under its own status name.
+ */
+export type TerminalState = "completed" | "no_result" | "failed" | "canceled";
 
 export type PollableRun = {
   id: string;
@@ -72,10 +76,11 @@ function serviceHeaders(key: string, prefer?: string): HeadersInit {
   return headers;
 }
 
-export function terminalStateFor(status: CallStatus): TerminalState | null {
+export function terminalStateFor(status: string): TerminalState | null {
   if (status === "completed") return "completed";
   if (status === "failed") return "failed";
   if (status === "canceled") return "canceled";
+  if ((RESULT_VALIDATION_FAILED as readonly string[]).includes(status)) return "no_result";
   return null;
 }
 
@@ -172,10 +177,13 @@ export async function pollRun(run: PollableRun, deps: CalleDeps): Promise<void> 
   }
 
   if (!current.calle_call_id) {
+    // The disposition and its billing are written together, as the ingestion
+    // boundary writes them, so the pair can never disagree.
     const won = await patchPendingRun(deps, run.id, {
       state: "failed",
       terminal_writer: TERMINAL_WRITER,
       disposition: "not_answered",
+      billable: false,
       calle_failure: failure("poll_unavailable", "run has no CALL-E call id to poll"),
     });
     if (won) {
@@ -203,6 +211,7 @@ export async function pollRun(run: PollableRun, deps: CalleDeps): Promise<void> 
       state: "failed",
       terminal_writer: TERMINAL_WRITER,
       disposition: "not_answered",
+      billable: false,
       calle_failure: failure("poll_timeout", message),
     });
     if (won) {
@@ -377,6 +386,39 @@ if (typeof testFn === "function") {
     });
     await pollRun({ id: RUN, state: "awaiting_result", poll_after: null }, depsFor(fetchImpl));
     if (events[0]?.detail.state !== "failed") throw new Error("a failed call must move the run to failed");
+  });
+
+  testFn("a validation failure terminalises the run as no_result", async () => {
+    const { seen, events, fetchImpl } = driver({
+      run: { id: RUN, state: "awaiting_result" },
+      call: { id: CALL, status: "result_validation_failed" },
+    });
+    await pollRun({ id: RUN, state: "awaiting_result", poll_after: null }, depsFor(fetchImpl));
+    const body = seen.find((entry) => entry.method === "PATCH")?.body as Record<string, unknown>;
+    if (body.state !== "no_result") {
+      throw new Error(`a failed result validation must land as no_result, saw ${JSON.stringify(body.state)}`);
+    }
+    if (events[0]?.detail.state !== "no_result") {
+      throw new Error(`the polled row must carry no_result, saw ${JSON.stringify(events[0]?.detail)}`);
+    }
+  });
+
+  testFn("every provider status maps to the run state it produces", () => {
+    const cases: Array<[string, string | null]> = [
+      ["completed", "completed"],
+      ["failed", "failed"],
+      ["canceled", "canceled"],
+      ["result_validation_failed", "no_result"],
+      ["call.result_validation_failed", "no_result"],
+      ["queued", null],
+      ["in_progress", null],
+    ];
+    for (const [status, expected] of cases) {
+      const mapped = terminalStateFor(status);
+      if (mapped !== expected) {
+        throw new Error(`${status} mapped to ${String(mapped)}, not ${String(expected)}`);
+      }
+    }
   });
 
   testFn("a run the webhook already terminalised is a no-op", async () => {

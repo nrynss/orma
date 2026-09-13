@@ -34,6 +34,22 @@ kept_run="00000000-0000-0000-0000-0000000000b2"
 # A run CALL-E reported as canceled. Nothing else drives the canceled state or
 # the canceled disposition, so the pair is unmeasured without this row.
 canceled_run="00000000-0000-0000-0000-0000000000b3"
+# A call whose result failed validation. CALL-E names that under a status of
+# its own, so the run takes the `no_result` state the spec gives it.
+validation_run="00000000-0000-0000-0000-0000000000b4"
+# A rehearsal. The dry path writes a synthetic call id and places no call, so
+# this run must never read as billed.
+rehearsal_run="00000000-0000-0000-0000-0000000000b5"
+# A terminal run the finaliser gave up on. The webhook terminalised it
+# `completed` and left the disposition unwritten, and its re-fetch then failed
+# every attempt. The give-up therefore owns the whole pair, the state included.
+abandon_run="00000000-0000-0000-0000-0000000000b6"
+# The same give-up on a run that never received a provider call id, holding the
+# state the poll's own give-up writes.
+abandon_noid_run="00000000-0000-0000-0000-0000000000b7"
+# A rehearsal of the validation-failure shape. It carries the disposition that
+# shape gives, and the billing a rehearsal carries, which is none.
+no_result_rehearsal_run="00000000-0000-0000-0000-0000000000b8"
 
 cleanup() {
   supabase stop --workdir "$scratch_root" >/dev/null 2>&1 || true
@@ -254,7 +270,30 @@ values
   -- The poll stored a CALL-E failure with a code the fixture never repeats.
   ('$kept_run', '$user_id', current_date, 'evening', now(), 't2-7-kept', 'call_t2_7_kept'),
   -- CALL-E canceled this run in flight. Nothing else drives the canceled state.
-  ('$canceled_run', '$user_id', current_date, 'evening', now(), 't2-7-canceled', 'call_t2_7_canceled');
+  ('$canceled_run', '$user_id', current_date, 'evening', now(), 't2-7-canceled', 'call_t2_7_canceled'),
+  -- A call whose result failed validation. CALL-E names that under a status of
+  -- its own, and the run must read as no_result.
+  ('$validation_run', '$user_id', current_date, 'morning', now(), 't2-7-no-result', 'call_t2_10_no_result'),
+  -- A rehearsal. The dry path writes a synthetic call id, and no real call was
+  -- placed, so this run must never read as billed.
+  ('$rehearsal_run', '$user_id', current_date, 'morning', now(), 't2-7-rehearsal', 'fixture:call_t2_10_rehearsal'),
+  -- A call the finaliser gave up on after CALL-E placed and answered it.
+  ('$abandon_run', '$user_id', current_date, 'evening', now(), 't2-10-abandon', 'call_t2_10_abandon'),
+  -- The same give-up on a run that never received a provider call id.
+  ('$abandon_noid_run', '$user_id', current_date, 'evening', now(), 't2-10-abandon-noid', null),
+  -- A rehearsal of the validation-failure shape, on a synthetic call id.
+  ('$no_result_rehearsal_run', '$user_id', current_date, 'morning', now(), 't2-10-no-result-rehearsal', 'fixture:call_t2_10_no_result_rehearsal');
+
+update public.call_runs
+   set state = 'failed',
+       terminal_writer = 'poll',
+       calle_failure = '{"failure_code":"no_answer","failure_message":"CALL-E reported no answer"}'::jsonb
+ where id = '$abandon_noid_run';
+
+update public.call_runs
+   set state = 'completed',
+       terminal_writer = 'webhook:evt_t2_10_give_up'
+ where id = '$abandon_run';
 
 update public.call_runs
    set state = 'failed',
@@ -339,10 +378,15 @@ SQL
 select count(*) from public.items where id = '$retired_item' and status = 'retired' and retired_at is not null and retired_reason is not null;
 SQL
 )" == "1" ]]
-[[ "$(psql <<SQL
-select state || ' ' || disposition || ' ' || mood from public.call_runs where id = '$main_run';
+# The spec bills `answered_extracted`, and this run holds a provider call id.
+main_billing="$(psql <<SQL
+select state || ' ' || coalesce(disposition, 'null') || ' ' || mood || ' ' || billable::text from public.call_runs where id = '$main_run';
 SQL
-)" == "completed answered_extracted unknown" ]]
+)"
+[[ "$main_billing" == "completed answered_extracted unknown true" ]] || {
+  echo "the completed run read '$main_billing' beside its disposition" >&2
+  exit 1
+}
 # The transcript keeps every recorded turn and the raw payload keeps its call id.
 [[ "$(psql <<SQL
 select jsonb_array_length(turns) from public.transcripts where call_run_id = '$main_run';
@@ -460,10 +504,15 @@ SQL
 select count(*) from public.transcripts where call_run_id = '$invalid_run';
 SQL
 )" == "1" ]]
-[[ "$(psql <<SQL
-select state || ' ' || disposition from public.call_runs where id = '$invalid_run';
+# The spec bills `answered_no_result` too, and this run placed a real call.
+invalid_billing="$(psql <<SQL
+select state || ' ' || coalesce(disposition, 'null') || ' ' || billable::text from public.call_runs where id = '$invalid_run';
 SQL
-)" == "completed answered_no_result" ]]
+)"
+[[ "$invalid_billing" == "completed answered_no_result true" ]] || {
+  echo "the answered run with no result read '$invalid_billing'" >&2
+  exit 1
+}
 # No partial state: no new item, mention or commitment anywhere.
 [[ "$(psql <<SQL
 select (select count(*) from public.items where user_id = '$user_id' and source = 'call')
@@ -859,12 +908,13 @@ select public.ingest_call_result(
   null, false, null, 'failed', 'not_answered', null, '$failed_completed_at'
 );
 SQL
-failed_expected="failed not_answered null $(jq -r '.failure_code' "$fixtures/call-failed.json") $(jq -r '.failure_message' "$fixtures/call-failed.json") true"
+failed_expected="failed not_answered null $(jq -r '.failure_code' "$fixtures/call-failed.json") $(jq -r '.failure_message' "$fixtures/call-failed.json") true false"
 failed_row="$(psql <<SQL
 select state || ' ' || disposition || ' ' || coalesce(mood, 'null')
   || ' ' || coalesce(calle_failure ->> 'failure_code', 'null')
   || ' ' || coalesce(calle_failure ->> 'failure_message', 'null')
   || ' ' || (completed_at is not null)::text
+  || ' ' || billable::text
 from public.call_runs where id = '$failed_run';
 SQL
 )"
@@ -877,6 +927,7 @@ select state || ' ' || disposition || ' ' || coalesce(mood, 'null')
   || ' ' || coalesce(calle_failure ->> 'failure_code', 'null')
   || ' ' || coalesce(calle_failure ->> 'failure_message', 'null')
   || ' ' || (completed_at is not null)::text
+  || ' ' || billable::text
 from public.call_runs where id = '$webhook_failed_run';
 SQL
 )"
@@ -987,17 +1038,199 @@ SQL
 }
 stored_completed_at "$canceled_run" '2026-09-12T02:30:00Z'
 canceled_row="$(psql <<SQL
-select state || ' ' || disposition
+select state || ' ' || coalesce(disposition, 'null')
   || ' ' || (select count(*) from public.transcripts where call_run_id = '$canceled_run')
   || ' ' || (select count(*) from public.results where call_run_id = '$canceled_run')
   || ' ' || (select count(*) from public.call_events where call_run_id = '$canceled_run' and kind = 'ingested')
+  || ' ' || billable::text
 from public.call_runs where id = '$canceled_run';
 SQL
 )"
-[[ "$canceled_row" == "canceled canceled 1 1 1" ]] || {
+[[ "$canceled_row" == "canceled canceled 1 1 1 false" ]] || {
   echo "the canceled run read '$canceled_row'" >&2
   exit 1
 }
 echo "T2.7 a canceled call stored its own state, disposition and transcript."
+
+# Case fourteen: `no_result` is the terminal state a call whose result failed
+# validation lands in, and `answered_no_result` is its disposition. The state
+# the poll and the webhook write is the state ingestion must accept.
+validation_summary="$(psql <<SQL
+set role service_role;
+select public.ingest_call_result(
+  '$validation_run', '$user_id',
+  '[]'::jsonb, '{"id":"call_t2_10_no_result","status":"result_validation_failed"}'::jsonb,
+  null, false, 'structured_result.captured_items must be an array',
+  'no_result', 'answered_no_result', null, '2026-09-12T02:40:00Z'
+);
+SQL
+)"
+[[ "$(jq -r .already_ingested <<<"$validation_summary")" == "false" ]] || {
+  echo "the validation failed run was already ingested: $validation_summary" >&2
+  exit 1
+}
+validation_row="$(psql <<SQL
+select state || ' ' || coalesce(disposition, 'null') || ' ' || billable::text
+  || ' ' || (select count(*) from public.transcripts where call_run_id = '$validation_run')
+from public.call_runs where id = '$validation_run';
+SQL
+)"
+[[ "$validation_row" == "no_result answered_no_result true 1" ]] || {
+  echo "the validation failed run read '$validation_row'" >&2
+  exit 1
+}
+stored_completed_at "$validation_run" '2026-09-12T02:40:00Z'
+echo "T2.7 a failed result validation stored no_result with its own disposition."
+
+# Case fifteen: a rehearsal places no call, so its synthetic call id must never
+# read as billed, whatever disposition its fixture lands on.
+rehearsal_summary="$(psql <<SQL
+set role service_role;
+select public.ingest_call_result(
+  '$rehearsal_run', '$user_id',
+  '[]'::jsonb, '{"id":"call_t2_10_rehearsal","status":"completed"}'::jsonb,
+  '{"captured_items":[],"retired_items":[],"commitments":[]}'::jsonb,
+  true, null, 'completed', 'answered_extracted', 'calm', now()
+);
+SQL
+)"
+[[ "$(jq -r .already_ingested <<<"$rehearsal_summary")" == "false" ]] || {
+  echo "the rehearsal was already ingested: $rehearsal_summary" >&2
+  exit 1
+}
+rehearsal_row="$(psql <<SQL
+select state || ' ' || coalesce(disposition, 'null') || ' ' || billable::text from public.call_runs where id = '$rehearsal_run';
+SQL
+)"
+[[ "$rehearsal_row" == "completed answered_extracted false" ]] || {
+  echo "the rehearsal read '$rehearsal_row', and no call was placed" >&2
+  exit 1
+}
+echo "T2.7 a rehearsal with a synthetic call id was not billed."
+
+# Case sixteen: a rehearsal that lands the validation-failure shape keeps the
+# disposition that shape carries and the billing a rehearsal carries. No call
+# was placed, so the pair is not a billed one, whatever the terminus.
+no_result_rehearsal_summary="$(psql <<SQL
+set role service_role;
+select public.ingest_call_result(
+  '$no_result_rehearsal_run', '$user_id',
+  '[]'::jsonb, '{"id":"call_t2_10_no_result_rehearsal","status":"result_validation_failed"}'::jsonb,
+  null, false, 'structured_result.captured_items must be an array',
+  'no_result', 'answered_no_result', null, now()
+);
+SQL
+)"
+[[ "$(jq -r .already_ingested <<<"$no_result_rehearsal_summary")" == "false" ]] || {
+  echo "the no_result rehearsal was already ingested: $no_result_rehearsal_summary" >&2
+  exit 1
+}
+no_result_rehearsal_row="$(psql <<SQL
+select state || ' ' || coalesce(disposition, 'null') || ' ' || billable::text from public.call_runs where id = '$no_result_rehearsal_run';
+SQL
+)"
+[[ "$no_result_rehearsal_row" == "no_result answered_no_result false" ]] || {
+  echo "the no_result rehearsal read '$no_result_rehearsal_row'" >&2
+  exit 1
+}
+echo "T2.7 a rehearsal of the validation-failure shape was not billed."
+
+# Case seventeen: the finaliser's give-up is the last writer for a run it can
+# never finish, so it writes that run's disposition and its billing together.
+# The spec's table says a failed run is `not_answered`, and nothing bills a run
+# CALL-E never answered.
+abandon_won="$(psql <<SQL
+set role service_role;
+select public.abandon_call_run(
+  '$abandon_run',
+  'the call re-fetch failed after 3 attempts'
+);
+SQL
+)"
+[[ "$abandon_won" == "t" ]] || {
+  echo "the give-up did not win the run: '$abandon_won'" >&2
+  exit 1
+}
+abandon_row="$(psql <<SQL
+select state || ' ' || coalesce(disposition, 'null') || ' ' || billable::text
+  || ' ' || (completed_at is not null)::text || ' ' || coalesce(finalise_error, 'null')
+from public.call_runs where id = '$abandon_run';
+SQL
+)"
+[[ "$abandon_row" == "failed not_answered false true the call re-fetch failed after 3 attempts" ]] || {
+  echo "the abandoned run read '$abandon_row'" >&2
+  exit 1
+}
+# The guarded update is not repeatable, so a second give-up changes no pair.
+abandon_second="$(psql <<SQL
+set role service_role;
+select public.abandon_call_run('$abandon_run', 'a later tick');
+SQL
+)"
+[[ "$abandon_second" == "f" ]] || {
+  echo "a second give-up won an already ended run: '$abandon_second'" >&2
+  exit 1
+}
+# A run with no provider call id takes the same pair, so the disposition does
+# not depend on how far the dispatch got.
+abandon_noid_won="$(psql <<SQL
+set role service_role;
+select public.abandon_call_run('$abandon_noid_run', 'the run has no CALL-E call id to re-fetch');
+SQL
+)"
+[[ "$abandon_noid_won" == "t" ]] || {
+  echo "the give-up on a run with no call id did not win: '$abandon_noid_won'" >&2
+  exit 1
+}
+abandon_noid_row="$(psql <<SQL
+select state || ' ' || coalesce(disposition, 'null') || ' ' || billable::text from public.call_runs where id = '$abandon_noid_run';
+SQL
+)"
+[[ "$abandon_noid_row" == "failed not_answered false" ]] || {
+  echo "the abandoned run with no call id read '$abandon_noid_row'" >&2
+  exit 1
+}
+echo "T2.7 a given-up run stored not_answered with its billing."
+
+# The seed's timeline is the one the demo shows, so every kind it writes must be
+# one the eight-kind vocabulary names. An unknown kind is a row no reader can
+# label.
+seeded_timeline="$(psql <<SQL
+select (select count(*) from public.call_events where call_run_id = '40000000-0000-4000-8000-000000000001')
+  || ' ' || coalesce((
+    select string_agg(distinct kind, ',' order by kind) from public.call_events
+     where call_run_id = '40000000-0000-4000-8000-000000000001'
+       and kind not in ('materialised','claimed','dispatched','polled','webhook_received','refetched','ingested','finalised')
+  ), 'none');
+SQL
+)"
+[[ "$seeded_timeline" == "2 none" ]] || {
+  echo "the seeded run's timeline read '$seeded_timeline'" >&2
+  exit 1
+}
+echo "T2.7 every seeded timeline kind is one the vocabulary names."
+
+# Case eighteen: the pair is read over every terminal run at rest, not on one
+# row. A terminal run must carry a disposition from the spec's four, and
+# `billable` must agree with it and with whether CALL-E placed a real call.
+# Three ways the two could disagree, and a null disposition, all count here.
+pair_gaps="$(psql <<SQL
+select count(*) from public.call_runs
+ where state in ('completed','no_result','failed','canceled')
+   and completed_at is not null
+   and (
+     disposition is null
+     or (billable and disposition not in ('answered_extracted','answered_no_result'))
+     or (billable and (calle_call_id is null or calle_call_id like 'fixture:%'))
+     or (not billable and disposition in ('answered_extracted','answered_no_result')
+         and calle_call_id is not null and calle_call_id not like 'fixture:%')
+   );
+SQL
+)"
+[[ "$pair_gaps" == "0" ]] || {
+  echo "$pair_gaps terminal run(s) hold a disposition and a billing that disagree" >&2
+  exit 1
+}
+echo "T2.7 every terminal run's disposition and billing agree."
 
 echo "T2.7 ingestion acceptance passed."

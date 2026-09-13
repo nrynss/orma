@@ -105,13 +105,19 @@ insert into public.item_mentions (item_id)
 select '20000000-0000-4000-8000-000000000222'
 from generate_series(1, 4);
 
+-- The previous call carries a provider-written sentence that counts the same
+-- item twice and ages it, and its own rows carry one captured item and one
+-- commitment. The summary the next briefing reads must come from those rows, so
+-- no number the provider's model wrote can reach the task template.
 insert into public.call_runs (
-  id, user_id, local_date, part_of_day, scheduled_for, state, idempotency_key, completed_at
+  id, user_id, local_date, part_of_day, scheduled_for, state, disposition,
+  calle_call_id, idempotency_key, completed_at
 )
 values (
   '30000000-0000-4000-8000-000000000222',
   '00000000-0000-0000-0000-000000000222',
   '2026-09-11', 'morning', '2026-09-11 02:30:00+00', 'completed',
+  'answered_extracted', 'call_t2_2_summary',
   'orma:t2-2:summary', '2026-09-11 02:32:00+00'
 );
 
@@ -119,7 +125,14 @@ insert into public.transcripts (call_run_id, turns, raw)
 values (
   '30000000-0000-4000-8000-000000000222',
   '[]',
-  '{"summary":"Yesterday you said you would book it by Friday."}'
+  '{"summary":"You mentioned the dentist 7 times and it has been 99 days."}'
+);
+
+insert into public.results (call_run_id, structured, valid)
+values (
+  '30000000-0000-4000-8000-000000000222',
+  '{"captured_items":[{"text":"book the dentist","evidence_offset_seconds":12}],"retired_items":[],"commitments":[{"item_id":"20000000-0000-4000-8000-000000000222","evidence_offset_seconds":30}]}'::jsonb,
+  true
 );
 
 do $$
@@ -133,8 +146,12 @@ begin
   if briefing ->> 'lead_line' <> 'You''ve mentioned dentist 4 times. It''s been 34 days.' then
     raise exception 'golden lead changed: %', briefing ->> 'lead_line';
   end if;
-  if briefing ->> 'last_call_summary' <> 'Yesterday you said you would book it by Friday.' then
-    raise exception 'provider summary was not read from transcripts.raw: %', briefing ->> 'last_call_summary';
+  if briefing ->> 'last_call_summary' <> 'Last call we wrote down 1 new item. You promised 1 thing.' then
+    raise exception 'the prior call summary must come from the run rows: %', briefing ->> 'last_call_summary';
+  end if;
+  if position('99 days' in briefing ->> 'last_call_summary') > 0
+     or position('7 times' in briefing ->> 'last_call_summary') > 0 then
+    raise exception 'the provider summary reached the briefing: %', briefing ->> 'last_call_summary';
   end if;
   if briefing ->> 'open_count' <> '2' then
     raise exception 'open item count changed: %', briefing ->> 'open_count';
@@ -182,6 +199,12 @@ do $$
 begin
   if not has_function_privilege('service_role', 'public.assemble_briefing(uuid, time without time zone, timestamp with time zone)', 'execute') then
     raise exception 'service_role cannot execute assemble_briefing';
+  end if;
+  if has_function_privilege('anon', 'public.assemble_briefing(uuid, time without time zone, timestamp with time zone)', 'execute') then
+    raise exception 'anon can execute assemble_briefing';
+  end if;
+  if has_function_privilege('authenticated', 'public.assemble_briefing(uuid, time without time zone, timestamp with time zone)', 'execute') then
+    raise exception 'authenticated can execute assemble_briefing';
   end if;
 end;
 $$;

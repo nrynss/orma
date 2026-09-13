@@ -16,6 +16,12 @@
  * A null or unparseable result still writes the transcript and a disposition,
  * so the user never learns that extraction failed.
  *
+ * CALL-E's own `result_validation_failed` status lands the run in `no_result`,
+ * which is the terminal state `spec.md` section 3 names for that case, with
+ * `answered_no_result` as its disposition. A call that merely completed with no
+ * usable result keeps the older pair, `completed` and `answered_no_result`,
+ * which the same spec section allows.
+ *
  * "Invalid" covers more than `parseStructuredResult`. The RPC casts and checks
  * several fields, and a raise there rolls the whole ingest back. The CALL-E
  * payload never changes, so such a result would fail on every retry. This
@@ -26,7 +32,11 @@
  * never writes `slots`.
  */
 
-import { loadCallFixtures, type TranscriptTurnFixture } from "./fixtures.ts";
+import {
+  loadCallFixtures,
+  RESULT_VALIDATION_FAILED,
+  type TranscriptTurnFixture,
+} from "./fixtures.ts";
 import {
   parseStructuredResult,
   type CapturedItemResult,
@@ -63,7 +73,7 @@ export type IngestDeps = {
   fetch: typeof fetch;
 };
 
-type TerminalState = "completed" | "failed" | "canceled";
+type TerminalState = "completed" | "no_result" | "failed" | "canceled";
 type Disposition = "answered_extracted" | "answered_no_result" | "not_answered" | "canceled";
 
 type IngestSummary = {
@@ -117,15 +127,20 @@ function requireTurns(value: unknown): TranscriptTurnFixture[] {
   return value.map(storableJson) as TranscriptTurnFixture[];
 }
 
+/** `RESULT_VALIDATION_FAILED` holds CALL-E's spellings for this case. */
 function terminalState(raw: Record<string, unknown>): TerminalState {
   const status = raw.status;
   if (status === "completed" || status === "failed" || status === "canceled") return status;
+  if (typeof status === "string" && (RESULT_VALIDATION_FAILED as readonly string[]).includes(status)) {
+    return "no_result";
+  }
   throw new Error("ingest requires a terminal call status");
 }
 
 function dispositionFor(state: TerminalState, valid: boolean): Disposition {
   if (state === "canceled") return "canceled";
   if (state === "failed") return "not_answered";
+  if (state === "no_result") return "answered_no_result";
   return valid ? "answered_extracted" : "answered_no_result";
 }
 
@@ -1599,6 +1614,33 @@ if (typeof testFn === "function") {
       }
       if (answer.disposition !== expected) {
         throw new Error(`a ${status} call reported the disposition ${answer.disposition}`);
+      }
+    }
+  });
+
+  // A validation failure is terminal under CALL-E's own status name. The run
+  // takes the `no_result` state and the disposition the spec gives that case.
+  testFn("a failed result validation lands as no_result", async () => {
+    for (const status of ["result_validation_failed", "call.result_validation_failed"]) {
+      const state: MockState = {
+        rpcBodies: [],
+        summary: () => ({
+          already_ingested: false,
+          disposition: "answered_no_result",
+          counts: zeroCounts,
+          slot_change_requested: null,
+        }),
+      };
+      await ingestTerminalRun({
+        callRunId: runId,
+        userId,
+        raw: { id: "call_t2_10_validation_failed", status },
+        transcriptTurns: [],
+        structuredResult: null,
+      }, deps(mock(state)));
+      const body = state.rpcBodies[0];
+      if (body.p_state !== "no_result" || body.p_disposition !== "answered_no_result") {
+        throw new Error(`a ${status} call was stored as ${String(body.p_state)} ${String(body.p_disposition)}`);
       }
     }
   });
