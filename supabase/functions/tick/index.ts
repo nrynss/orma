@@ -8,8 +8,13 @@
  */
 
 import { withSupabase } from "npm:@supabase/server@1.6.0";
-import { dispatchClaimedRun, depsFromEnv as calleDepsFromEnv } from "../_shared/calle.ts";
+import {
+  type CalleDeps,
+  depsFromEnv as calleDepsFromEnv,
+  dispatchClaimedRun,
+} from "../_shared/calle.ts";
 import { recordCallEvent } from "../_shared/events.ts";
+import { pollRun } from "../_shared/poll.ts";
 
 const CLAIM_LIMIT = 20;
 
@@ -30,7 +35,8 @@ export type TickDeps = {
   serviceRoleKey: string;
   fetch: typeof fetch;
   dispatchClaimed?: (run: ClaimedTickRun) => Promise<void>;
-  pollDue: (run: TickRun) => Promise<void>;
+  /** Resolves false, or throws, when the pass did not land. */
+  pollDue: (run: TickRun) => Promise<boolean | void>;
   finalise: (run: TickRun) => Promise<void>;
   now: () => Date;
 };
@@ -56,6 +62,51 @@ function unavailable(stage: string): (run: TickRun) => Promise<void> {
   };
 }
 
+/**
+ * One run's poll pass, isolated from the rest. A write that fails leaves the
+ * run's `poll_after` untouched, so the next tick retries it. One broken run
+ * must never cost every other run in the same tick.
+ */
+export async function pollStep(
+  run: TickRun,
+  calleDeps: CalleDeps,
+): Promise<boolean> {
+  try {
+    await pollRun(run, calleDeps);
+    return true;
+  } catch (error) {
+    console.error(
+      `poll failed for run ${run.id}`,
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return false;
+  }
+}
+
+/**
+ * Runs one step per run in isolation and counts only the steps that landed.
+ * A step fails when it throws or reports false, and the tick then must not
+ * claim it in the response body.
+ */
+async function countSucceeded(
+  runs: TickRun[],
+  step: (run: TickRun) => Promise<boolean | void>,
+  stage: string,
+): Promise<number> {
+  const results = await Promise.all(runs.map(async (run) => {
+    try {
+      return await step(run) !== false;
+    } catch (error) {
+      console.error(
+        `${stage} failed for run ${run.id}`,
+        error instanceof Error ? error.message : "unknown error",
+      );
+      return false;
+    }
+  }));
+  return results.filter(Boolean).length;
+}
+
 export function depsFromEnv(
   getEnv: (key: string) => string | undefined = (key) => Deno.env.get(key),
   fetchImpl: typeof fetch = fetch,
@@ -66,7 +117,7 @@ export function depsFromEnv(
     serviceRoleKey: requireNamedEnv("SUPABASE_SERVICE_ROLE_KEY", getEnv),
     fetch: fetchImpl,
     dispatchClaimed: (run) => dispatchClaimedRun(run, calleDeps),
-    pollDue: unavailable("poll"),
+    pollDue: (run) => pollStep(run, calleDeps),
     finalise: unavailable("finalisation"),
     now: () => new Date(),
   };
@@ -148,16 +199,14 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
   }
 
   const polls = await duePolls(deps);
-  await Promise.all(polls.map((run) => deps.pollDue(run)));
+  const polled = await countSucceeded(polls, deps.pollDue, "poll");
 
   const terminal = await terminalRuns(deps);
-  await Promise.all(terminal.map((run) => deps.finalise(run)));
+  // Each run finalises in isolation, like pollStep. One run that cannot
+  // finalise stays selected for the next tick and costs its siblings nothing.
+  const finalised = await countSucceeded(terminal, deps.finalise, "finalise");
 
-  return {
-    claimed: claimed.length,
-    polled: polls.length,
-    finalised: terminal.length,
-  };
+  return { claimed: claimed.length, polled, finalised };
 }
 
 export function createTickHandler(
@@ -312,6 +361,96 @@ if (typeof testFn === "function" && !import.meta.main) {
       }
     },
   );
+
+  testFn(
+    "a run that cannot finalise costs neither the tick nor its siblings",
+    async () => {
+      const fetchStub: typeof fetch = async (input) => {
+        const url = new URL(String(input));
+        if (url.searchParams.get("completed_at") === "is.null") {
+          return Response.json([
+            { id: "run-broken", state: "completed", poll_after: null },
+            { id: "run-healthy", state: "failed", poll_after: null },
+          ]);
+        }
+        return Response.json([]);
+      };
+      const finalised: string[] = [];
+      const deps: TickDeps = {
+        ...baseDeps(fetchStub),
+        dispatchClaimed: undefined,
+        finalise: async (run) => {
+          if (run.id === "run-broken") throw new Error("finalisation implementation is unavailable");
+          finalised.push(run.id);
+        },
+      };
+      const response = await createTickHandler(deps)(
+        new Request("https://orma-api.nryn.dev/functions/v1/tick", { method: "POST" }),
+      );
+      if (response.status !== 200) {
+        throw new Error(`a finalise failure must not turn the tick red, saw ${response.status}`);
+      }
+      if (finalised.length !== 1 || finalised[0] !== "run-healthy") {
+        throw new Error(`the sibling run must still finalise, saw ${JSON.stringify(finalised)}`);
+      }
+    },
+  );
+
+  testFn(
+    "the tick reports only the polls and finalisations that landed",
+    async () => {
+      const fetchStub: typeof fetch = async (input) => {
+        const url = new URL(String(input));
+        if (url.searchParams.get("completed_at") === "is.null") {
+          return Response.json([
+            { id: "run-broken", state: "completed", poll_after: null },
+            { id: "run-healthy", state: "failed", poll_after: null },
+          ]);
+        }
+        if (url.searchParams.get("state") === "in.(dispatched,awaiting_result)") {
+          return Response.json([
+            { id: "poll-swallowed", state: "awaiting_result", poll_after: null },
+            { id: "poll-thrown", state: "awaiting_result", poll_after: null },
+            { id: "poll-ok", state: "awaiting_result", poll_after: null },
+          ]);
+        }
+        return Response.json([]);
+      };
+      const deps: TickDeps = {
+        ...baseDeps(fetchStub),
+        dispatchClaimed: undefined,
+        pollDue: async (run) => {
+          if (run.id === "poll-swallowed") return false;
+          if (run.id === "poll-thrown") throw new Error("poll write failed");
+          return true;
+        },
+        finalise: async (run) => {
+          if (run.id === "run-broken") throw new Error("finalisation implementation is unavailable");
+        },
+      };
+      const response = await createTickHandler(deps)(
+        new Request("https://orma-api.nryn.dev/functions/v1/tick", { method: "POST" }),
+      );
+      const body = await response.json() as TickResult;
+      if (response.status !== 200 || body.polled !== 1 || body.finalised !== 1) {
+        throw new Error(`the tick must count landed steps only, saw ${response.status} ${JSON.stringify(body)}`);
+      }
+    },
+  );
+
+  testFn("pollStep reports a swallowed poll failure as false", async () => {
+    const calleDeps = {
+      apiUrl: "https://orma-api.nryn.dev",
+      serviceRoleKey: "service-key",
+      calleApiBase: "https://api.call-e.test",
+      calleApiKey: "calle-key",
+      webhookUrl: "https://orma-api.nryn.dev/functions/v1/calle-webhook/secret",
+      fetch: (async () => new Response(null, { status: 500 })) as typeof fetch,
+      now: () => new Date("2026-09-12T00:00:00.000Z"),
+    } as CalleDeps;
+    const landed = await pollStep({ id: "run-1", state: "awaiting_result", poll_after: null }, calleDeps);
+    if (landed !== false) throw new Error(`a poll whose run read fails must report false, saw ${landed}`);
+  });
 
   testFn("only the named scheduler secret API key reaches tick", async () => {
     const oldUrl = Deno.env.get("SUPABASE_URL");

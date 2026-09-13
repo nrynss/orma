@@ -11,8 +11,9 @@ Where a phase document and specification conflict, the specification wins. Recor
 
 Each document provides complete context for an engineer starting cold.
 
-**Current status:** P0 and P1 are complete. Schema, policies, types, fixtures,
-validation and local seed data are frozen.
+**Current status:** P0, P1 and P3 are complete. Schema, policies, types, fixtures,
+validation and local seed data are frozen. P2 is in remediation, and its board row
+below is current.
 
 P0 is complete. What exists is listed in [PHASE-0-ground.md](PHASE-0-ground.md): the repository, the Supabase project with its extensions and secrets, the deployed app and front door, the bot, verified email, and a proven CALL-E path. Start at P1.
 
@@ -157,7 +158,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
 | P1 | 7 / 7 | Complete. Contracts are frozen. |
-| P2 | 5 / 9 | T2.1 through T2.4 and T2.6 complete. T2.8 and T2.9 remain in progress. T2.5 and T2.7 are not started. |
+| P2 | 6 / 11 | T2.1 through T2.6 landed. T2.5's three round 3 findings moved to T2.7 and T2.5a. T2.7 round 2 returned REMEDIATE, C0 H1 M3 L3 with the transferred L, awaiting remediation round 2. T2.8 is built and waits for both to land. T2.7a (split from T2.7), T2.5a (split from T2.5) and T2.9 are not started. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 0 / 3 | T4.1 can start. |
 | P5 | 0 / 4 | T5.1 can start. |
@@ -501,3 +502,230 @@ live database holds no `call_runs` row yet.
 T2.7 result ingestion can start. It depends on T2.6 for the `calle_call_id` link
 and on the re-fetch, not on a live callback. T2.9 owns both timeline kinds this
 receiver now produces.
+
+### 2026-09-13 · P2 checkpoint: three tasks implemented, five landed
+
+This entry closes the working phase, not the phase's work. Five of nine tasks
+are landed. Three more are written, reviewed and not yet approved. One has not
+started. The board says so, and this entry says why.
+
+**T2.5 poll reconciliation, written, round 1 REMEDIATE.** `_shared/poll.ts`
+holds `POLL_INTERVAL_MS`, `POLL_GIVE_UP_MS`, `terminalStateFor`, `fetchCall` and
+`pollRun`, with thirteen in-file checks. `tick` gained `pollStep` and the
+`calle-webhook` receiver gained `terminaliseFromRefetch`, which moves a matched
+run on the re-fetched status and never on the body. The poll reaches a terminal
+`state` and leaves `completed_at` null, because `terminalRuns()` selects
+terminal runs with a null `completed_at` and hands them to finalisation.
+
+Round 1 found C0 H1 M1 L1. The H is real and I reproduced it live on the
+scratch stack. `tick/index.ts` fans out to an unavailable `finalise`, so the
+first terminal run with a null `completed_at` turns every later tick into an
+error. The throwing stub was unreachable before this task, because dispatch
+always set `completed_at` on a terminal write. The live reproduction and the
+full dry-run proof are in the same throwaway driver, and the driver's own output
+names it.
+
+The M is that the give-up deadline slides. `poll.ts` falls back to `poll_after`
+when `dispatched_at` is null, and `reschedule` rewrites `poll_after` on every
+pass, so the deadline never arrives. The L is that the receiver ignores
+`terminaliseFromRefetch`'s win boolean and logs a `refetched` row carrying its
+superseded state.
+
+**T2.7 result ingestion, written, round 1 REMEDIATE.** `_shared/ingest.ts` plus
+`supabase/migrations/20260912180000_ingest.sql` and its runner turn a terminal
+run into rows in one transaction. `test-ingest.sh` passes all five cases and
+eight in-file checks pass. The reviewer drove the real module against live
+PostgREST and matched its returned counts to SQL row counts on the completed,
+duplicate and invalid paths.
+
+Round 1 found C0 H1 M1 L2. The H matters most. `parseStructuredResult` accepts
+shapes the RPC rejects, and a rejected RPC rolls the whole transaction back to
+zero rows. The run then keeps `state = 'awaiting_result'` with no disposition,
+and the CALL-E payload is immutable, so every retry fails identically. The
+module promises that an invalid extraction still writes a transcript and
+`answered_no_result`, and for this class the promise is false. Remediation must
+fix this in `ingest.ts`, never in `result.ts`, which is outside T2.7's ownership
+and would reopen the gap on the next schema change.
+
+**T2.8 dry-run mode, written and proven, review not started.** `ORMA_DRY_RUN`
+defaults to true, so a missing setting means nobody gets called.
+`dispatchClaimedRun` now builds the serialized body once and branches to
+`executeDryRun` before the only outbound call it can make. The dry module holds
+no CALL-E address, no key and no fetch, which is what makes it structurally
+unable to dial.
+
+The two recorded CALL-E payloads are embedded in `dispatch-mode.ts` rather than
+read from `testdata/`. A deployed Edge Function bundles only its function
+directory, so `fixtures.ts` works in tests and fails in production. An in-file
+check re-reads both committed files and compares them to the embedded copies, so
+they cannot drift apart silently.
+
+A full dry run was driven through the real tick against live rows. Eighteen
+checks pass. A scheduled run is claimed by the real RPC, reaches `completed`
+with `billable` false and a synthetic `fixture:` call id, stores a 27 turn
+transcript, a valid result, one item and one mention at offset 44. The timeline
+reads `claimed, dispatched, ingested, finalised` in order. No request left for
+any host but the stack. The recorded `request_body` is a complete rendered
+CALL-E request. The byte-for-byte equality between the dry body and the live
+body is pinned in `calle.ts`, where both paths run against the same stubs.
+
+The driver is `/tmp/orma-p2/dry-run-e2e.ts` and it is a scratch file. Its
+durable form is the in-file checks in `calle.ts`, `dispatch-mode.ts` and
+`tick/index.ts`, which need no stack and no key.
+
+The contract change is `dev-diary/adversarial-review/t2.8-contract-change.md`.
+It records three moves: `dry_run` on the claimed-run shapes, embedded fixtures,
+and the injected ingestion seam.
+
+**T2.9 operator timeline is not started.** Its `requires` line names T2.3, which
+landed, so nothing blocks it. One piece is already identified.
+`materialise/index.ts` writes no `materialised` event, and the event belongs
+immediately after `insertRuns` succeeds, near line 239. A materialise failure
+should then record nothing, which is the pin that belongs with it.
+
+### The scratch stack, and how to rebuild it
+
+Corrected later on 2026-09-13. The first version of this section said `up.sh`
+starts the whole harness. It does not.
+
+This machine misresolves `*.supabase.co`, so every live probe goes through
+`ORMA_API_URL`. The harness has three parts, and `bash /tmp/orma-p2/up.sh`
+builds only the first.
+
+1. `up.sh` wipes `/tmp/orma-p2/stack` and starts Postgres on 57022 plus the
+   bundled PostgREST container. Nothing else.
+2. A harness PostgREST on 57030 is started by hand. Mint an HS256 secret and a
+   `service_role` JWT signed with it, and write the JWT into `env.sh`. Then run
+   `public.ecr.aws/supabase/postgrest:v16.2` as container `orma-p2-rest` with
+   host networking, `PGRST_SERVER_PORT=57030` and that secret.
+3. A small proxy on 57031 strips `/rest/v1`, because PostgREST serves at the
+   root while every shared module appends `/rest/v1`. Start it bounded, as
+   `timeout 21600 deno run --allow-net /tmp/orma-p2/proxy.ts`.
+
+Do not try to reuse the stack's bundled PostgREST. Its `PGRST_JWT_SECRET` holds
+a JWKS document, so an HS256 token returns an error before any row is read.
+Source `/tmp/orma-p2/env.sh` before any Deno driver.
+
+Host port 57022 refuses psql from a shell even while the container reports
+healthy. Read SQL with `docker exec supabase_db_stack psql -U postgres`.
+
+The stack is shared, and that matters when several agents work at once. `tick`
+claims, polls and finalises every due run in the database, not only yours.
+Never drive `tick` while another agent's runs are due or pending. Scope every
+count to rows you created. Never run `up.sh` while any agent is working.
+
+Three traps cost time and are worth naming. Import `depsFromEnv` from the module
+that owns it, because `calle.ts` and `tick/index.ts` both export one under that
+name and the wrong import fails late and misleadingly.
+
+The committed completed fixture produces one item and one mention, at offset 44.
+T2.7 remediation round 1 measured that in SQL. The round 1 review's three
+mentions, one retirement and one commitment came from a test payload. That
+payload adds a retirement at offset 62 and a commitment at offset 80.
+
+The third trap is the finaliser. `tick` still wires
+`unavailable("finalisation")`, and T2.7a replaces it. Since T2.5 remediation
+round 1 isolates each finalise call, a bare `tick` answers 200 with the stub in
+place. It simply finalises nothing.
+
+### Two CALL-E observations from this phase
+
+`dev-diary/feedback.md` gained entries 14 and 15. Entry 14 records that a
+`result_schema` cannot constrain a field's format, so a commitment's `due` is a
+free string and every integrator parses it back into a timestamp. Entry 15
+records that a call which never connected still reports
+`task_completed: true` with a high `completion_confidence`, which reads as a
+statement about the call and is not one.
+
+The webhook delivery gap from T2.6 is unchanged and is still issue 13. A live
+call, a control call and a logging receiver all failed to produce a POST. The
+spec is re-fetch based, so no task depends on delivery. T2.5's poll reconciles
+any call no webhook reports, and that is the design's answer to it.
+
+### 2026-09-13 · P2 remediation under way, and a missing task
+
+This entry supersedes the checkpoint's "What is left". Nothing new has landed
+yet. The board now reads 5 of 10, because the phase gained a task.
+
+**T2.7a, split from T2.7.** Nothing connected a terminal run to ingestion.
+`tick` still wires `finalise` to `unavailable("finalisation")`, and
+`ingestTerminalRun` has no production caller. A live call ended by the poll or
+the webhook would therefore never become rows or gain `completed_at`. T2.7a
+owns `_shared/finalise.ts` and `tick/index.ts`. Its block in
+`PHASE-2-call-engine.md` holds the done condition.
+
+**T2.5.** Remediation round 1 fixed all three round 1 findings. Round 2
+returned REMEDIATE with C0 H1 M0 L2. The H mattered. Past the give-up window the
+poll failed a run without re-fetching, so a call CALL-E had completed was stored
+as `not_answered`. The first L was a redelivered webhook labelling its own write
+`already_resolved`. The second L was a tick counting selected runs as
+succeeded. Remediation round 2 fixed all three.
+
+Round 3 returned REMEDIATE with C0 H0 M0 L3, and zero residue against rounds 1
+and 2. The session stopped here by choice, so remediation round 3 has not
+started. The three findings are in `t2.5-round3.md`.
+
+1. A second webhook event for the same call records `applied`, although the
+   first event wrote the run.
+2. When the poll wins but its `polled` row fails or lags, a redelivery records
+   `applied`. No row then names the poll. A plain race reproduced it live.
+3. A `poll_timeout` written to `calle_failure` survives a later successful
+   ingest. The fix sits in T2.7's migration. On the user's decision it moved to
+   T2.7, recorded in both `t2.5-round3.md` and `t2.7-round2.md`.
+
+Remediation round 3 took findings 1 and 2 and stopped without code. No truthful
+fix fits T2.5's paths, because PostgREST gives no transaction across two writes.
+It proposed a `call_runs.terminal_writer` column set in the same guarded update
+as `state`. The user made that a new task, T2.5a, instead of widening T2.5.
+With all three findings moved, a narrow round 4 review checked the transfers.
+It found the code unchanged since round 3, and 99 in-file checks passing. Its one
+L was T2.5's stale `owns` line, closed by the orchestrator under the
+documentation exemption. T2.5 landed.
+
+The round 2 remediator made one design choice for review to judge. Past the
+window, a re-fetch that itself fails still gives up as `poll_timeout`, and the
+failure message names the re-fetch error. Retrying forever would reopen the
+unbounded window that round 1 closed. Round 3 judged this not a defect. The
+T2.7a finaliser re-fetches and ingests later, which corrects state and
+disposition once CALL-E recovers. One failed re-fetch on the first overdue pass
+is enough to trigger it, not a long outage.
+
+**T2.7.** Remediation round 1 fixed all four round 1 findings. `ingest.ts` now
+routes every result the RPC would reject to `answered_no_result`, with the
+transcript kept. It backfills a lost `ingested` event on retry, and its errors
+carry the database's cause. `test-ingest.sh` shifts off busy ports.
+
+Round 2 returned REMEDIATE with C0 H1 M3 L2. Residue against round 1 is not zero,
+because round 1's H survives for U+0000 in a captured text. The session stopped
+here by choice. The findings are in `t2.7-round2.md`.
+
+1. H. One bad field discards the whole extraction. A free-text `due`, which the
+   Goal schema invites, turns the call into `answered_no_result` and loses every
+   captured item. Invalid fields need dropping one at a time, not wholesale.
+2. M. Some inputs still fail every retry. `raw` carries its own copy of
+   `structured_result`, so U+0000 there fails with `22P05`. A transcript turn
+   with empty text throws too.
+3. M. Two overlapping ingests write two `ingested` rows. The event belongs
+   inside the database transaction.
+4. M. Case five in `test-ingest.sh` passes with `for update` removed, so it does
+   not prove the run lock.
+5. L. Error scrubbing leaves five of six tested phone formats unmasked.
+6. L. Case eight prints a mention count as `items=` and offsets as `mentions=`.
+
+T2.5 round 3 finding 3 now belongs here, as a seventh finding. `ingest_call_result`
+never clears a `poll_timeout` in `calle_failure`. The counts become C0 H1 M3 L3.
+
+**Order from here.** Start with remediation round 3 for T2.5 and round 2 for
+T2.7, each with a fresh agent. Before the next session, check that
+`/tmp/orma-p2` still holds the drivers, then rebuild the harness as described
+above. The container `orma-p2-rest` from this session should be removed first.
+T2.5 and T2.7 run in parallel until both land. After that,
+one task runs at a time, each landed before the next begins. The order is T2.8,
+then T2.7a, then T2.5a, then T2.9 with the `materialised` event. T2.5a comes
+before T2.9 because the timeline's `refetched` outcomes are only truthful after it. Several tasks' uncommitted
+edits in one tree, `tick/index.ts` above all, are what made this phase hard to
+read.
+
+Nothing here is blocked on CALL-E. The only CALL-E dependent items in this
+phase are T2.5's live timing proof and T2.6's live delivery. Neither gates
+T2.7, T2.7a or T2.9.

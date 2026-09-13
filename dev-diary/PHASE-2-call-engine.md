@@ -114,8 +114,8 @@ Refuse to dispatch for a profile without a live `outbound_calls` consent and a c
 requires:   T2.4
 fixture-ok: no
 size:       M · mid
-owns:       supabase/functions/_shared/poll.ts
-status:     not-started
+owns:       supabase/functions/_shared/poll.ts, supabase/functions/tick/index.ts, supabase/functions/calle-webhook/index.ts
+status:     done
 ```
 Webhooks get dropped. Polling is the safety net that makes that survivable.
 
@@ -126,6 +126,36 @@ Whichever of the webhook and the poll arrives first wins. The other is a no-op.
 This task needs one live call to prove the timing against the real service.
 
 **Done when:** a live call reaches a terminal state through polling alone with the webhook deliberately unregistered, and a second run proves the poll is a no-op when the webhook won.
+
+---
+
+### T2.5a: Terminal writer attribution
+```yaml
+requires:   T2.5
+fixture-ok: yes
+size:       S · frontier
+owns:       supabase/migrations/20260913120000_terminal_writer.sql, supabase/functions/_shared/database.types.ts, web/src/lib/database.types.ts, supabase/functions/calle-webhook/index.ts, supabase/functions/_shared/poll.ts
+status:     not-started
+```
+Split from T2.5 on 2026-09-13. T2.5 round 3 found that the webhook guesses who
+moved a run from a missing `polled` row. A second event for the same call, or a
+poll whose timeline insert failed, makes that guess false. No truthful fix fits
+inside T2.5's paths, because PostgREST offers no transaction across two writes.
+
+Add a nullable `call_runs.terminal_writer text`. Every guarded pending-to-terminal
+update sets it in the same statement as `state`. The webhook writes
+`webhook:<event_id>`, and the poll writes `poll`. A redelivery whose update
+matches no row reads the column. It records `applied` only for its own exact
+tag, and `already_resolved` for anything else, null included.
+
+The design record is the last row of
+`dev-diary/adversarial-review/t2.5-contract-change.md`. Decide whether the run's
+owner may read the column under `call_runs_owner_read`, and record the decision.
+
+**Done when:** both orderings of a webhook and poll race leave `terminal_writer`
+naming exactly the writer whose timeline row claims the move. A second event for
+the same call records `already_resolved`. A redelivery of the winning event
+records `applied`. Pins F1a, F1b and F1c from `t2.5-round3.md` pass.
 
 ---
 
@@ -164,8 +194,8 @@ re-fetch.
 requires:   T1.5, T2.6
 fixture-ok: yes
 size:       XL · frontier
-owns:       supabase/functions/_shared/ingest.ts
-status:     not-started
+owns:       supabase/functions/_shared/ingest.ts, supabase/migrations/20260912180000_ingest.sql, supabase/migrations/test-ingest.sh
+status:     claimed:orchestrator-p2
 ```
 Turn a terminal run into rows, in one transaction.
 
@@ -185,13 +215,40 @@ On a null result, fall back to the raw transcript for analysis, mark the run `an
 
 ---
 
+### T2.7a: Finalise terminal runs ★
+```yaml
+requires:   T2.5, T2.7, T2.8
+fixture-ok: yes
+size:       M · frontier
+owns:       supabase/functions/_shared/finalise.ts, supabase/functions/tick/index.ts
+status:     not-started
+```
+Split from T2.7 on 2026-09-13. T2.7 built ingestion and gave it no production
+caller. T2.3 left `finalise` in `tick` as `unavailable("finalisation")`. No task
+owned the join, so a live call ended by the poll or the webhook never became rows.
+
+For each terminal run with a null `completed_at`, re-fetch the call with
+`fetchCall`, hand the payload to `ingestTerminalRun`, and record `finalised`.
+Ingestion sets `completed_at`, which removes the run from the finaliser's queue.
+One run's failure must not cost the rest of the tick.
+
+`requires` names T2.8 only because both tasks write `tick/index.ts`. Start once
+T2.5 and T2.8 have landed.
+
+**Done when:** a run terminalised by the poll alone reaches `completed_at`, with
+transcript, result, items and mentions. The same holds for a run terminalised by
+the webhook. A second tick over the same run changes nothing. A failing re-fetch
+leaves the run queued for the next tick and its siblings finalised.
+
+---
+
 ### T2.8: Dry-run mode ★
 ```yaml
 requires:   T2.4, T2.7
 fixture-ok: yes
 size:       M · mid
 owns:       supabase/functions/_shared/dispatch-mode.ts, supabase/functions/_shared/calle.ts
-status:     claimed:gpt-5
+status:     claimed:orchestrator-p2
 ```
 A first-class mode, not a flag bolted on for the submission checklist.
 
@@ -209,7 +266,7 @@ requires:   T2.3
 fixture-ok: yes
 size:       S · mid
 owns:       supabase/functions/_shared/events.ts
-status:     claimed:gpt-5
+status:     not-started
 ```
 Write a `call_events` row at every transition: materialised, claimed, dispatched, polled, webhook received, re-fetched, ingested, finalised. Include enough detail to answer what happened without opening the logs.
 

@@ -6,6 +6,8 @@
  * item, result, or billing state is ever taken from the webhook body.
  */
 
+import { terminalStateFor } from "../_shared/poll.ts";
+import type { CallStatus } from "../_shared/fixtures.ts";
 import { recordCallEvent } from "../_shared/events.ts";
 
 const EVENT_ID_HEADER = "call-e-event-id";
@@ -149,13 +151,16 @@ export function depsFromEnv(
   };
 }
 
-async function insertPendingEvent(deps: WebhookDeps, eventId: string): Promise<void> {
+/** Returns true when the event id was already recorded, which marks a redelivery. */
+async function insertPendingEvent(deps: WebhookDeps, eventId: string): Promise<boolean> {
   const response = await deps.fetch(restUrl(deps.apiUrl, "webhook_events"), {
     method: "POST",
     headers: serviceHeaders(deps.serviceRoleKey, "return=minimal"),
     body: JSON.stringify({ event_id: eventId, type: PENDING }),
   });
-  if (response.status !== 409 && !response.ok) throw new Error("webhook event record failed");
+  if (response.status === 409) return true;
+  if (!response.ok) throw new Error("webhook event record failed");
+  return false;
 }
 
 async function claimPendingEvent(deps: WebhookDeps, eventId: string, now = Date.now()): Promise<boolean> {
@@ -193,6 +198,69 @@ async function fetchAuthoritativeCall(deps: WebhookDeps, callId: string): Promis
   return parseAuthoritativeCall(await response.json(), callId);
 }
 
+/**
+ * Moves the run to the state the re-fetch reports, and only while the run is
+ * still pending. The webhook and the poll both write here, so the conditional
+ * PATCH is what makes exactly one of them win. The body never supplies a
+ * state, only the authoritative GET does.
+ */
+type RefetchOutcome = "applied" | "already_resolved" | "not_terminal";
+
+async function terminaliseFromRefetch(
+  deps: WebhookDeps,
+  call: AuthoritativeCall,
+  redelivered: boolean,
+): Promise<RefetchOutcome> {
+  const state = terminalStateFor(call.status as CallStatus);
+  if (!state) return "not_terminal";
+  const query = new URLSearchParams({
+    id: `eq.${call.metadata.call_run_id}`,
+    state: "in.(dispatched,awaiting_result)",
+  });
+  const response = await deps.fetch(restUrl(deps.apiUrl, "call_runs", query.toString()), {
+    method: "PATCH",
+    headers: serviceHeaders(deps.serviceRoleKey, "return=representation"),
+    body: JSON.stringify({ state, poll_after: null }),
+  });
+  if (!response.ok) throw new Error("call run terminalisation failed");
+  const rows = await response.json() as unknown[];
+  if (Array.isArray(rows) && rows.length === 1) return "applied";
+  // Zero matched rows has two writers. The poll may have moved the run, and
+  // then the re-fetched status is a superseded observation. Or an earlier
+  // attempt at this same event moved it and then failed on a timeline insert.
+  // A first delivery cannot be the second case, so only a redelivery looks.
+  if (redelivered && await earlierAttemptApplied(deps, call.metadata.call_run_id, state)) return "applied";
+  return "already_resolved";
+}
+
+/**
+ * An earlier attempt at this event wrote the run when the run holds exactly the
+ * re-fetched terminal state and no poll row claims a terminal state. Every
+ * poll write to a terminal state records a `polled` row naming that state.
+ */
+async function earlierAttemptApplied(deps: WebhookDeps, runId: string, state: string): Promise<boolean> {
+  const runQuery = new URLSearchParams({ select: "state", id: `eq.${runId}`, limit: "1" });
+  const runResponse = await deps.fetch(restUrl(deps.apiUrl, "call_runs", runQuery.toString()), {
+    headers: serviceHeaders(deps.serviceRoleKey),
+  });
+  if (!runResponse.ok) throw new Error("call run attribution read failed");
+  const runs = await runResponse.json() as { state?: string }[];
+  if (!Array.isArray(runs) || runs[0]?.state !== state) return false;
+  const eventQuery = new URLSearchParams({
+    select: "id",
+    call_run_id: `eq.${runId}`,
+    kind: "eq.polled",
+    "detail->>state": "in.(completed,failed,canceled)",
+    limit: "1",
+  });
+  const eventResponse = await deps.fetch(restUrl(deps.apiUrl, "call_events", eventQuery.toString()), {
+    headers: serviceHeaders(deps.serviceRoleKey),
+  });
+  if (!eventResponse.ok) throw new Error("call run attribution read failed");
+  const polled = await eventResponse.json() as unknown[];
+  return Array.isArray(polled) && polled.length === 0;
+}
+
 async function hasMatchingOrmaRun(deps: WebhookDeps, call: AuthoritativeCall): Promise<boolean> {
   const query = new URLSearchParams({
     select: "id",
@@ -226,7 +294,7 @@ export function createWebhookHandler(deps: WebhookDeps): (request: Request) => P
       }
       const envelope = parseWebhookEnvelope(body, headerEventId);
       if (!envelope) return new Response(null, { status: 400 });
-      await insertPendingEvent(deps, envelope.id);
+      const redelivered = await insertPendingEvent(deps, envelope.id);
       if (!await claimPendingEvent(deps, envelope.id)) return new Response(null, { status: 200 });
       try {
         const call = await fetchAuthoritativeCall(deps, envelope.data.id);
@@ -234,6 +302,10 @@ export function createWebhookHandler(deps: WebhookDeps): (request: Request) => P
           await setEventState(deps, envelope.id, IGNORED);
           return new Response(null, { status: 200 });
         }
+        // Persist the transition before the timeline claims it, so a failed
+        // write never leaves an entry asserting a state that never landed.
+        // The event row is released to pending below, so this is retried.
+        const outcome = await terminaliseFromRefetch(deps, call, redelivered);
         const eventDeps = { apiUrl: deps.apiUrl, serviceRoleKey: deps.serviceRoleKey, fetch: deps.fetch };
         await recordCallEvent(
           call.metadata.call_run_id,
@@ -244,7 +316,7 @@ export function createWebhookHandler(deps: WebhookDeps): (request: Request) => P
         await recordCallEvent(
           call.metadata.call_run_id,
           "refetched",
-          { calle_call_id: call.id, event_type: envelope.type, state: call.status },
+          { calle_call_id: call.id, event_type: envelope.type, state: call.status, outcome },
           eventDeps,
         );
         await setEventState(deps, envelope.id, REFETCHED);
@@ -324,7 +396,11 @@ if (typeof testFn === "function" && !import.meta.main) {
           refetched.push(value.body.data.id);
           return Response.json({ id: value.body.data.id, status: "completed", metadata: { call_run_id: "11111111-1111-4111-8111-111111111111" } });
         }
-        if (current.url.includes("/call_runs?")) return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
+        if (current.url.includes("/call_runs?") && current.method === "GET") {
+          return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
+        }
+        // The poll won this race. The receiver must still acknowledge.
+        if (current.url.includes("/call_runs?") && current.method === "PATCH") return Response.json([]);
         throw new Error(`unexpected request ${current.method} ${current.url} while driving ${fixture}`);
       }));
       const response = await handler(new Request(
@@ -402,6 +478,7 @@ if (typeof testFn === "function" && !import.meta.main) {
 
   testFn("writes webhook_received and refetched timeline rows for the matched run", async () => {
     const callEvents: { call_run_id: string; kind: string; detail: Record<string, unknown> }[] = [];
+    const terminalPatches: { url: string; body: Record<string, unknown> }[] = [];
     const handler = createWebhookHandler(baseDeps(async (input, init) => {
       const current = new Request(input, init);
       if (current.url.endsWith("/webhook_events") && current.method === "POST") return new Response(null, { status: 201 });
@@ -413,7 +490,13 @@ if (typeof testFn === "function" && !import.meta.main) {
       if (current.url.endsWith("/v1/calls/call_terminal")) {
         return Response.json({ id: "call_terminal", status: "completed", metadata: { call_run_id: "11111111-1111-4111-8111-111111111111" } });
       }
-      if (current.url.includes("/call_runs?")) return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
+      if (current.url.includes("/call_runs?") && current.method === "GET") {
+        return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
+      }
+      if (current.url.includes("/call_runs?") && current.method === "PATCH") {
+        terminalPatches.push({ url: current.url, body: JSON.parse(await current.text()) });
+        return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
+      }
       throw new Error(`unexpected request ${current.method} ${current.url}`);
     }));
     const response = await handler(request({ ...event(), type: "call.failed" }));
@@ -433,6 +516,101 @@ if (typeof testFn === "function" && !import.meta.main) {
     }
     if (callEvents.some((row) => row.detail.state === "call.failed")) {
       throw new Error("no timeline row may carry the webhook body type as state");
+    }
+    if (terminalPatches.length !== 1) {
+      throw new Error(`the matched run must be moved exactly once, saw ${terminalPatches.length}`);
+    }
+    const [patch] = terminalPatches;
+    if (patch.body.state !== "completed") {
+      throw new Error(`the run must take the refetched state, saw ${JSON.stringify(patch.body.state)}`);
+    }
+    if (!patch.url.includes("state=in.%28dispatched%2Cawaiting_result%29")) {
+      throw new Error("the move must only match a still-pending run, so the poll can win instead");
+    }
+    if (patch.body.poll_after !== null) {
+      throw new Error("a terminal run must stop being polled");
+    }
+  });
+
+  testFn("the refetched row marks whether the webhook's write won or the poll had already resolved the run", async () => {
+    for (const [patchRows, expected] of [[1, "applied"], [0, "already_resolved"]] as const) {
+      const callEvents: { kind: string; detail: Record<string, unknown> }[] = [];
+      const handler = createWebhookHandler(baseDeps(async (input, init) => {
+        const current = new Request(input, init);
+        if (current.url.endsWith("/webhook_events") && current.method === "POST") return new Response(null, { status: 201 });
+        if (current.url.includes("/webhook_events?") && current.method === "PATCH") return Response.json([{ event_id: "evt_terminal" }]);
+        if (current.url.endsWith("/call_events") && current.method === "POST") {
+          callEvents.push(JSON.parse(await current.text()));
+          return new Response(null, { status: 201 });
+        }
+        if (current.url.endsWith("/v1/calls/call_terminal")) {
+          return Response.json({ id: "call_terminal", status: "failed", metadata: { call_run_id: "11111111-1111-4111-8111-111111111111" } });
+        }
+        if (current.url.includes("/call_runs?") && current.method === "GET") {
+          return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
+        }
+        if (current.url.includes("/call_runs?") && current.method === "PATCH") {
+          return Response.json(patchRows === 1 ? [{ id: "11111111-1111-4111-8111-111111111111" }] : []);
+        }
+        throw new Error(`unexpected request ${current.method} ${current.url}`);
+      }));
+      const response = await handler(request());
+      if (response.status !== 200) throw new Error("the receiver must acknowledge either way");
+      const refetchedRow = callEvents.find((row) => row.kind === "refetched");
+      if (refetchedRow?.detail.outcome !== expected) {
+        throw new Error(`a PATCH matching ${patchRows} rows must record outcome ${expected}, saw ${JSON.stringify(refetchedRow?.detail)}`);
+      }
+    }
+  });
+
+  testFn("a redelivery whose own earlier attempt moved the run records applied, not a poll that never ran", async () => {
+    const RUN_ID = "11111111-1111-4111-8111-111111111111";
+    const cases = [
+      { name: "redelivery, no poll row", insertStatus: 409, runState: "completed", polledRows: [], expected: "applied" },
+      { name: "redelivery, poll moved it", insertStatus: 409, runState: "completed", polledRows: [{ id: 7 }], expected: "already_resolved" },
+      { name: "redelivery, run holds another state", insertStatus: 409, runState: "failed", polledRows: [], expected: "already_resolved" },
+      { name: "first delivery", insertStatus: 201, runState: "completed", polledRows: [], expected: "already_resolved" },
+    ];
+    for (const scenario of cases) {
+      const callEvents: { kind: string; detail: Record<string, unknown> }[] = [];
+      const polledQueries: URL[] = [];
+      const handler = createWebhookHandler(baseDeps(async (input, init) => {
+        const current = new Request(input, init);
+        const url = new URL(current.url);
+        if (url.pathname.endsWith("/webhook_events") && current.method === "POST") {
+          return new Response(null, { status: scenario.insertStatus });
+        }
+        if (url.pathname.endsWith("/webhook_events") && current.method === "PATCH") return Response.json([{ event_id: "evt_terminal" }]);
+        if (url.pathname.endsWith("/call_events") && current.method === "POST") {
+          callEvents.push(JSON.parse(await current.text()));
+          return new Response(null, { status: 201 });
+        }
+        if (url.pathname.endsWith("/call_events") && current.method === "GET") {
+          polledQueries.push(url);
+          return Response.json(scenario.polledRows);
+        }
+        if (current.url.endsWith("/v1/calls/call_terminal")) {
+          return Response.json({ id: "call_terminal", status: "completed", metadata: { call_run_id: RUN_ID } });
+        }
+        if (url.pathname.endsWith("/call_runs") && current.method === "GET") {
+          if (url.searchParams.get("select") === "state") return Response.json([{ state: scenario.runState }]);
+          return Response.json([{ id: RUN_ID }]);
+        }
+        // The guard matches nothing, because the run already left the pending states.
+        if (url.pathname.endsWith("/call_runs") && current.method === "PATCH") return Response.json([]);
+        throw new Error(`unexpected request ${current.method} ${current.url}`);
+      }));
+      const response = await handler(request());
+      if (response.status !== 200) throw new Error(`${scenario.name}: the receiver must acknowledge`);
+      const refetchedRow = callEvents.find((row) => row.kind === "refetched");
+      if (refetchedRow?.detail.outcome !== scenario.expected) {
+        throw new Error(`${scenario.name}: expected outcome ${scenario.expected}, saw ${JSON.stringify(refetchedRow?.detail)}`);
+      }
+      for (const query of polledQueries) {
+        if (query.searchParams.get("kind") !== "eq.polled" || query.searchParams.get("call_run_id") !== `eq.${RUN_ID}`) {
+          throw new Error(`${scenario.name}: attribution must read this run's polled rows, saw ${query.search}`);
+        }
+      }
     }
   });
 
