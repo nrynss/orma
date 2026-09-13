@@ -1,0 +1,23 @@
+Check the phase 2 status
+
+---
+
+commit and push. do we need to turn scheduler on?
+
+---
+
+We need to design the UI
+
+---
+
+It needs to be reactive.
+
+---
+
+Talk to me about colours. Palette. Text.
+
+---
+
+1. Which accent is good for eyes?
+2. Which is the best option?
+3. both
