@@ -155,7 +155,7 @@ function corsHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "content-type, authorization",
+    "Access-Control-Allow-Headers": "content-type, authorization, apikey",
   }
 }
 
@@ -447,9 +447,11 @@ export function createAuthTelegramHandler(
     let knownUser: AuthUser | null = null
     const bearer = extractBearerToken(req)
     try {
-      if (bearer) {
+      // Anon key, garbage, or expired JWT is a missing bearer, not a 401.
+      if (bearer && bearer !== deps.anonKey) {
         knownUser = await getBearerUser(deps, bearer)
-        if (!knownUser) return unauthorized()
+      }
+      if (knownUser) {
         email = knownUser.email
       } else {
         knownUser = await findUserByTelegramId(deps, telegramUserId)
@@ -808,6 +810,9 @@ if (typeof testFn === "function" && !import.meta.main) {
     if (!allowHeaders.includes("content-type") || !allowHeaders.includes("authorization")) {
       throw new Error("CORS must allow content-type and authorization")
     }
+    if (!allowHeaders.includes("apikey")) {
+      throw new Error("CORS must allow apikey")
+    }
   })
 
   testFn("handler uses service role on generateLink and never in the body", async () => {
@@ -858,15 +863,56 @@ if (typeof testFn === "function" && !import.meta.main) {
     if (linked) throw new Error("missing fields must not mint")
   })
 
-  testFn("invalid bearer is 401 and does not mint a synthetic user", async () => {
+  testFn("valid HMAC with anon key Bearer still mints telegram-first", async () => {
+    const double = mintFetch({ bearerUser: null })
+    const payload = await signedWidget()
+    const response = await postWidget(baseDeps(double.fetch), payload, {
+      authorization: `Bearer ${anonKey}`,
+    })
+    if (response.status !== 200) throw new Error(`expected 200, got ${response.status}`)
+    const body = await response.json() as {
+      access_token?: string
+      user?: { id?: string; email?: string }
+    }
+    if (!body.access_token) throw new Error("anon Bearer must still mint a session")
+    if (body.user?.id !== telegramUser.id) throw new Error("anon Bearer must not invent a user")
+    if (body.user?.email !== syntheticEmail) {
+      throw new Error("anon Bearer must take the telegram-first path")
+    }
+    const link = double.calls.find((call) => call.path === "/auth/v1/admin/generate_link")
+    if (!link) throw new Error("generateLink was not called")
+    const emailed = (JSON.parse(link.body) as { email?: string }).email
+    if (emailed !== syntheticEmail) {
+      throw new Error("anon Bearer must not attach to a fake user")
+    }
+  })
+
+  testFn("garbage bearer is missing and still mints telegram-first", async () => {
     const double = mintFetch({ bearerUser: null })
     const payload = await signedWidget()
     const response = await postWidget(baseDeps(double.fetch), payload, {
       authorization: "Bearer not-a-real-session",
     })
+    if (response.status !== 200) throw new Error(`expected 200, got ${response.status}`)
+    const body = await response.json() as { user?: { id?: string; email?: string } }
+    if (body.user?.id !== telegramUser.id) throw new Error("garbage Bearer must fall through")
+    if (body.user?.email !== syntheticEmail) {
+      throw new Error("garbage Bearer must take the telegram-first path")
+    }
+  })
+
+  testFn("invalid HMAC with anon key Bearer still returns 401", async () => {
+    const double = mintFetch({ bearerUser: null })
+    const payload = await signedWidget()
+    const hash = String(payload.hash)
+    const last = hash[hash.length - 1] === "a" ? "b" : "a"
+    payload.hash = hash.slice(0, -1) + last
+    const response = await postWidget(baseDeps(double.fetch), payload, {
+      authorization: `Bearer ${anonKey}`,
+    })
     if (response.status !== 401) throw new Error(`expected 401, got ${response.status}`)
     const linked = double.calls.some((call) => call.path === "/auth/v1/admin/generate_link")
-    if (linked) throw new Error("invalid bearer must not mint")
+    if (linked) throw new Error("bad hash must not mint even with anon Bearer")
   })
 
   testFn("later telegram login without bearer mints the attached email user", async () => {

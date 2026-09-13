@@ -7,19 +7,11 @@
 		getPublishableKey,
 		getSupabase,
 		LOGIN_CALLBACK_URL,
-		sessionTokensFromUnknown
+		postAuthTelegram,
+		sessionTokensFromUnknown,
+		type TelegramWidgetUser
 	} from '$lib/supabase'
 	import { lookupProfileExists, postAuthPath } from '../app/onboarding/profile-gate'
-
-	type TelegramWidgetUser = {
-		id: number
-		first_name: string
-		last_name?: string
-		username?: string
-		photo_url?: string
-		auth_date: number
-		hash: string
-	}
 
 	let email = $state('')
 	let status = $state('')
@@ -59,27 +51,7 @@
 		status = ''
 		busy = true
 		try {
-			const api = getOrmaApiUrl()
-			const key = getPublishableKey()
-			const response = await fetch(`${api}/functions/v1/auth-telegram`, {
-				method: 'POST',
-				headers: {
-					'content-type': 'application/json',
-					apikey: key,
-					authorization: `Bearer ${key}`
-				},
-				body: JSON.stringify(user)
-			})
-			const text = await response.text()
-			if (!response.ok) {
-				throw new Error(text || `Telegram sign-in failed (${response.status})`)
-			}
-			let payload: unknown = null
-			try {
-				payload = text ? JSON.parse(text) : null
-			} catch {
-				throw new Error('Telegram sign-in returned invalid JSON')
-			}
+			const payload = await postAuthTelegram(user)
 			const tokens = sessionTokensFromUnknown(payload)
 			if (!tokens) {
 				throw new Error('Telegram sign-in returned no session')
@@ -174,7 +146,10 @@
 		<p class="error">{error}</p>
 	{/if}
 
-	<p class="foot-hint">Both ways reach the same account.</p>
+	<p class="foot-hint">
+		Telegram-only sign-in starts here. To add Telegram to an email account, open Settings after you
+		sign in.
+	</p>
 </main>
 
 <style>

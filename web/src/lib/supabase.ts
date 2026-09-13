@@ -104,3 +104,40 @@ export function sessionTokensFromUnknown(payload: unknown): {
   }
   return null
 }
+
+export type TelegramWidgetUser = {
+  id: number
+  first_name: string
+  last_name?: string
+  username?: string
+  photo_url?: string
+  auth_date: number
+  hash: string
+}
+
+export async function postAuthTelegram(
+  widget: TelegramWidgetUser,
+  options?: { accessToken?: string },
+): Promise<unknown> {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  }
+  if (options?.accessToken) {
+    headers.apikey = getPublishableKey()
+    headers.authorization = `Bearer ${options.accessToken}`
+  }
+  const response = await fetch(`${getOrmaApiUrl()}/functions/v1/auth-telegram`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(widget),
+  })
+  const text = await response.text()
+  if (!response.ok) {
+    throw new Error(text || `Telegram sign-in failed (${response.status})`)
+  }
+  try {
+    return text ? JSON.parse(text) : null
+  } catch {
+    throw new Error("Telegram sign-in returned invalid JSON")
+  }
+}

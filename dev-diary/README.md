@@ -161,7 +161,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P2 | 12 / 12 | **Complete.** Every task and the e2e remediation landed, and the deployment carries the phase. The operator still owes the Vault scheduler key. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 4 / 4 | **Complete.** MCP live at `orma-api.nryn.dev/mcp`, six tools wired, docs published at `docs/mcp.md`. |
-| P5 | 4 / 4 | **Complete.** Auth, Telegram bridge, web sessions, and onboarding are live. |
+| P5 | 4 / 4 | **P5 e2e clean.** Auth, Telegram bridge, web sessions, and onboarding are live. |
 | P6 | 0 / 6 | Not started. Unblocked. T5.3 and T5.4 are live. |
 | P7 | 0 / 4 | Not started. Soft-blocked on P2. T3.4 delivery is ready. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
@@ -1168,3 +1168,24 @@ later until T6.5. The landing footer still says sign-ups are closed. No P5
 task owns `web/src/routes/+page.svelte`.
 
 P6 can start. It required T5.3, which landed earlier today.
+
+### 2026-09-14 · P5 e2e clean
+
+Phase e2e round 1 returned REMEDIATE, C1 H1. Per-task APPROVE verdicts stood.
+The integrated product failed on the live Telegram login path.
+
+F1: `/login` sent the publishable key as `Authorization: Bearer`. The handler
+treated every bearer as a user session, GoTrue returned 403, and the function
+answered 401. Continue with Telegram never minted a JWT. Login now posts the
+widget with no Authorization. A non-user bearer is treated as missing.
+
+F2: a signed-in user never saw the widget, so email then Telegram minted a
+second `tg-…@telegram.invalid` account. Settings now hosts the Login Widget
+and posts the user JWT. A later no-bearer widget returns the same id.
+
+Round 2 returned APPROVE with zero residue. Live anon-key Bearer still 200s.
+A flipped hash still 401s. Email plus Settings attach plus a later widget
+login is one user and one items row.
+
+**Still leftover for P6.** `/app` 404s. Settings has no consent UI. The
+landing footer still says sign-ups are closed. Sign in is in the shell nav.
