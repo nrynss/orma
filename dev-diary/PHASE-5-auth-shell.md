@@ -44,9 +44,13 @@ Set the site URL and the allowed redirect list to the Pages domain. A redirect l
 requires:   T5.1, T3.1
 fixture-ok: yes
 size:       L · frontier
-owns:       supabase/functions/auth-telegram/index.ts
-status:     not-started
+owns:       supabase/functions/auth-telegram/index.ts, supabase/config.toml ([functions.auth-telegram] only)
+status:     claimed:orma-impl-52
 ```
+The browser posts the widget payload with no session JWT, so this task also owns
+`[functions.auth-telegram] verify_jwt = false`. Do not edit any other block in
+`config.toml`. T5.1 owns `[auth]`. T3.1 owns `[functions.telegram]`.
+
 Verify the Login Widget payload by computing `HMAC-SHA256` over the data-check string with `SHA256(bot_token)` as the key and comparing against `hash`. Reject a payload older than a short window, which is what stops a captured payload being replayed later.
 
 Then find or create the user and mint a session in two steps:
@@ -67,9 +71,13 @@ A Telegram identity linked to an existing email account attaches to that account
 requires:   T5.1
 fixture-ok: yes
 size:       M · mid
-owns:       web/src/lib/supabase.ts, web/src/routes/+layout.ts, web/src/routes/login/
-status:     not-started
+owns:       web/src/lib/supabase.ts, web/src/routes/+layout.ts, web/src/routes/+layout.svelte, web/src/hooks.server.ts, web/src/routes/login/, web/src/routes/app/settings/+page.svelte, web/package.json, web/package-lock.json
+status:     claimed:orma-impl-53
 ```
+Cookie sessions need the server hook and the existing layout. Settings must
+read the signed-in session rather than a pasted JWT. The package files take
+the publishable client and the secret-key build check.
+
 Add to the deployed app: a Supabase client, session handling across server and
 client rendering, route protection, and the login page carrying both paths.
 

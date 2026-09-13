@@ -160,7 +160,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P2 | 12 / 12 | **Complete.** Every task and the e2e remediation landed, and the deployment carries the phase. The operator still owes the Vault scheduler key. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 4 / 4 | **Complete.** MCP live at `orma-api.nryn.dev/mcp`, six tools wired, docs published at `docs/mcp.md`. |
-| P5 | 0 / 4 | T5.1 can start. |
+| P5 | 1 / 4 | T5.1 landed. T5.2 and T5.3 claimed. T5.4 waits on T5.3. |
 | P6 | 0 / 6 | Not started. Blocked on T5.3. |
 | P7 | 0 / 4 | Not started. Soft-blocked on P2. T3.4 delivery is ready. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
