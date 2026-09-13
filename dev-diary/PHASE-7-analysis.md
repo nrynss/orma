@@ -48,6 +48,27 @@ Keep it short. A report nobody finishes is a report that changed nothing.
 
 **Done when:** a fixture facts object yields prose containing only its own numbers, a deliberately hallucinated number is caught and regenerated, and the same facts twice produce stable output.
 
+
+---
+
+### T7.2a: Shared Vertex text client
+```yaml
+requires:   T3.3
+fixture-ok: yes
+size:       S · mid
+owns:       supabase/functions/_shared/vertex.ts, supabase/functions/_shared/vertex_tests.ts, supabase/functions/telegram/voice_vertex.ts
+status:     done
+```
+T7.2 needs the same service-account credential and `generateContent` path as voice.
+Extract them once so analysis never grows a second credential mechanism.
+
+Move the private token exchange, JWT signing, service-account test key and response
+parsing behind a shared module. Refactor `voice_vertex.ts` to call it without changing
+its exported API. Add a colocated Deno suite that pins credential parsing, token
+exchange, bearer authorization, the Vertex URL, failure propagation and text extraction.
+
+**Done when:** every existing `voice_vertex` Deno suite passes unchanged, and the new
+shared suite proves the auth and generation path with an injected `fetch`.
 ---
 
 ### T7.3: Report delivery
