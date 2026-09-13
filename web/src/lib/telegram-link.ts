@@ -3,9 +3,11 @@
  *
  * Mirrors `mintLinkToken` / `unlinkTelegram` from the Edge link store.
  * Posts the hash only. Reach PostgREST through `ORMA_API_URL`.
- * Auth uses the signed-in user JWT. Service role never enters the bundle.
+ * apikey is the publishable anon key. Bearer is the signed-in user JWT.
+ * Missing anonKey throws. It never falls back to the user JWT.
+ * Service role never enters the bundle.
  *
- * T5.3 owns the real session client. Callers pass that JWT in.
+ * T5.3 owns the real session client. Callers pass that JWT and the anon key.
  */
 export const TELEGRAM_BOT_USERNAME = "orma_tele_bot"
 export const LINK_TOKEN_TTL_MS = 10 * 60 * 1000
@@ -17,6 +19,7 @@ export type TelegramLinkClient = {
   apiUrl?: string
   accessToken: string
   userId: string
+  anonKey: string
   fetch?: typeof fetch
 }
 
@@ -44,9 +47,17 @@ function apiBase(apiUrl: string): string {
   return base
 }
 
-function headers(accessToken: string, prefer?: string): Record<string, string> {
+function requireAnonKey(anonKey: string | undefined): string {
+  if (typeof anonKey !== "string" || anonKey.length === 0) {
+    throw new Error("missing publishable anon key")
+  }
+  return anonKey
+}
+
+function headers(anonKey: string, accessToken: string, prefer?: string): Record<string, string> {
+  const key = requireAnonKey(anonKey)
   const next: Record<string, string> = {
-    apikey: accessToken,
+    apikey: key,
     authorization: `Bearer ${accessToken}`,
     "content-type": "application/json",
   }
@@ -72,13 +83,13 @@ export async function mintLinkToken(client: TelegramLinkClient): Promise<{
 
   const cleared = await fetchImpl(
     `${base}/rest/v1/telegram_link_tokens?user_id=eq.${encodeURIComponent(client.userId)}&consumed_at=is.null`,
-    { method: "DELETE", headers: headers(client.accessToken, "return=minimal") },
+    { method: "DELETE", headers: headers(client.anonKey, client.accessToken, "return=minimal") },
   )
   if (!cleared.ok) throw new Error("telegram_link_tokens open delete failed")
 
   const inserted = await fetchImpl(`${base}/rest/v1/telegram_link_tokens`, {
     method: "POST",
-    headers: headers(client.accessToken, "return=minimal"),
+    headers: headers(client.anonKey, client.accessToken, "return=minimal"),
     body: JSON.stringify({
       token_hash: tokenHash,
       user_id: client.userId,
@@ -101,7 +112,7 @@ export async function unlinkTelegram(client: TelegramLinkClient): Promise<void> 
 
   const deleted = await fetchImpl(
     `${base}/rest/v1/telegram_link_tokens?user_id=eq.${encodeURIComponent(client.userId)}`,
-    { method: "DELETE", headers: headers(client.accessToken, "return=minimal") },
+    { method: "DELETE", headers: headers(client.anonKey, client.accessToken, "return=minimal") },
   )
   if (!deleted.ok) throw new Error("telegram_link_tokens delete failed")
 
@@ -109,7 +120,7 @@ export async function unlinkTelegram(client: TelegramLinkClient): Promise<void> 
     `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(client.userId)}`,
     {
       method: "PATCH",
-      headers: headers(client.accessToken, "return=minimal"),
+      headers: headers(client.anonKey, client.accessToken, "return=minimal"),
       body: JSON.stringify({ telegram_chat_id: null }),
     },
   )
@@ -123,7 +134,7 @@ export async function loadTelegramLinkState(client: TelegramLinkClient): Promise
   const base = apiBase(client.apiUrl ?? ORMA_API_URL)
   const response = await fetchImpl(
     `${base}/rest/v1/profiles?id=eq.${encodeURIComponent(client.userId)}&select=telegram_chat_id`,
-    { headers: headers(client.accessToken) },
+    { headers: headers(client.anonKey, client.accessToken) },
   )
   if (!response.ok) throw new Error("profiles telegram read failed")
   const rows = (await response.json()) as Array<{ telegram_chat_id: number | null }>

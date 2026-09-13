@@ -160,7 +160,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P2 | 12 / 12 | **Complete.** Every task and the e2e remediation landed, and the deployment carries the phase. The operator still owes the Vault scheduler key. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 4 / 4 | **Complete.** MCP live at `orma-api.nryn.dev/mcp`, six tools wired, docs published at `docs/mcp.md`. |
-| P5 | 2 / 4 | T5.1 and T5.2 landed. T5.3 in remediation. T5.4 waits on T5.3. |
+| P5 | 3 / 4 | T5.1, T5.2 and T5.3 landed. T5.4 claimed. |
 | P6 | 0 / 6 | Not started. Blocked on T5.3. |
 | P7 | 0 / 4 | Not started. Soft-blocked on P2. T3.4 delivery is ready. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
@@ -1116,3 +1116,27 @@ is inserted. Anon `apikey` plus user Bearer returns 201 and count 1.
 The helper lives in `web/src/lib/telegram-link.ts`, outside the original owns
 line. The operator confirmed a contract change is valid when the task needs
 it. T5.3 now owns that file for the header fix. Remediation round 1 follows.
+
+### 2026-09-14 · T5.3 landed, web sessions live
+
+T5.3 is done. The Worker at `orma.nryn.dev` has a Supabase client pointed at
+`orma-api.nryn.dev`, cookie sessions, login with email magic link and the
+Telegram widget, and Settings mint from `getSession()`. A signed-out visit to
+`/app/settings` redirects to `/login`. A signed-in reload keeps the cookie.
+
+Round 1 found C1: `telegram-link.ts` sent the user JWT as `apikey`, so mint
+returned 401 and inserted zero rows. The helper now requires the publishable
+anon key as `apikey` and the user JWT as Bearer. Round 2 returned APPROVE with
+zero residue. Live mint inserted one `telegram_link_tokens` row. The JWT-as
+`apikey` control still 401s.
+
+Contract change also covers `web/scripts/` (PUBLIC_ env mapping and the secret
+key scan) and `+layout.server.ts`. The operator confirmed those rows.
+
+**What T5.4 must know.** An auth user has no `public.profiles` row until
+onboarding writes one. `telegram_link_tokens.user_id` references profiles, so
+mint fails before that row exists. Login currently sends a signed-in user to
+`/app/settings`. New accounts should go to onboarding first.
+
+The landing footer still says sign-ups are closed. T5.3 does not own
+`+page.svelte`.

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte'
 	import {
 		ORMA_API_URL,
 		TELEGRAM_BOT_USERNAME,
@@ -6,33 +7,37 @@
 		mintLinkToken,
 		unlinkTelegram
 	} from '$lib/telegram-link'
+	import { getPublishableKey, getSession } from '$lib/supabase'
 
-	let userId = $state('')
-	let accessToken = $state('')
+	let { data } = $props()
+
 	let deepLink = $state('')
 	let telegramChatId = $state<number | null>(null)
 	let status = $state('')
 	let error = $state('')
 	let busy = $state(false)
 
-	function client() {
+	async function creds() {
+		const live = await getSession()
+		const accessToken = live?.access_token ?? data.session?.access_token ?? ''
+		const userId = live?.user.id ?? data.session?.user.id ?? ''
+		if (!accessToken || !userId) {
+			throw new Error('Sign in, then return to Settings.')
+		}
 		return {
 			apiUrl: ORMA_API_URL,
-			accessToken: accessToken.trim(),
-			userId: userId.trim()
+			accessToken,
+			userId,
+			anonKey: getPublishableKey()
 		}
 	}
 
 	async function refresh() {
 		error = ''
 		status = ''
-		if (!userId.trim() || !accessToken.trim()) {
-			status = 'T5.3 auth shell is not landed. Enter a signed-in user id and JWT to mint or unlink.'
-			return
-		}
 		busy = true
 		try {
-			const state = await loadTelegramLinkState(client())
+			const state = await loadTelegramLinkState(await creds())
 			telegramChatId = state.telegramChatId
 			status = telegramChatId === null ? 'Telegram is not linked.' : `Linked chat ${telegramChatId}.`
 		} catch (err) {
@@ -45,13 +50,9 @@
 	async function mint() {
 		error = ''
 		status = ''
-		if (!userId.trim() || !accessToken.trim()) {
-			error = 'Sign in through T5.3, then return with a session JWT.'
-			return
-		}
 		busy = true
 		try {
-			const minted = await mintLinkToken(client())
+			const minted = await mintLinkToken(await creds())
 			deepLink = minted.deepLink
 			status = 'Open this link in Telegram. One Start press binds this chat.'
 		} catch (err) {
@@ -64,13 +65,9 @@
 	async function unlink() {
 		error = ''
 		status = ''
-		if (!userId.trim() || !accessToken.trim()) {
-			error = 'Sign in through T5.3, then return with a session JWT.'
-			return
-		}
 		busy = true
 		try {
-			await unlinkTelegram(client())
+			await unlinkTelegram(await creds())
 			deepLink = ''
 			telegramChatId = null
 			status = 'Telegram is unlinked. Tokens and chat id are cleared.'
@@ -80,6 +77,10 @@
 			busy = false
 		}
 	}
+
+	onMount(() => {
+		void refresh()
+	})
 </script>
 
 <svelte:head>
@@ -96,20 +97,6 @@
 		The web app mints a short-lived token. You open the bot with that token. Orma then records
 		thoughts you send in that chat.
 	</p>
-
-	<p class="note">
-		T5.3 owns the session client. Until that lands, paste the signed-in user id and JWT from a
-		working session. Helpers talk to {ORMA_API_URL} only.
-	</p>
-
-	<label>
-		User id
-		<input bind:value={userId} autocomplete="off" />
-	</label>
-	<label>
-		Access token
-		<input type="password" bind:value={accessToken} autocomplete="off" />
-	</label>
 
 	<p class="actions">
 		<button type="button" onclick={refresh} disabled={busy}>Refresh</button>
@@ -150,23 +137,11 @@
 		margin: 0;
 	}
 	.gloss,
-	.note,
 	.status {
 		color: light-dark(#7a746a, #938c80);
 	}
 	.error {
 		color: light-dark(#8a2b2b, #e08a8a);
-	}
-	label {
-		display: block;
-		margin: 1rem 0;
-	}
-	input {
-		display: block;
-		width: 100%;
-		margin-top: 0.25rem;
-		padding: 0.4rem 0.5rem;
-		box-sizing: border-box;
 	}
 	.actions {
 		display: flex;
@@ -176,5 +151,8 @@
 	button {
 		font: inherit;
 		padding: 0.4rem 0.8rem;
+	}
+	a {
+		color: light-dark(#7a5283, #cfa7d8);
 	}
 </style>

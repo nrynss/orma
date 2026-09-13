@@ -72,7 +72,7 @@ requires:   T5.1
 fixture-ok: yes
 size:       M · mid
 owns:       web/src/lib/supabase.ts, web/src/lib/telegram-link.ts, web/src/routes/+layout.ts, web/src/routes/+layout.server.ts, web/src/routes/+layout.svelte, web/src/hooks.server.ts, web/src/routes/login/, web/src/routes/app/settings/+page.svelte, web/package.json, web/package-lock.json, web/scripts/
-status:     claimed:orma-impl-53
+status:     done
 ```
 Cookie sessions need the server hook and the existing layout. Settings must
 read the signed-in session rather than a pasted JWT. The package files take
@@ -122,9 +122,13 @@ reload keeps the session, and no request in the browser network tab goes to a
 requires:   T5.3, T1.1
 fixture-ok: yes
 size:       M · frontier
-owns:       web/src/routes/app/onboarding/
-status:     not-started
+owns:       web/src/routes/app/onboarding/, web/src/hooks.server.ts, web/src/routes/login/, web/src/routes/+layout.server.ts
+status:     claimed:orma-impl-54
 ```
+A signed-in account with no profile must land here, not on Settings. That gate
+lives in `hooks.server.ts` (the `/login` redirect today) and the server layout.
+T5.3 already owns those files. This task takes the missing-profile branch only.
+
 The sequence that turns a signed-in account into a profile the dispatcher will accept: name, phone in E.164, explicit consent, timezone, and a first slot.
 
 Consent is a row and not a checkbox. Store the exact wording shown, the moment, and the surface. The wording is versioned, so a later change does not silently rewrite what someone agreed to.
