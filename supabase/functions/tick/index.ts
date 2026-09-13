@@ -4,6 +4,9 @@
  *
  * T2.4 wires each claimed run to the guarded CALL-E dispatcher.
  *
+ * T2.7a wires each terminal run to the finaliser, which re-fetches the call
+ * and turns it into rows. The finaliser bounds its own attempts, and this
+ * select skips a run that is waiting for its next one.
  * Pin with: deno test --allow-env --allow-net supabase/functions/tick/index.ts
  */
 
@@ -13,6 +16,7 @@ import {
   depsFromEnv as calleDepsFromEnv,
   dispatchClaimedRun,
 } from "../_shared/calle.ts";
+import { finaliseStep } from "../_shared/finalise.ts";
 import { pollRun } from "../_shared/poll.ts";
 
 const CLAIM_LIMIT = 20;
@@ -31,6 +35,12 @@ export type ClaimedTickRun = TickRun & {
   dry_run: boolean;
 };
 
+/** A terminal run carries the two fields the re-fetch needs. */
+export type TerminalTickRun = TickRun & {
+  user_id: string;
+  calle_call_id: string | null;
+};
+
 export type TickDeps = {
   apiUrl: string;
   serviceRoleKey: string;
@@ -38,7 +48,11 @@ export type TickDeps = {
   dispatchClaimed?: (run: ClaimedTickRun) => Promise<void>;
   /** Resolves false, or throws, when the pass did not land. */
   pollDue: (run: TickRun) => Promise<boolean | void>;
-  finalise: (run: TickRun) => Promise<void>;
+  /**
+   * One bounded finalise pass. A throw means the attempt was counted on the
+   * run, so the tick does not report it as landed and the next tick waits.
+   */
+  finalise: (run: TerminalTickRun) => Promise<void>;
   now: () => Date;
 };
 
@@ -49,7 +63,8 @@ export type TickResult = {
    * counted. That holds when CALL-E accepted the call and a later write
    * failed, when the recovery failed the run, and when the run completed and
    * only the last timeline write failed. `polled` and `finalised` count the
-   * same way, and neither counts a step that threw.
+   * same way, and neither counts a step that threw. A finalise step that ends
+   * a stuck run counts, because it finished that run's work.
    */
   claimed: number;
   polled: number;
@@ -63,12 +78,6 @@ export function requireNamedEnv(
   const value = getEnv(name);
   if (!value) throw new Error(`missing ${name}`);
   return value;
-}
-
-function unavailable(stage: string): (run: TickRun) => Promise<void> {
-  return async () => {
-    throw new Error(`${stage} implementation is unavailable`);
-  };
 }
 
 /**
@@ -149,7 +158,7 @@ export function depsFromEnv(
     fetch: fetchImpl,
     dispatchClaimed: async (run) => { await dispatchClaimedRun(run, calleDeps); },
     pollDue: (run) => pollStep(run, calleDeps),
-    finalise: unavailable("finalisation"),
+    finalise: async (run) => { await finaliseStep(run, calleDeps); },
     now: () => new Date(),
   };
 }
@@ -168,10 +177,10 @@ function restUrl(base: string, path: string, query = ""): string {
   }`;
 }
 
-async function readRows(
+async function readRows<T extends TickRun>(
   deps: TickDeps,
   query: URLSearchParams,
-): Promise<TickRun[]> {
+): Promise<T[]> {
   const response = await deps.fetch(
     restUrl(deps.apiUrl, "call_runs", query.toString()),
     {
@@ -179,7 +188,7 @@ async function readRows(
     },
   );
   if (!response.ok) throw new Error("call_runs read failed");
-  return await response.json() as TickRun[];
+  return await response.json() as T[];
 }
 
 /** Calls the only SQL boundary allowed to claim runs. Do not replace this with
@@ -209,15 +218,20 @@ export async function duePolls(deps: TickDeps): Promise<TickRun[]> {
   return readRows(deps, query);
 }
 
-export async function terminalRuns(deps: TickDeps): Promise<TickRun[]> {
+export async function terminalRuns(deps: TickDeps): Promise<TerminalTickRun[]> {
+  const now = deps.now().toISOString();
   const query = new URLSearchParams({
-    select: "id,state,poll_after",
+    select: "id,state,poll_after,user_id,calle_call_id",
     state: "in.(completed,no_result,failed,canceled)",
     completed_at: "is.null",
-    order: "scheduled_for",
+    // A run that failed an attempt waits before its next one, so a batch of
+    // stuck runs can never hold every slot.
+    or: `(finalise_after.is.null,finalise_after.lte.${now})`,
+    // A run nobody has tried yet goes first, so a fresh run always finds a slot.
+    order: "finalise_after.asc.nullsfirst,scheduled_for.asc",
     limit: String(CLAIM_LIMIT),
   });
-  return readRows(deps, query);
+  return readRows<TerminalTickRun>(deps, query);
 }
 
 export async function tick(deps: TickDeps): Promise<TickResult> {
@@ -234,7 +248,8 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
 
   const terminal = await terminalRuns(deps);
   // Each run finalises in isolation, like pollStep. One run that cannot
-  // finalise stays selected for the next tick and costs its siblings nothing.
+  // finalise is counted on the run and skipped until its next attempt, so it
+  // costs its siblings nothing and never holds the batch.
   const finalised = await countSucceeded(terminal, deps.finalise, "finalise");
 
   return { claimed: dispatched, polled, finalised };
@@ -281,6 +296,32 @@ if (typeof testFn === "function" && !import.meta.main) {
     finalise: async () => undefined,
     now: () => new Date("2026-09-12T00:00:00.000Z"),
   });
+
+  /**
+   * PostgREST answers a select with the columns it was asked for and no
+   * others, and it skips a row whose finalise wait has not passed. A stub that
+   * ignores `select` cannot measure the projection, and one that ignores the
+   * gate cannot measure the bound.
+   */
+  const terminalAnswer = (
+    url: URL,
+    rows: Array<Record<string, unknown>>,
+  ): Array<Record<string, unknown>> => {
+    const select = url.searchParams.get("select") ?? "";
+    const bound = url.searchParams.get("or")?.match(/finalise_after\.lte\.(.+)\)/)?.[1];
+    const before = bound ?? new Date().toISOString();
+    return rows
+      .filter((row) =>
+        typeof row.finalise_after !== "string" || row.finalise_after <= before
+      )
+      .map((row) => {
+        const answer: Record<string, unknown> = {};
+        for (const key of select.split(",")) {
+          if (key in row) answer[key] = row[key];
+        }
+        return answer;
+      });
+  };
 
   testFn(
     "a tick without dispatch leaves scheduled runs unclaimed",
@@ -486,6 +527,167 @@ if (typeof testFn === "function" && !import.meta.main) {
       }
       if (finalised.length !== 1 || finalised[0] !== "run-healthy") {
         throw new Error(`the sibling run must still finalise, saw ${JSON.stringify(finalised)}`);
+      }
+    },
+  );
+
+  testFn(
+    "a failed re-fetch leaves its run queued while its siblings finalise",
+    async () => {
+      const requests: Request[] = [];
+      const callTask = (callId: string) => ({
+        id: callId,
+        status: "completed",
+        completed_at: "2026-09-12T00:00:05.000Z",
+        failure_code: null,
+        failure_message: null,
+        structured_result: {
+          captured_items: [
+            { text: "Renew the passport", evidence_offset_seconds: 12 },
+          ],
+          retired_items: [],
+        },
+        recipients: [{
+          attempts: [{
+            transcript_turns: [
+              { offset_seconds: 12, speaker: "callee", text: "Renew the passport" },
+            ],
+          }],
+        }],
+      });
+      const fetchStub: typeof fetch = async (input, init) => {
+        const request = new Request(String(input), init);
+        requests.push(request);
+        const url = new URL(request.url);
+        if (url.host === "api.call-e.test") {
+          return url.pathname.endsWith("/v1/calls/call-stuck")
+            ? new Response(null, { status: 503 })
+            : Response.json(callTask("call-healthy"));
+        }
+        if (url.pathname.endsWith("/rpc/claim_due_call_runs")) return Response.json([]);
+        if (url.searchParams.get("completed_at") === "is.null") {
+          return Response.json(terminalAnswer(url, [
+            { id: "run-stuck", state: "failed", poll_after: null, user_id: "user-1", calle_call_id: "call-stuck", finalise_after: null },
+            { id: "run-healthy", state: "failed", poll_after: null, user_id: "user-1", calle_call_id: "call-healthy", finalise_after: null },
+          ]));
+        }
+        if (url.searchParams.get("state") === "in.(dispatched,awaiting_result)") {
+          return Response.json([]);
+        }
+        if (url.pathname.endsWith("/rpc/record_finalise_failure")) {
+          return Response.json({ attempts: 1, finalised: false });
+        }
+        if (url.pathname.endsWith("/rpc/ingest_call_result")) {
+          return Response.json({
+            already_ingested: false,
+            disposition: "answered_extracted",
+            counts: { items: 1, mentions: 1, retirements: 0, commitments: 0 },
+            slot_change_requested: null,
+          });
+        }
+        if (url.pathname.endsWith("/call_events")) {
+          return new Response(null, { status: 201 });
+        }
+        throw new Error(`unexpected request ${request.method} ${request.url}`);
+      };
+      const env: Record<string, string> = {
+        ORMA_API_URL: "https://orma-api.nryn.dev",
+        SUPABASE_SERVICE_ROLE_KEY: "service-key",
+        CALLE_API_BASE: "https://api.call-e.test",
+        CALLE_API_KEY: "calle-key",
+        ORMA_WEBHOOK_SECRET: "webhook-secret",
+      };
+      const body = await tick(depsFromEnv((key) => env[key], fetchStub));
+
+      if (body.finalised !== 1) {
+        throw new Error(`only the reachable run may finalise, saw ${JSON.stringify(body)}`);
+      }
+      const ingest = requests.filter((request) =>
+        request.url.endsWith("/rpc/ingest_call_result")
+      );
+      if (ingest.length !== 1) {
+        throw new Error(`a failed re-fetch must not reach ingestion, saw ${ingest.length}`);
+      }
+      const ingestBody = await ingest[0].json() as {
+        p_call_run_id?: string;
+        p_user_id?: string;
+      };
+      if (ingestBody.p_call_run_id !== "run-healthy" || ingestBody.p_user_id !== "user-1") {
+        throw new Error(`the reachable sibling must finalise with its own identity, saw ${JSON.stringify(ingestBody)}`);
+      }
+      const attempt = requests.find((request) =>
+        request.url.endsWith("/rpc/record_finalise_failure")
+      );
+      if (!attempt || attempt.method !== "POST") {
+        throw new Error("the failed attempt must be counted on the stuck run");
+      }
+      const attemptBody = await attempt.json() as {
+        p_call_run_id?: string;
+        p_wait_seconds?: number;
+      };
+      if (attemptBody.p_call_run_id !== "run-stuck" || !(attemptBody.p_wait_seconds! > 0)) {
+        throw new Error(`the attempt must name the stuck run and its wait, saw ${JSON.stringify(attemptBody)}`);
+      }
+      const events = requests.filter((request) => request.url.endsWith("/call_events"));
+      if (events.length !== 1) {
+        throw new Error(`the stuck run must record nothing, saw ${events.length} row(s)`);
+      }
+      const row = await events[0].json() as {
+        call_run_id?: string;
+        kind?: string;
+        detail?: { state?: string };
+      };
+      if (
+        row.call_run_id !== "run-healthy" || row.kind !== "finalised" ||
+        row.detail?.state !== "completed"
+      ) {
+        throw new Error(`the timeline row is wrong: ${JSON.stringify(row)}`);
+      }
+      // Ingestion owns `completed_at`, and it never ran for the stuck run. The
+      // attempt count is recorded through its own SQL boundary, so every plain
+      // `call_runs` write stays inside ingestion and the next tick still
+      // selects the run.
+      const writes = requests.filter((request) =>
+        request.method === "PATCH" && request.url.includes("/call_runs")
+      );
+      if (writes.length !== 0) {
+        throw new Error("the finaliser must leave every run write to ingestion");
+      }
+    },
+  );
+
+  testFn(
+    "the terminal select asks for the attempt bound and the queue order",
+    async () => {
+      let url: URL | undefined;
+      const deps: TickDeps = {
+        ...baseDeps(async (input) => {
+          url = new URL(String(input));
+          return Response.json([]);
+        }),
+        dispatchClaimed: undefined,
+      };
+      await terminalRuns(deps);
+      if (!url) throw new Error("the terminal select made no request");
+      const params = url.searchParams;
+      if (params.get("select") !== "id,state,poll_after,user_id,calle_call_id") {
+        throw new Error(`the terminal select must carry the re-fetch fields: ${params.get("select")}`);
+      }
+      if (params.get("completed_at") !== "is.null") {
+        throw new Error(`only an unfinished run is queued: ${params.get("completed_at")}`);
+      }
+      const or = params.get("or") ?? "";
+      if (
+        !or.includes("finalise_after.is.null") ||
+        !or.includes(`finalise_after.lte.${deps.now().toISOString()}`)
+      ) {
+        throw new Error(`the terminal select must skip a run that is waiting: ${or}`);
+      }
+      if (params.get("order") !== "finalise_after.asc.nullsfirst,scheduled_for.asc") {
+        throw new Error(`an untried run must be selected first: ${params.get("order")}`);
+      }
+      if (params.get("limit") !== "20") {
+        throw new Error(`the batch bound was lost: ${params.get("limit")}`);
       }
     },
   );

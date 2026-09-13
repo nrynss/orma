@@ -220,8 +220,8 @@ On a null result, fall back to the raw transcript for analysis, mark the run `an
 requires:   T2.5, T2.7, T2.8
 fixture-ok: yes
 size:       M · frontier
-owns:       supabase/functions/_shared/finalise.ts, supabase/functions/tick/index.ts
-status:     not-started
+owns:       supabase/functions/_shared/finalise.ts, supabase/functions/tick/index.ts, supabase/migrations/20260913130000_finalise_attempts.sql
+status:     done
 ```
 Split from T2.7 on 2026-09-13. T2.7 built ingestion and gave it no production
 caller. T2.3 left `finalise` in `tick` as `unavailable("finalisation")`. No task

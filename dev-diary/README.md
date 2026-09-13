@@ -158,7 +158,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
 | P1 | 7 / 7 | Complete. Contracts are frozen. |
-| P2 | 9 / 11 | T2.1 through T2.8 and T2.5a landed. T2.7a (split from T2.7) and T2.9 remain. |
+| P2 | 10 / 11 | T2.1 through T2.8, T2.5a and T2.7a landed. T2.9 is the last task. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 0 / 3 | T4.1 can start. |
 | P5 | 0 / 4 | T5.1 can start. |
@@ -849,3 +849,38 @@ body is masked and the discrepancy is recorded here.
 **What T2.7a must know.** `tick` now isolates each claimed run through
 `dispatchStep`, and `dispatchClaimedRun` recovers a stranded run itself. A recovery
 that holds a call id hands the run to the poll.
+
+### 2026-09-13 · T2.7a landed, the finaliser
+
+T2.7a is done. `_shared/finalise.ts` gives ingestion a production caller. For each
+terminal run with a null `completed_at`, the tick re-fetches the call with
+`fetchCall`, hands the payload to `ingestTerminalRun` and records `finalised`.
+Ingestion sets `completed_at`, which is what removes the run from the queue.
+
+A run is bounded now. A failing re-fetch spends one of three attempts and waits
+five minutes before the next, and the last attempt ends the run with a `finalised`
+row that names the reason. A terminal run with no call id, which the poll writes
+when it has nothing to poll, ends at once with `the run has no CALL-E call id to
+re-fetch`. Two SQL functions carry that, `record_finalise_failure` and
+`abandon_call_run`, both security definer and both revoked from `anon` and
+`authenticated`.
+
+The migration adds `call_runs.finalise_attempts`, `finalise_after` and
+`finalise_error`. The terminal select skips a waiting run and tries an untried one
+first, so twenty stuck runs cannot fill the batch.
+
+Round 1 review found two M findings, one inherited from `t2.5-round3.md`. Both are
+fixed, and each fix has a revert that fails its pin. The `finalised` row is now
+appended with three attempts, because ingestion commits `completed_at` before that
+row is written.
+
+**Deviation from the loop, on the user's authority.** The orchestrator landed
+after remediation round 1 with no round 2 review. The orchestrator ran the
+acceptance itself: `deno check` clean, 125 Deno tests green, the pins driver 56 of
+56 against the shared stack, and the stack back to its baseline rows.
+
+**What T2.9 must know.** The timeline reads `polled, ingested, finalised` for a
+poll-terminalised run, `webhook_received, refetched, ingested, finalised` for a
+webhook one, and `claimed, dispatched, ingested, finalised` for a dry run. A run
+abandoned for a spent retry budget carries `finalised` with `outcome: abandoned`
+and its reason.
