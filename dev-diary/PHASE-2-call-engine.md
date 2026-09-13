@@ -195,7 +195,7 @@ requires:   T1.5, T2.6
 fixture-ok: yes
 size:       XL · frontier
 owns:       supabase/functions/_shared/ingest.ts, supabase/migrations/20260912180000_ingest.sql, supabase/migrations/test-ingest.sh
-status:     claimed:orchestrator-p2
+status:     done
 ```
 Turn a terminal run into rows, in one transaction.
 

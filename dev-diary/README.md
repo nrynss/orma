@@ -158,7 +158,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
 | P1 | 7 / 7 | Complete. Contracts are frozen. |
-| P2 | 7 / 11 | T2.1 through T2.6 and T2.5a landed. T2.7 remediation round 2 is complete and awaits review round 3. T2.8 is built and waits for T2.7 to land. T2.7a and T2.9 are not started. |
+| P2 | 8 / 11 | T2.1 through T2.7 and T2.5a landed. T2.8 remediation is next, off T2.7's landing. T2.7a and T2.9 are not started. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 0 / 3 | T4.1 can start. |
 | P5 | 0 / 4 | T5.1 can start. |
@@ -761,3 +761,48 @@ truthful without that row.
 Both `database.types.ts` copies were regenerated from the scratch stack and stay
 byte-identical. They also carry `p_skipped`, the new argument of
 `ingest_call_result` from T2.7's remediation, which lands next.
+
+### 2026-09-13 · T2.7 landed, result ingestion
+
+T2.7 is done. `ingestTerminalRun` turns a terminal run into rows through
+`public.ingest_call_result` in one transaction. It writes the transcript, the
+result, the disposition, the mood, the captured items, the retirements and
+commitments, and one `item_mentions` row per item named on the call.
+
+Six rounds of review left the module far stronger. Rounds 1 and 2 found a parser
+weaker than the RPC and a wholesale discard of an extraction with one bad field.
+Round 3 found the transferred `poll_timeout` clear over-reaching into CALL-E's own
+failure. Rounds 4, 5 and 6 found successively narrower holes in the masking helper
+and in two acceptance cases. Every finding is fixed, and each fix has a revert
+that fails its pin.
+
+What the module does now. A bad entry costs only itself, so a free-text `due`
+keeps its row with a null due and an unknown item id drops its entry. The reasons
+travel as `p_skipped` and land in the run's `ingested` timeline row. Characters a
+jsonb cast refuses are replaced before the request leaves. The `ingested` row is
+written inside the RPC transaction, so a racing retry cannot duplicate it or lose
+it. `calle_failure` is cleared only when it holds the poll's own `poll_timeout`,
+so a failure CALL-E reported survives. The masker covers a 2,592 row corpus with
+zero leaks, and its comment names what it over-matches.
+
+The RPC gained a twelfth argument, `p_skipped jsonb default '[]'::jsonb`. The
+default keeps every earlier caller working. `ingest.ts` posts no `call_events` row
+at all, so its exports stay source-compatible for `calle.ts` and `dispatch-mode.ts`.
+
+**One deviation from the loop, on the user's authority.** Round 6 returned
+C0 H0 M0 L4. The orchestrator landed the task after remediation round 6 fixed all
+four, with no round 7 review. The four were not load bearing on their own, their
+fixes carry revert-based pins, and the orchestrator ran the acceptance itself:
+`deno check` clean, 22 Deno tests green, `test-ingest.sh` green in 29.7 seconds.
+The record is `t2.7-round6.md` and `t2.7-remediation-round6.md`.
+
+**What T2.7a and T2.9 must know.** `tick` still wires `finalise` to
+`unavailable("finalisation")`, so nothing calls `ingestTerminalRun` in production
+yet. T2.7a replaces that stub, re-fetches each terminal run and hands the payload
+to ingestion. T2.9 reads the `ingested` row for its counts, and the row carries
+the state, the disposition, the call id, four counts and the repair list.
+
+**Scratch stack note.** The shared stack's `ingest_call_result` was recreated by
+hand, so its execute revokes had to be re-applied there. A fresh migration run
+produces them. The stack now reads `anon=false`, `authenticated=false`,
+`service_role=true`.

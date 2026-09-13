@@ -3,23 +3,37 @@
  *
  * A terminal call becomes rows in one PostgreSQL transaction. PostgREST cannot
  * hold that transaction, so this module validates the extraction, forwards it
- * to `public.ingest_call_result`, and records the `ingested` timeline row.
- * A null or invalid result still writes the transcript and a disposition, so
- * the user never learns that extraction failed.
+ * to `public.ingest_call_result`, and reads the summary back. The RPC writes
+ * the `ingested` timeline row in the same transaction, so a committed ingest
+ * always carries its row and a second ingest never writes another.
+ *
+ * One unusable entry never discards the rest. This module repairs the
+ * extraction entry by entry before it sends it. A commitment whose `due` is
+ * free text keeps its row with a null `due`, and a retirement of an unknown
+ * item is dropped. Each drop is named in `p_skipped` and lands in the
+ * `ingested` row. The raw payload keeps the words the caller spoke.
+ *
+ * A null or unparseable result still writes the transcript and a disposition,
+ * so the user never learns that extraction failed.
  *
  * "Invalid" covers more than `parseStructuredResult`. The RPC casts and checks
  * several fields, and a raise there rolls the whole ingest back. The CALL-E
  * payload never changes, so such a result would fail on every retry. This
  * module therefore stays stricter than the SQL on its own. Anything the RPC
- * would reject becomes `valid=false` before the request leaves.
+ * would reject is repaired before the request leaves.
  *
  * A `slot_change_requested` is a proposal only. This module returns it and
  * never writes `slots`.
  */
 
-import { recordCallEvent } from "./events.ts";
 import { loadCallFixtures, type TranscriptTurnFixture } from "./fixtures.ts";
-import { parseStructuredResult, type StructuredCallResult } from "./result.ts";
+import {
+  parseStructuredResult,
+  type CapturedItemResult,
+  type CommitmentResult,
+  type RetiredItemResult,
+  type StructuredCallResult,
+} from "./result.ts";
 
 export type TerminalCallSource = {
   callRunId: string;
@@ -64,10 +78,12 @@ type IngestSummary = {
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const INT4_MIN = -2147483648;
 const INT4_MAX = 2147483647;
-// A strict subset of what `::timestamptz` accepts. Each accepted boundary form
-// is proven against PostgreSQL by case six of test-ingest.sh.
+// A strict subset of what `::timestamptz` accepts. The fraction may run to nine
+// digits, the separator and the zone letter may be lowercase, and a zone may
+// give hours alone. Each accepted boundary form is proven against PostgreSQL by
+// case six of test-ingest.sh.
 const TIMESTAMP_PATTERN =
-  /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,6})?)?(?:Z|[+-](\d{2}):?(\d{2}))?)?$/;
+  /^(\d{4})-(\d{2})-(\d{2})(?:[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(?:[Zz]|[+-](\d{2})(?::?(\d{2}))?)?)?$/;
 
 function requireString(value: unknown, message: string): string {
   if (typeof value !== "string" || value.trim() === "") throw new Error(message);
@@ -93,20 +109,12 @@ function requireCount(value: unknown, message: string): number {
   return value;
 }
 
+// `transcripts.turns` is jsonb, so the column stores every turn CALL-E sends,
+// a null offset and a missing speaker included. Nothing here refuses a turn.
+// Only the characters a jsonb cast refuses are replaced.
 function requireTurns(value: unknown): TranscriptTurnFixture[] {
   if (!Array.isArray(value)) throw new Error("ingest requires transcript turns");
-  return value.map((turn, index) => {
-    const record = requireObject(turn, `transcript turn ${index} must be an object`);
-    const offset = record.offset_seconds;
-    if (typeof offset !== "number" || !Number.isInteger(offset)) {
-      throw new Error(`transcript turn ${index} requires an integer offset`);
-    }
-    return {
-      offset_seconds: offset,
-      speaker: requireString(record.speaker, `transcript turn ${index} requires a speaker`),
-      text: requireString(record.text, `transcript turn ${index} requires text`),
-    };
-  });
+  return value.map(storableJson) as TranscriptTurnFixture[];
 }
 
 function terminalState(raw: Record<string, unknown>): TerminalState {
@@ -148,10 +156,49 @@ function isStorableText(value: string): boolean {
   return true;
 }
 
+/**
+ * Replaces each character jsonb refuses with U+FFFD. The rest of the string
+ * survives, so one bad character in a payload never costs the whole row. The
+ * fast path returns the same string, and almost every string arrives clean.
+ */
+function storableText(value: string): string {
+  if (isStorableText(value)) return value;
+  let clean = "";
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code === 0) {
+      clean += "\uFFFD";
+    } else if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        clean += value[index] + value[index + 1];
+        index++;
+      } else {
+        clean += "\uFFFD";
+      }
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      clean += "\uFFFD";
+    } else {
+      clean += value[index];
+    }
+  }
+  return clean;
+}
+
+/** Makes every string of a payload storable, keys included. */
+function storableJson(value: unknown): unknown {
+  if (typeof value === "string") return storableText(value);
+  if (Array.isArray(value)) return value.map(storableJson);
+  if (value === null || typeof value !== "object") return value;
+  const copy: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) copy[storableText(key)] = storableJson(entry);
+  return copy;
+}
+
 function isStorableTimestamp(value: string): boolean {
   const match = TIMESTAMP_PATTERN.exec(value);
   if (!match) return false;
-  const [, year, month, day, hour, minute, second, offsetHour, offsetMinute] = match;
+  const [, year, month, day, hour, minute, second, , offsetHour, offsetMinute] = match;
   const y = Number(year);
   const m = Number(month);
   if (y < 1 || m < 1 || m > 12) return false;
@@ -168,68 +215,27 @@ function offsetRejection(value: number, path: string): string | null {
   return value < INT4_MIN || value > INT4_MAX ? `${path} is outside the integer range` : null;
 }
 
-function itemIdRejection(value: string, path: string): string | null {
-  return UUID_PATTERN.test(value) ? null : `${path} must be a UUID`;
+/** Names every item id the result references, lowercase and deduplicated. */
+function referencedItemIds(result: StructuredCallResult): string[] {
+  const ids = [
+    ...result.retired_items.map((item) => item.item_id),
+    ...(result.commitments ?? []).map((item) => item.item_id),
+  ]
+    .filter((id) => UUID_PATTERN.test(id))
+    .map((id) => id.toLowerCase());
+  return [...new Set(ids)];
 }
 
 /**
- * Mirrors every cast and raise in `ingest_call_result` that depends on the
- * result alone. Reasons name the path, never the value, because a value may
- * hold a spoken phone number.
+ * Reads the ids this user owns. A failed read is transient, so it throws and
+ * the caller retries. An id the user does not own is dropped from the result.
  */
-function storageRejection(result: StructuredCallResult): string | null {
-  for (const [index, item] of result.captured_items.entries()) {
-    const path = `structured_result.captured_items[${index}]`;
-    if (item.text.trim() === "") return `${path}.text must not be blank`;
-    if (!isStorableText(item.text)) return `${path}.text holds characters PostgreSQL cannot store`;
-    const offset = offsetRejection(item.evidence_offset_seconds, `${path}.evidence_offset_seconds`);
-    if (offset) return offset;
-  }
-  for (const [index, item] of result.retired_items.entries()) {
-    const path = `structured_result.retired_items[${index}]`;
-    const rejection = itemIdRejection(item.item_id, `${path}.item_id`) ??
-      offsetRejection(item.evidence_offset_seconds, `${path}.evidence_offset_seconds`);
-    if (rejection) return rejection;
-  }
-  for (const [index, item] of (result.commitments ?? []).entries()) {
-    const path = `structured_result.commitments[${index}]`;
-    const rejection = itemIdRejection(item.item_id, `${path}.item_id`) ??
-      offsetRejection(item.evidence_offset_seconds, `${path}.evidence_offset_seconds`);
-    if (rejection) return rejection;
-    if (item.due !== undefined && !isStorableTimestamp(item.due)) {
-      return `${path}.due must be an ISO 8601 date or timestamp`;
-    }
-  }
-  if (result.slot_change_time !== undefined && !isStorableText(result.slot_change_time)) {
-    return "structured_result.slot_change_time holds characters PostgreSQL cannot store";
-  }
-  return null;
-}
-
-/**
- * The RPC raises when a retirement or a commitment names an item the user does
- * not own. A model can invent a well-formed id, so this read turns that into an
- * invalid result. If an item vanishes between this read and the RPC, the RPC
- * raises and the caller retries. The retry's read then rejects the result.
- */
-async function ownershipRejection(
-  result: StructuredCallResult,
+async function readOwnedItemIds(
+  ids: string[],
   userId: string,
   deps: IngestDeps,
-): Promise<string | null> {
-  const references = [
-    ...result.retired_items.map((item, index) => ({
-      id: item.item_id.toLowerCase(),
-      path: `structured_result.retired_items[${index}].item_id`,
-    })),
-    ...(result.commitments ?? []).map((item, index) => ({
-      id: item.item_id.toLowerCase(),
-      path: `structured_result.commitments[${index}].item_id`,
-    })),
-  ];
-  if (references.length === 0) return null;
-
-  const ids = [...new Set(references.map((reference) => reference.id))];
+): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
   const query = new URLSearchParams({
     select: "id",
     user_id: `eq.${userId}`,
@@ -244,26 +250,224 @@ async function ownershipRejection(
   }
   const rows = await response.json();
   if (!Array.isArray(rows)) throw new Error("item ownership lookup returned no rows");
-  const owned = new Set(
-    rows.map((row) => typeof row?.id === "string" ? row.id.toLowerCase() : ""),
-  );
-  const missing = references.find((reference) => !owned.has(reference.id));
-  return missing ? `${missing.path} does not name an item this user owns` : null;
+  return new Set(rows.map((row) => typeof row?.id === "string" ? row.id.toLowerCase() : ""));
 }
 
-const MASKABLE =
-  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d{4}-\d{2}-\d{2}(?:[T ][\d:.]+)?|\+?\d[\d ().-]{5,}\d/gi;
+type RepairedResult = {
+  structured: StructuredCallResult;
+  skipped: string[];
+};
 
-/** Removes keys and masks phone-shaped digit runs. UUIDs and dates survive. */
+/** Mirrors the casts and the ownership check on one referenced item id. */
+function itemReferenceRejection(
+  item: { item_id: string; evidence_offset_seconds: number },
+  path: string,
+  owned: Set<string>,
+): string | null {
+  if (!UUID_PATTERN.test(item.item_id)) return `${path}.item_id is not a UUID`;
+  if (!owned.has(item.item_id.toLowerCase())) {
+    return `${path}.item_id does not name an item this user owns`;
+  }
+  return offsetRejection(item.evidence_offset_seconds, `${path}.evidence_offset_seconds`);
+}
+
+/**
+ * Mirrors every cast and raise in `ingest_call_result`, then drops the entries
+ * that would make it raise and keeps every other entry. A commitment whose
+ * `due` is not a timestamp keeps its row and loses the due, because a caller
+ * who says "tomorrow after work" still made a commitment. Reasons name the path
+ * and never the value, because a value may hold a spoken phone number.
+ */
+function repairStructuredResult(result: StructuredCallResult, owned: Set<string>): RepairedResult {
+  const skipped: string[] = [];
+
+  const capturedItems: CapturedItemResult[] = [];
+  for (const [index, item] of result.captured_items.entries()) {
+    const path = `structured_result.captured_items[${index}]`;
+    const rejection = item.text.trim() === ""
+      ? `${path}.text is blank`
+      : !isStorableText(item.text)
+        ? `${path}.text holds characters PostgreSQL cannot store`
+        : offsetRejection(item.evidence_offset_seconds, `${path}.evidence_offset_seconds`);
+    if (rejection) skipped.push(rejection);
+    else capturedItems.push(item);
+  }
+
+  const retiredItems: RetiredItemResult[] = [];
+  for (const [index, item] of result.retired_items.entries()) {
+    const rejection = itemReferenceRejection(item, `structured_result.retired_items[${index}]`, owned);
+    if (rejection) skipped.push(rejection);
+    else retiredItems.push(item);
+  }
+
+  const commitments: CommitmentResult[] = [];
+  for (const [index, item] of (result.commitments ?? []).entries()) {
+    const path = `structured_result.commitments[${index}]`;
+    const rejection = itemReferenceRejection(item, path, owned);
+    if (rejection) {
+      skipped.push(rejection);
+      continue;
+    }
+    if (item.due !== undefined && !isStorableTimestamp(item.due)) {
+      skipped.push(`${path}.due is not a timestamp`);
+      commitments.push({ item_id: item.item_id, evidence_offset_seconds: item.evidence_offset_seconds });
+      continue;
+    }
+    commitments.push(item);
+  }
+
+  const structured: StructuredCallResult = { captured_items: capturedItems, retired_items: retiredItems };
+  if (result.commitments !== undefined) structured.commitments = commitments;
+  if (result.slot_change_requested !== undefined) structured.slot_change_requested = result.slot_change_requested;
+  if (result.slot_change_time !== undefined) {
+    if (isStorableText(result.slot_change_time)) structured.slot_change_time = result.slot_change_time;
+    else skipped.push("structured_result.slot_change_time holds characters PostgreSQL cannot store");
+  }
+  if (result.mood !== undefined) structured.mood = result.mood;
+
+  return { structured, skipped };
+}
+
+// A uuid and a timestamp are not phone numbers, so this module keeps the
+// digits of each value it would store. A uuid always keeps them, because
+// thirty two hex digits run longer than any phone. A timestamp keeps them
+// only while every fragment of its run holds seven or more digits. A run
+// where every fragment is that long holds a stored value beside whole
+// numbers, so the module keeps the value. Every other run could be one
+// number, so its fragments mask and the timestamps in it mask too.
+//
+// A phone number is a run of seven or more decimal digits. Two digits join
+// when the gap between them holds at most four characters. A gap may hold any
+// code point that is not a decimal digit, because the separator class
+// excludes no category. So a space, a hyphen, an en dash, an apostrophe, a
+// curly apostrophe, a modifier letter apostrophe, an okina, an Arabic
+// tatweel, a bracket, a colon, a middle dot, a backslash and a letter all
+// join the groups, and no code point category can break a run. The digit
+// class is `\p{Nd}` and not `\d`, so fullwidth digits mask in full. What the
+// pattern does not match: a run shorter than seven digits, and a group that a
+// gap of five characters or more separates from the rest of its number.
+//
+// The pattern cannot tell a number from a count. It also masks an integer of
+// seven digits or more, a version, a clock time with a fraction, decimal
+// money, a plain fraction, a comma joined list of single digits, a compact
+// stamp, a dotted quad, a card grouping written in fours, and a date-shaped
+// run this module does not store as a timestamp. Two stored values written
+// side by side mask as well, because that run holds a zero digit fragment.
+// Every other digit of a run masks, one fragment at a time, and what survives
+// is a stored value plus the separators around it.
+//
+// The widest gap that still joins two groups of one number.
+const PHONE_GAP = 4;
+const UUID_SCAN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const TIMESTAMP_SCAN =
+  /\d{4}-\d{2}-\d{2}(?:[Tt ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:[Zz]|[+-]\d{2}:?\d{2})?)?/g;
+const PHONE_SCAN = new RegExp(
+  `[+\\uFF0B]?\\p{Nd}(?:[^\\p{Nd}]{0,${PHONE_GAP}}\\p{Nd}){6,}`,
+  "gu",
+);
+const DIGIT_SCAN = /\p{Nd}/gu;
+
+type ValueKind = "uuid" | "timestamp";
+
+/** A value this module would store, and where the text holds it. */
+type ValueSpan = { start: number; end: number; kind: ValueKind };
+
+/** A value inside one run, with its offset measured from the run's start. */
+type RunSpan = { start: number; end: number; kind: ValueKind };
+
+/** Every uuid and every stored timestamp of the text, in order. */
+function valueSpans(text: string): ValueSpan[] {
+  const spans: ValueSpan[] = [];
+  for (const match of text.matchAll(UUID_SCAN)) {
+    const start = match.index ?? 0;
+    spans.push({ start, end: start + match[0].length, kind: "uuid" });
+  }
+  for (const match of text.matchAll(TIMESTAMP_SCAN)) {
+    if (!isStorableTimestamp(match[0])) continue;
+    const start = match.index ?? 0;
+    spans.push({ start, end: start + match[0].length, kind: "timestamp" });
+  }
+  return spans.sort((left, right) => left.start - right.start);
+}
+
+function digitCount(fragment: string): number {
+  return fragment.match(DIGIT_SCAN)?.length ?? 0;
+}
+
+/** Replaces the digits of one fragment with the mask, keeping its separators. */
+function maskFragment(fragment: string): string {
+  const digits = [...fragment.matchAll(DIGIT_SCAN)];
+  if (digits.length === 0) return fragment;
+  const start = digits[0].index ?? 0;
+  const last = digits[digits.length - 1];
+  const end = (last.index ?? 0) + last[0].length;
+  return `${fragment.slice(0, start)}[masked number]${fragment.slice(end)}`;
+}
+
+/**
+ * Masks one phone-shaped run. A uuid always keeps its digits. A timestamp
+ * keeps them only while every fragment of the run holds seven or more digits,
+ * so a date followed by a short remainder masks together with the number. A
+ * run of two stored values with only separators between them holds a zero
+ * digit fragment, which is too short, so a timestamp in that run masks too.
+ */
+function maskRun(run: string, start: number, values: ValueSpan[]): string {
+  const end = start + run.length;
+  const inside: RunSpan[] = values
+    .filter((value) => value.start < end && value.end > start)
+    .map((value) => ({
+      kind: value.kind,
+      start: Math.max(value.start, start) - start,
+      end: Math.min(value.end, end) - start,
+    }));
+  if (inside.length === 0) return "[masked number]";
+
+  const fragments: number[] = [];
+  let cursor = 0;
+  for (const value of inside) {
+    if (value.start > cursor) fragments.push(digitCount(run.slice(cursor, value.start)));
+    cursor = Math.max(cursor, value.end);
+  }
+  if (cursor < run.length) fragments.push(digitCount(run.slice(cursor)));
+  const ambiguous = fragments.some((digits) => digits < 7);
+
+  const kept: RunSpan[] = [];
+  for (const value of inside) {
+    if (value.kind === "timestamp" && ambiguous) continue;
+    if (kept.length > 0 && value.start < kept[kept.length - 1].end) continue;
+    kept.push(value);
+  }
+  if (kept.length === 0) return "[masked number]";
+
+  let masked = "";
+  let at = 0;
+  for (const value of kept) {
+    masked += maskFragment(run.slice(at, value.start)) + run.slice(value.start, value.end);
+    at = value.end;
+  }
+  return masked + maskFragment(run.slice(at));
+}
+
+/** Masks every phone-shaped run of the text, keeping the value digits in it. */
+function maskPhones(text: string): string {
+  const values = valueSpans(text);
+  let masked = "";
+  let cursor = 0;
+  for (const match of text.matchAll(PHONE_SCAN)) {
+    const start = match.index ?? 0;
+    masked += text.slice(cursor, start) + maskRun(match[0], start, values);
+    cursor = start + match[0].length;
+  }
+  return masked + text.slice(cursor);
+}
+
+/** Removes keys and masks phone-shaped digit runs. `maskRun` says what keeps its digits. */
 function scrub(text: string, serviceRoleKey: string): string {
   let clean = serviceRoleKey ? text.split(serviceRoleKey).join("[redacted key]") : text;
   clean = clean
     .replace(/eyJ[\w-]+\.[\w-]+\.[\w-]+/g, "[redacted key]")
     .replace(/sb_(?:secret|publishable)_[\w-]+/g, "[redacted key]");
-  return clean.replace(MASKABLE, (match) => {
-    if (UUID_PATTERN.test(match) || /^\d{4}-\d{2}-\d{2}/.test(match)) return match;
-    return match.replace(/\D/g, "").length >= 7 ? "[masked number]" : match;
-  });
+  return maskPhones(clean);
 }
 
 /** Names the PostgREST cause of a failed request, safe to log or throw. */
@@ -283,12 +487,14 @@ async function failureCause(response: Response, serviceRoleKey: string): Promise
   } catch {
     // A non-JSON body is kept as text.
   }
-  // Each part is scrubbed alone, so digits from two fields never join into
-  // one phone-shaped run. The status is ours and needs no scrubbing.
-  const detail = parts
-    .filter((part): part is string => typeof part === "string" && part !== "")
-    .map((part) => scrub(part, serviceRoleKey))
-    .join(" ");
+  // The caller reads one string, so the parts are joined before they are
+  // scrubbed. Digits from two fields then mask as one run instead of meeting
+  // in the returned text. The status is ours, three digits that no response
+  // changes, so the module appends it after the masker has run.
+  const detail = scrub(
+    parts.filter((part): part is string => typeof part === "string" && part !== "").join(" "),
+    serviceRoleKey,
+  );
   return (detail ? `HTTP ${response.status} ${detail}` : `HTTP ${response.status}`).slice(0, 500);
 }
 
@@ -310,57 +516,6 @@ function readSummary(value: unknown): IngestSummary {
   };
 }
 
-function arrayLength(value: unknown): number {
-  return Array.isArray(value) ? value.length : 0;
-}
-
-/**
- * The first ingest writes its `ingested` row after the transaction commits. A
- * failure in that window leaves the run ingested with no timeline row. A retry
- * lands here and writes the missing row from the committed rows.
- */
-async function backfillIngestedEvent(
-  runId: string,
-  calleCallId: string | null,
-  deps: IngestDeps,
-): Promise<void> {
-  const query = new URLSearchParams({
-    id: `eq.${runId}`,
-    select: "state,disposition,results(structured),item_mentions(id),commitments(id),call_events(id)",
-    "call_events.kind": "eq.ingested",
-  });
-  const response = await deps.fetch(`${apiBase(deps.apiUrl)}/rest/v1/call_runs?${query}`, {
-    method: "GET",
-    headers: readHeaders(deps.serviceRoleKey),
-  });
-  if (!response.ok) {
-    throw new Error(`ingested event lookup failed: ${await failureCause(response, deps.serviceRoleKey)}`);
-  }
-  const rows = await response.json();
-  if (!Array.isArray(rows) || rows.length !== 1) throw new Error("ingested event lookup found no run");
-  const run = requireObject(rows[0], "ingested event lookup found no run");
-  if (arrayLength(run.call_events) > 0) return;
-
-  const results = run.results !== null && typeof run.results === "object"
-    ? run.results as Record<string, unknown>
-    : {};
-  const structured = results.structured !== null && typeof results.structured === "object"
-    ? results.structured as Record<string, unknown>
-    : {};
-  // The RPC inserts one item per captured entry and retires one per retired
-  // entry, or raises. The committed arrays therefore equal those counts.
-  await recordCallEvent(runId, "ingested", {
-    call_run_id: runId,
-    calle_call_id: calleCallId,
-    state: typeof run.state === "string" ? run.state : null,
-    disposition: typeof run.disposition === "string" ? run.disposition : null,
-    item_count: arrayLength(structured.captured_items),
-    mention_count: arrayLength(run.item_mentions),
-    retirement_count: arrayLength(structured.retired_items),
-    commitment_count: arrayLength(run.commitments),
-    backfilled: true,
-  }, deps);
-}
 
 export function depsFromEnv(
   getEnv: (name: string) => string | undefined = (name) => Deno.env.get(name),
@@ -387,19 +542,23 @@ export async function ingestTerminalRun(
   const runId = requireString(input.callRunId, "ingest requires a call run id");
   const userId = requireString(input.userId, "ingest requires a user id");
   const raw = requireObject(input.raw, "ingest requires a terminal call payload");
+  // The turns are sanitised by `requireTurns`. The raw payload is the whole
+  // CALL-E call, and jsonb refuses U+0000 and unpaired surrogates, so one bad
+  // character inside it would poison every later retry. Replace those, never
+  // the field.
   const turns = requireTurns(input.transcriptTurns);
   const state = terminalState(raw);
+  const storableRaw = storableJson(raw);
 
   const parsed = parseStructuredResult(input.structuredResult ?? null);
   let structured = parsed.result;
-  let reason = parsed.reason;
+  const reason = parsed.reason;
+  let skipped: string[] = [];
   if (structured !== null) {
-    const rejection = storageRejection(structured) ??
-      await ownershipRejection(structured, userId, deps);
-    if (rejection !== null) {
-      structured = null;
-      reason = rejection;
-    }
+    const owned = await readOwnedItemIds(referencedItemIds(structured), userId, deps);
+    const repaired = repairStructuredResult(structured, owned);
+    structured = repaired.structured;
+    skipped = repaired.skipped;
   }
   const valid = structured !== null;
   const disposition = dispositionFor(state, valid);
@@ -409,7 +568,6 @@ export async function ingestTerminalRun(
   const completedAt = typeof raw.completed_at === "string" && isStorableTimestamp(raw.completed_at)
     ? raw.completed_at
     : null;
-  const calleCallId = typeof raw.id === "string" && raw.id.trim() !== "" ? raw.id : null;
 
   const response = await deps.fetch(`${apiBase(deps.apiUrl)}/rest/v1/rpc/ingest_call_result`, {
     method: "POST",
@@ -421,7 +579,7 @@ export async function ingestTerminalRun(
       p_call_run_id: runId,
       p_user_id: userId,
       p_transcript_turns: turns,
-      p_raw: raw,
+      p_raw: storableRaw,
       p_structured: structured,
       p_result_valid: valid,
       p_result_error: reason,
@@ -429,6 +587,7 @@ export async function ingestTerminalRun(
       p_disposition: disposition,
       p_mood: structured?.mood ?? null,
       p_completed_at: completedAt,
+      p_skipped: skipped,
     }),
   });
   if (!response.ok) {
@@ -436,21 +595,6 @@ export async function ingestTerminalRun(
   }
 
   const summary = readSummary(await response.json());
-
-  if (summary.already_ingested) {
-    await backfillIngestedEvent(runId, calleCallId, deps);
-  } else {
-    await recordCallEvent(runId, "ingested", {
-      call_run_id: runId,
-      calle_call_id: calleCallId,
-      state,
-      disposition: summary.disposition,
-      item_count: summary.counts.items,
-      mention_count: summary.counts.mentions,
-      retirement_count: summary.counts.retirements,
-      commitment_count: summary.counts.commitments,
-    }, deps);
-  }
 
   return {
     alreadyIngested: summary.already_ingested,
@@ -479,18 +623,16 @@ if (typeof testFn === "function") {
 
   type MockState = {
     rpcBodies: Record<string, unknown>[];
-    events: Record<string, unknown>[];
     summary: () => IngestSummary;
     ownedItems?: string[];
     itemLookups?: URL[];
     rpcFailure?: () => Response | null;
-    eventFailure?: () => boolean;
-    runRow?: (events: Record<string, unknown>[]) => Record<string, unknown>;
-    runLookups?: URL[];
   };
 
   // Every mock branches on URL and method. Anything else throws, so a stray
-  // request fails the test instead of passing silently.
+  // request fails the test instead of passing silently. Ingestion posts no
+  // timeline row of its own now, and a retry reads no run row, so both paths
+  // are deliberately unreachable here.
   const mock = (state: MockState): typeof fetch =>
   (input, init) => {
     const request = new Request(input, init);
@@ -507,24 +649,8 @@ if (typeof testFn === "function") {
       state.itemLookups?.push(url);
       return Promise.resolve(Response.json(state.ownedItems.map((id) => ({ id }))));
     }
-    if (url.pathname === "/rest/v1/call_runs") {
-      if (request.method !== "GET" || !state.runRow) throw new Error(`unexpected ${request.method} ${request.url}`);
-      state.runLookups?.push(url);
-      return Promise.resolve(Response.json([state.runRow(state.events)]));
-    }
-    if (url.pathname === "/rest/v1/call_events") {
-      if (request.method !== "POST") throw new Error(`unexpected ${request.method} ${request.url}`);
-      return request.json().then((row) => {
-        if (state.eventFailure?.()) return new Response("{}", { status: 503 });
-        state.events.push(row as Record<string, unknown>);
-        return new Response(null, { status: 201 });
-      });
-    }
     throw new Error(`unexpected request ${request.method} ${request.url}`);
   };
-
-  const ingestedEvents = (events: Record<string, unknown>[]) =>
-    events.filter((event) => event.kind === "ingested").map((_, index) => ({ id: index + 1 }));
 
   testFn("the completed fixture produces items, mentions, retirements and commitments", async () => {
     const { completed } = await loadCallFixtures();
@@ -538,7 +664,6 @@ if (typeof testFn === "function") {
     };
     const state: MockState = {
       rpcBodies: [],
-      events: [],
       ownedItems: [itemId],
       itemLookups: [],
       summary: () => ({
@@ -600,17 +725,10 @@ if (typeof testFn === "function") {
     }
     if (result.slotChangeRequested !== "no") throw new Error("the slot proposal was not surfaced");
 
-    if (state.events.length !== 1) throw new Error("ingest must record exactly one timeline row");
-    const event = state.events[0];
-    if (event.kind !== "ingested" || event.call_run_id !== runId) {
-      throw new Error("the timeline row lost its run or its kind");
-    }
-    const detail = event.detail as Record<string, unknown>;
-    if (detail.state !== "completed" || detail.calle_call_id !== completed.id) {
-      throw new Error("the timeline row must name the call and its state");
-    }
-    if (detail.item_count !== 1 || detail.mention_count !== 3 || detail.retirement_count !== 1 || detail.commitment_count !== 1) {
-      throw new Error("the timeline row must carry the counts");
+    // The RPC writes the timeline row inside its own transaction. The mock
+    // throws on any call_events request, so a post-commit write fails here.
+    if (JSON.stringify(body.p_skipped) !== "[]") {
+      throw new Error("a clean extraction skipped nothing, so it must report nothing");
     }
   });
 
@@ -621,7 +739,6 @@ if (typeof testFn === "function") {
     const fixture = JSON.parse(raw) as { body: { id: string; data: { id: string } } };
     const state: MockState = {
       rpcBodies: [],
-      events: [],
       summary: () => ({
         already_ingested: false,
         disposition: "answered_no_result",
@@ -660,15 +777,14 @@ if (typeof testFn === "function") {
     if (result.disposition !== "answered_no_result" || result.counts.items !== 0 || result.counts.mentions !== 0) {
       throw new Error("an invalid result must leave no partial state");
     }
-    if (state.events.length !== 1 || (state.events[0].detail as Record<string, unknown>).disposition !== "answered_no_result") {
-      throw new Error("the timeline must record the answered_no_result disposition");
+    if (JSON.stringify(state.rpcBodies[0].p_skipped) !== "[]") {
+      throw new Error("an invalid result skips nothing, because it carries nothing");
     }
   });
 
   testFn("a retirement without an evidence offset is rejected", async () => {
     const state: MockState = {
       rpcBodies: [],
-      events: [],
       summary: () => ({
         already_ingested: false,
         disposition: "answered_no_result",
@@ -698,115 +814,315 @@ if (typeof testFn === "function") {
     }
   });
 
-  // Each case parses cleanly but would make `ingest_call_result` raise. The
-  // matching SQL raise is proven by case seven of test-ingest.sh.
-  const sqlRejected: { name: string; result: Record<string, unknown>; owned?: string[]; reason: string }[] = [
+  const countOf = (structured: Record<string, unknown>, key: string): number =>
+    Array.isArray(structured[key]) ? (structured[key] as unknown[]).length : 0;
+
+  // One unusable entry never discards the rest. Each case parses cleanly and
+  // holds one entry `ingest_call_result` would raise on. Every other entry
+  // still reaches the RPC, and the drop is named in `p_skipped`. Case seven of
+  // test-ingest.sh proves the same values raise when nothing repairs them.
+  const repaired: {
+    name: string;
+    result: Record<string, unknown>;
+    owned?: string[];
+    skipped: string[];
+    expect: (structured: Record<string, unknown>) => void;
+  }[] = [
     {
       name: "a free-text due",
-      result: { captured_items: [], retired_items: [], commitments: [{ item_id: itemId, due: "next Tuesday after work", evidence_offset_seconds: 80 }] },
-      reason: "structured_result.commitments[0].due must be an ISO 8601 date or timestamp",
+      result: {
+        captured_items: [
+          { text: "renew the passport", evidence_offset_seconds: 44 },
+          { text: "book the dentist", evidence_offset_seconds: 62 },
+        ],
+        retired_items: [{ item_id: itemId, evidence_offset_seconds: 70 }],
+        commitments: [{ item_id: itemId, due: "next Tuesday after work", evidence_offset_seconds: 80 }],
+      },
+      skipped: ["structured_result.commitments[0].due is not a timestamp"],
+      expect: (structured) => {
+        const commitments = structured.commitments as Record<string, unknown>[];
+        if (countOf(structured, "captured_items") !== 2 || countOf(structured, "retired_items") !== 1) {
+          throw new Error("a free-text due discarded the rest of the extraction");
+        }
+        if (commitments.length !== 1 || "due" in commitments[0]) {
+          throw new Error("a free-text due must keep its commitment with no due");
+        }
+        if (commitments[0].evidence_offset_seconds !== 80) {
+          throw new Error("a repaired commitment must keep its evidence offset");
+        }
+      },
     },
     {
       name: "a year-only due",
-      result: { captured_items: [], retired_items: [], commitments: [{ item_id: itemId, due: "2026", evidence_offset_seconds: 80 }] },
-      reason: "structured_result.commitments[0].due must be an ISO 8601 date or timestamp",
+      result: {
+        captured_items: [{ text: "book the dentist", evidence_offset_seconds: 62 }],
+        retired_items: [],
+        commitments: [{ item_id: itemId, due: "2026", evidence_offset_seconds: 80 }],
+      },
+      skipped: ["structured_result.commitments[0].due is not a timestamp"],
+      expect: (structured) => {
+        const commitments = structured.commitments as Record<string, unknown>[];
+        if (countOf(structured, "captured_items") !== 1 || commitments.length !== 1 || "due" in commitments[0]) {
+          throw new Error("a year-only due must keep its commitment and the captured item");
+        }
+      },
     },
     {
       name: "an empty due",
-      result: { captured_items: [], retired_items: [], commitments: [{ item_id: itemId, due: "", evidence_offset_seconds: 80 }] },
-      reason: "structured_result.commitments[0].due must be an ISO 8601 date or timestamp",
+      result: {
+        captured_items: [{ text: "book the dentist", evidence_offset_seconds: 62 }],
+        retired_items: [],
+        commitments: [{ item_id: itemId, due: "", evidence_offset_seconds: 80 }],
+      },
+      skipped: ["structured_result.commitments[0].due is not a timestamp"],
+      expect: (structured) => {
+        const commitments = structured.commitments as Record<string, unknown>[];
+        if (countOf(structured, "captured_items") !== 1 || commitments.length !== 1 || "due" in commitments[0]) {
+          throw new Error("an empty due must keep its commitment and the captured item");
+        }
+      },
     },
     {
       name: "an impossible calendar due",
-      result: { captured_items: [], retired_items: [], commitments: [{ item_id: itemId, due: "2026-02-30T10:00:00Z", evidence_offset_seconds: 80 }] },
-      reason: "structured_result.commitments[0].due must be an ISO 8601 date or timestamp",
+      result: {
+        captured_items: [{ text: "book the dentist", evidence_offset_seconds: 62 }],
+        retired_items: [],
+        commitments: [{ item_id: itemId, due: "2026-02-30T10:00:00Z", evidence_offset_seconds: 80 }],
+      },
+      skipped: ["structured_result.commitments[0].due is not a timestamp"],
+      expect: (structured) => {
+        const commitments = structured.commitments as Record<string, unknown>[];
+        if (countOf(structured, "captured_items") !== 1 || commitments.length !== 1 || "due" in commitments[0]) {
+          throw new Error("an impossible calendar due must keep its commitment and the captured item");
+        }
+      },
     },
     {
       name: "a due in year zero",
-      result: { captured_items: [], retired_items: [], commitments: [{ item_id: itemId, due: "0000-09-15T10:00:00Z", evidence_offset_seconds: 80 }] },
-      reason: "structured_result.commitments[0].due must be an ISO 8601 date or timestamp",
+      result: {
+        captured_items: [{ text: "book the dentist", evidence_offset_seconds: 62 }],
+        retired_items: [],
+        commitments: [{ item_id: itemId, due: "0000-09-15T10:00:00Z", evidence_offset_seconds: 80 }],
+      },
+      skipped: ["structured_result.commitments[0].due is not a timestamp"],
+      expect: (structured) => {
+        const commitments = structured.commitments as Record<string, unknown>[];
+        if (countOf(structured, "captured_items") !== 1 || commitments.length !== 1 || "due" in commitments[0]) {
+          throw new Error("a due in year zero must keep its commitment and the captured item");
+        }
+      },
     },
     {
       name: "a due with an out-of-range zone",
-      result: { captured_items: [], retired_items: [], commitments: [{ item_id: itemId, due: "2026-09-15T10:00:00+16:00", evidence_offset_seconds: 80 }] },
-      reason: "structured_result.commitments[0].due must be an ISO 8601 date or timestamp",
+      result: {
+        captured_items: [{ text: "book the dentist", evidence_offset_seconds: 62 }],
+        retired_items: [],
+        commitments: [{ item_id: itemId, due: "2026-09-15T10:00:00+16:00", evidence_offset_seconds: 80 }],
+      },
+      skipped: ["structured_result.commitments[0].due is not a timestamp"],
+      expect: (structured) => {
+        const commitments = structured.commitments as Record<string, unknown>[];
+        if (countOf(structured, "captured_items") !== 1 || commitments.length !== 1 || "due" in commitments[0]) {
+          throw new Error("an out-of-range zone must keep its commitment and the captured item");
+        }
+      },
     },
     {
       name: "a paraphrased retired item id",
-      result: { captured_items: [], retired_items: [{ item_id: "the museum one", evidence_offset_seconds: 62 }] },
-      reason: "structured_result.retired_items[0].item_id must be a UUID",
+      result: {
+        captured_items: [{ text: "book the dentist", evidence_offset_seconds: 62 }],
+        retired_items: [{ item_id: "the museum one", evidence_offset_seconds: 80 }],
+      },
+      skipped: ["structured_result.retired_items[0].item_id is not a UUID"],
+      expect: (structured) => {
+        if (countOf(structured, "captured_items") !== 1 || countOf(structured, "retired_items") !== 0) {
+          throw new Error("a paraphrased retired id must drop that retirement alone");
+        }
+      },
     },
     {
       name: "a paraphrased commitment item id",
-      result: { captured_items: [], retired_items: [], commitments: [{ item_id: "passport", evidence_offset_seconds: 80 }] },
-      reason: "structured_result.commitments[0].item_id must be a UUID",
+      result: {
+        captured_items: [{ text: "book the dentist", evidence_offset_seconds: 62 }],
+        retired_items: [],
+        commitments: [{ item_id: "passport", evidence_offset_seconds: 80 }],
+      },
+      skipped: ["structured_result.commitments[0].item_id is not a UUID"],
+      expect: (structured) => {
+        if (countOf(structured, "captured_items") !== 1 || countOf(structured, "commitments") !== 0) {
+          throw new Error("a paraphrased commitment id must drop that commitment alone");
+        }
+      },
     },
     {
       name: "a blank captured text",
-      result: { captured_items: [{ text: "   ", evidence_offset_seconds: 44 }], retired_items: [] },
-      reason: "structured_result.captured_items[0].text must not be blank",
+      result: {
+        captured_items: [
+          { text: "   ", evidence_offset_seconds: 44 },
+          { text: "book the dentist", evidence_offset_seconds: 62 },
+        ],
+        retired_items: [],
+      },
+      skipped: ["structured_result.captured_items[0].text is blank"],
+      expect: (structured) => {
+        const captured = structured.captured_items as Record<string, unknown>[];
+        if (captured.length !== 1 || captured[0].text !== "book the dentist") {
+          throw new Error("a blank captured text must drop that item alone");
+        }
+      },
     },
     {
       name: "an empty captured text",
-      result: { captured_items: [{ text: "", evidence_offset_seconds: 44 }], retired_items: [] },
-      reason: "structured_result.captured_items[0].text must not be blank",
+      result: {
+        captured_items: [
+          { text: "", evidence_offset_seconds: 44 },
+          { text: "book the dentist", evidence_offset_seconds: 62 },
+        ],
+        retired_items: [],
+      },
+      skipped: ["structured_result.captured_items[0].text is blank"],
+      expect: (structured) => {
+        const captured = structured.captured_items as Record<string, unknown>[];
+        if (captured.length !== 1 || captured[0].text !== "book the dentist") {
+          throw new Error("an empty captured text must drop that item alone");
+        }
+      },
     },
     {
       name: "a captured text holding U+0000",
-      result: { captured_items: [{ text: "pass\u0000port", evidence_offset_seconds: 44 }], retired_items: [] },
-      reason: "structured_result.captured_items[0].text holds characters PostgreSQL cannot store",
+      result: {
+        captured_items: [
+          { text: "pass\u0000port", evidence_offset_seconds: 44 },
+          { text: "book the dentist", evidence_offset_seconds: 62 },
+        ],
+        retired_items: [],
+      },
+      skipped: ["structured_result.captured_items[0].text holds characters PostgreSQL cannot store"],
+      expect: (structured) => {
+        const captured = structured.captured_items as Record<string, unknown>[];
+        if (captured.length !== 1 || captured[0].text !== "book the dentist") {
+          throw new Error("an unstorable captured text must drop that item alone");
+        }
+      },
     },
     {
       name: "a captured text holding a lone surrogate",
-      result: { captured_items: [{ text: "pass\ud800port", evidence_offset_seconds: 44 }], retired_items: [] },
-      reason: "structured_result.captured_items[0].text holds characters PostgreSQL cannot store",
+      result: {
+        captured_items: [
+          { text: "pass\ud800port", evidence_offset_seconds: 44 },
+          { text: "book the dentist", evidence_offset_seconds: 62 },
+        ],
+        retired_items: [],
+      },
+      skipped: ["structured_result.captured_items[0].text holds characters PostgreSQL cannot store"],
+      expect: (structured) => {
+        const captured = structured.captured_items as Record<string, unknown>[];
+        if (captured.length !== 1 || captured[0].text !== "book the dentist") {
+          throw new Error("a lone surrogate must drop that item alone");
+        }
+      },
     },
     {
       name: "a slot change time holding U+0000",
-      result: { captured_items: [], retired_items: [], slot_change_requested: "yes", slot_change_time: "7\u0000am" },
-      reason: "structured_result.slot_change_time holds characters PostgreSQL cannot store",
+      result: {
+        captured_items: [],
+        retired_items: [],
+        slot_change_requested: "yes",
+        slot_change_time: "7\u0000am",
+      },
+      skipped: ["structured_result.slot_change_time holds characters PostgreSQL cannot store"],
+      expect: (structured) => {
+        if (structured.slot_change_requested !== "yes" || "slot_change_time" in structured) {
+          throw new Error("an unstorable slot change time must never cost the proposal");
+        }
+      },
     },
     {
       name: "a captured offset above the integer range",
-      result: { captured_items: [{ text: "Continental", evidence_offset_seconds: 2147483648 }], retired_items: [] },
-      reason: "structured_result.captured_items[0].evidence_offset_seconds is outside the integer range",
+      result: {
+        captured_items: [
+          { text: "Continental", evidence_offset_seconds: 2147483648 },
+          { text: "book the dentist", evidence_offset_seconds: 62 },
+        ],
+        retired_items: [],
+      },
+      skipped: ["structured_result.captured_items[0].evidence_offset_seconds is outside the integer range"],
+      expect: (structured) => {
+        const captured = structured.captured_items as Record<string, unknown>[];
+        if (captured.length !== 1 || captured[0].text !== "book the dentist") {
+          throw new Error("an out-of-range offset must drop that item alone");
+        }
+      },
     },
     {
       name: "a retired offset written as 1e21",
-      result: { captured_items: [], retired_items: [{ item_id: itemId, evidence_offset_seconds: 1e21 }] },
-      reason: "structured_result.retired_items[0].evidence_offset_seconds is outside the integer range",
+      result: {
+        captured_items: [{ text: "book the dentist", evidence_offset_seconds: 62 }],
+        retired_items: [{ item_id: itemId, evidence_offset_seconds: 1e21 }],
+      },
+      skipped: ["structured_result.retired_items[0].evidence_offset_seconds is outside the integer range"],
+      expect: (structured) => {
+        if (countOf(structured, "captured_items") !== 1 || countOf(structured, "retired_items") !== 0) {
+          throw new Error("an out-of-range retired offset must drop that retirement alone");
+        }
+      },
     },
     {
       name: "a commitment offset below the integer range",
-      result: { captured_items: [], retired_items: [], commitments: [{ item_id: itemId, evidence_offset_seconds: -2147483649 }] },
-      reason: "structured_result.commitments[0].evidence_offset_seconds is outside the integer range",
+      result: {
+        captured_items: [{ text: "book the dentist", evidence_offset_seconds: 62 }],
+        retired_items: [],
+        commitments: [{ item_id: itemId, evidence_offset_seconds: -2147483649 }],
+      },
+      skipped: ["structured_result.commitments[0].evidence_offset_seconds is outside the integer range"],
+      expect: (structured) => {
+        if (countOf(structured, "captured_items") !== 1 || countOf(structured, "commitments") !== 0) {
+          throw new Error("an out-of-range commitment offset must drop that commitment alone");
+        }
+      },
     },
     {
       name: "a retirement of an item the user does not own",
-      result: { captured_items: [], retired_items: [{ item_id: itemId, evidence_offset_seconds: 62 }] },
+      result: {
+        captured_items: [{ text: "book the dentist", evidence_offset_seconds: 62 }],
+        retired_items: [{ item_id: itemId, evidence_offset_seconds: 80 }],
+      },
       owned: [],
-      reason: "structured_result.retired_items[0].item_id does not name an item this user owns",
+      skipped: ["structured_result.retired_items[0].item_id does not name an item this user owns"],
+      expect: (structured) => {
+        if (countOf(structured, "captured_items") !== 1 || countOf(structured, "retired_items") !== 0) {
+          throw new Error("a foreign retirement must drop that retirement alone");
+        }
+      },
     },
     {
       name: "a commitment on an item the user does not own",
-      result: { captured_items: [], retired_items: [], commitments: [{ item_id: "44444444-4444-4444-8444-444444444444", evidence_offset_seconds: 80 }] },
+      result: {
+        captured_items: [{ text: "book the dentist", evidence_offset_seconds: 62 }],
+        retired_items: [],
+        commitments: [{ item_id: "44444444-4444-4444-8444-444444444444", evidence_offset_seconds: 80 }],
+      },
       owned: [itemId],
-      reason: "structured_result.commitments[0].item_id does not name an item this user owns",
+      skipped: ["structured_result.commitments[0].item_id does not name an item this user owns"],
+      expect: (structured) => {
+        if (countOf(structured, "captured_items") !== 1 || countOf(structured, "commitments") !== 0) {
+          throw new Error("a foreign commitment must drop that commitment alone");
+        }
+      },
     },
   ];
 
-  testFn("a parsed result the RPC would reject becomes answered_no_result", async () => {
-    for (const testCase of sqlRejected) {
+  testFn("one bad entry never discards the rest of the extraction", async () => {
+    for (const testCase of repaired) {
       if (parseStructuredResult(testCase.result).result === null) {
         throw new Error(`${testCase.name} must pass the parser, or the case proves nothing`);
       }
       const state: MockState = {
         rpcBodies: [],
-        events: [],
         ownedItems: testCase.owned ?? [itemId],
         summary: () => ({
           already_ingested: false,
-          disposition: "answered_no_result",
+          disposition: "answered_extracted",
           counts: zeroCounts,
           slot_change_requested: null,
         }),
@@ -814,21 +1130,25 @@ if (typeof testFn === "function") {
       await ingestTerminalRun({
         callRunId: runId,
         userId,
-        raw: { id: "call_sql_rejected", status: "completed" },
+        raw: { id: "call_repaired", status: "completed" },
         transcriptTurns: [{ offset_seconds: 0, speaker: "agent", text: "Hello" }],
         structuredResult: testCase.result,
       }, deps(mock(state)));
 
       const body = state.rpcBodies[0];
-      if (body?.p_structured !== null || body.p_result_valid !== false || body.p_mood !== null) {
-        throw new Error(`${testCase.name} reached the RPC as a valid result`);
+      if (body?.p_result_valid !== true || body.p_structured === null || body.p_mood !== null) {
+        throw new Error(`${testCase.name} did not reach the RPC as a valid result`);
       }
-      if (body.p_result_error !== testCase.reason) {
-        throw new Error(`${testCase.name} gave reason ${String(body.p_result_error)}`);
+      if (body.p_result_error !== null) {
+        throw new Error(`${testCase.name} carried the reason ${String(body.p_result_error)}`);
       }
-      if (body.p_disposition !== "answered_no_result" || JSON.stringify(body.p_transcript_turns).length < 3) {
-        throw new Error(`${testCase.name} lost its disposition or its transcript`);
+      if (body.p_disposition !== "answered_extracted") {
+        throw new Error(`${testCase.name} lost its disposition`);
       }
+      if (JSON.stringify(body.p_skipped) !== JSON.stringify(testCase.skipped)) {
+        throw new Error(`${testCase.name} reported ${JSON.stringify(body.p_skipped)}`);
+      }
+      testCase.expect(body.p_structured as Record<string, unknown>);
     }
   });
 
@@ -841,10 +1161,13 @@ if (typeof testFn === "function") {
       "2026-09-15 10:00:00.123456+15:59",
       "2028-02-29T23:59:59-0530",
       "0001-01-01T00:00:00Z",
+      "2026-09-15T10:00:00.123456789Z",
+      "2026-09-15t10:00:00z",
+      "2026-09-15T10:00+05",
+      "2026-09-15 10:00:00+0530",
     ];
     const state: MockState = {
       rpcBodies: [],
-      events: [],
       ownedItems: [itemId],
       summary: () => ({
         already_ingested: false,
@@ -874,6 +1197,13 @@ if (typeof testFn === "function") {
     if (body.p_completed_at !== null) {
       throw new Error("an unparseable completed_at must fall back to null, never reach the cast");
     }
+    if (JSON.stringify(body.p_skipped) !== "[]") {
+      throw new Error("a storable result must repair nothing");
+    }
+    const commitments = (body.p_structured as Record<string, unknown>).commitments as Record<string, unknown>[];
+    if (JSON.stringify(commitments.map((entry) => entry.due)) !== JSON.stringify(dues)) {
+      throw new Error("a due PostgreSQL accepts was repaired away");
+    }
   });
 
   testFn("re-ingesting the same run twice changes nothing", async () => {
@@ -882,15 +1212,6 @@ if (typeof testFn === "function") {
     let ingests = 0;
     const state: MockState = {
       rpcBodies: [],
-      events: [],
-      runRow: (events) => ({
-        state: "completed",
-        disposition: "answered_extracted",
-        results: { structured: completed.structured_result },
-        item_mentions: [{ id: 1 }],
-        commitments: [],
-        call_events: ingestedEvents(events),
-      }),
       summary: () => ingests++ === 0
         ? {
           already_ingested: false,
@@ -923,103 +1244,363 @@ if (typeof testFn === "function") {
     if (second.counts.items !== 0 || second.counts.mentions !== 0 || second.counts.commitments !== 0) {
       throw new Error("a re-ingest must not report new rows");
     }
-    if (state.events.length !== 1) {
-      throw new Error("a re-ingest must not append a second ingested timeline row");
+    if (JSON.stringify(state.rpcBodies[0]) !== JSON.stringify(state.rpcBodies[1])) {
+      throw new Error("a re-ingest must send the same request and let the RPC decide");
     }
   });
 
-  testFn("a retry backfills an ingested row lost after commit, exactly once", async () => {
-    let ingests = 0;
-    let eventPosts = 0;
+  testFn("a character jsonb refuses never stops the request", async () => {
     const state: MockState = {
       rpcBodies: [],
-      events: [],
-      runLookups: [],
-      eventFailure: () => eventPosts++ === 0,
-      runRow: (events) => ({
-        state: "completed",
-        disposition: "answered_extracted",
-        results: {
-          structured: {
-            captured_items: [{ text: "Continental", evidence_offset_seconds: 44 }],
-            retired_items: [{ item_id: itemId, evidence_offset_seconds: 62 }],
-            commitments: [{ item_id: itemId, evidence_offset_seconds: 80 }],
-          },
-        },
-        item_mentions: [{ id: 1 }, { id: 2 }, { id: 3 }],
-        commitments: [{ id: "c1" }],
-        call_events: ingestedEvents(events),
+      summary: () => ({
+        already_ingested: false,
+        disposition: "answered_no_result",
+        counts: zeroCounts,
+        slot_change_requested: null,
       }),
-      summary: () => ingests++ === 0
-        ? { already_ingested: false, disposition: "answered_extracted", counts: zeroCounts, slot_change_requested: null }
-        : { already_ingested: true, disposition: "answered_extracted", counts: zeroCounts, slot_change_requested: null },
     };
-    const source: TerminalCallSource = {
+    await ingestTerminalRun({
       callRunId: runId,
       userId,
-      raw: { id: "call_lost_event", status: "completed" },
-      transcriptTurns: [],
+      raw: {
+        id: "call_poison",
+        status: "completed",
+        structured_result: {
+          captured_items: [{ text: "Conti\u0000nental", evidence_offset_seconds: 44 }],
+          retired_items: [],
+          summary: "café \ud800 and 😀",
+        },
+      },
+      transcriptTurns: [
+        { offset_seconds: 0, speaker: "agent", text: "" },
+        { offset_seconds: 3.5, speaker: "caller", text: "Conti\u0000nental" },
+      ],
       structuredResult: null,
-    };
+    }, deps(mock(state)));
 
-    await ingestTerminalRun(source, deps(mock(state))).then(
-      () => { throw new Error("a failed timeline write must surface to the caller"); },
-      (error) => { if (!(error instanceof Error) || error.message !== "call event insert failed") throw error; },
-    );
-    if (state.events.length !== 0) throw new Error("the failing event write must leave no row");
+    // The wire body is the measurement. JSON.stringify escapes U+0000 and an
+    // unpaired surrogate, so their absence proves the RPC never sees them. The
+    // old code sent both, and PostgREST answered 22P05 on every retry.
+    const wire = JSON.stringify(state.rpcBodies[0]);
+    if (wire.includes("\\u0000")) throw new Error("a U+0000 reached the request body");
+    if (wire.includes("\\ud800")) throw new Error("a lone surrogate reached the request body");
 
-    const retry = await ingestTerminalRun(source, deps(mock(state)));
-    await ingestTerminalRun(source, deps(mock(state)));
-
-    if (retry.alreadyIngested !== true) throw new Error("the retry must see the committed ingest");
-    if ((state.events.length as number) !== 1) {
-      throw new Error(`the retry must write exactly one ingested row, found ${state.events.length}`);
+    const sentRaw = state.rpcBodies[0].p_raw as Record<string, unknown>;
+    const sentStructured = sentRaw.structured_result as Record<string, unknown>;
+    if (sentStructured.summary !== "café \uFFFD and 😀") {
+      throw new Error(`the raw payload lost its shape: ${String(sentStructured.summary)}`);
     }
-    const lookup = state.runLookups?.[0]?.searchParams;
-    if (lookup?.get("id") !== `eq.${runId}` || lookup.get("call_events.kind") !== "eq.ingested") {
-      throw new Error("the backfill must look for this run's ingested row");
+    const turns = state.rpcBodies[0].p_transcript_turns as Record<string, unknown>[];
+    if (turns.length !== 2 || turns[0].text !== "" || turns[0].offset_seconds !== 0) {
+      throw new Error("a turn with empty text must still reach the RPC");
     }
-    const event = state.events[0];
-    const detail = event.detail as Record<string, unknown>;
-    if (event.kind !== "ingested" || detail.backfilled !== true || detail.calle_call_id !== "call_lost_event") {
-      throw new Error("the backfilled row must be marked and name the call");
-    }
-    if (detail.item_count !== 1 || detail.mention_count !== 3 || detail.retirement_count !== 1 || detail.commitment_count !== 1) {
-      throw new Error("the backfilled row must carry the counts of the committed rows");
+    if (turns[1].offset_seconds !== 3.5 || turns[1].text !== "Conti\uFFFDnental") {
+      throw new Error("a fractional offset or a poisoned text must survive the request");
     }
   });
+
+  // `transcripts.turns` is jsonb, so the column stores every one of these five
+  // shapes. Refusing one strands the run forever, because the payload never
+  // changes and every retry would throw the same way.
+  testFn("a turn shape the column stores reaches the RPC", async () => {
+    const shapes = [
+      { offset_seconds: null, speaker: "agent", text: "Hello" },
+      { speaker: "agent", text: "Hello" },
+      { offset_seconds: "3", speaker: "agent", text: "Hello" },
+      { offset_seconds: 0, text: "Hello" },
+      { offset_seconds: 0, speaker: "agent", text: null },
+    ];
+    const state: MockState = {
+      rpcBodies: [],
+      summary: () => ({
+        already_ingested: false,
+        disposition: "answered_no_result",
+        counts: zeroCounts,
+        slot_change_requested: null,
+      }),
+    };
+
+    await ingestTerminalRun({
+      callRunId: runId,
+      userId,
+      raw: { id: "call_turn_shapes", status: "completed" },
+      transcriptTurns: shapes as unknown as TranscriptTurnFixture[],
+      structuredResult: null,
+    }, deps(mock(state)));
+
+    const turns = state.rpcBodies[0].p_transcript_turns as unknown[];
+    if (turns.length !== shapes.length) throw new Error("a turn shape the column stores was dropped");
+    for (const [index, shape] of shapes.entries()) {
+      if (JSON.stringify(turns[index]) !== JSON.stringify(shape)) {
+        throw new Error(`turn ${index} reached the RPC as ${JSON.stringify(turns[index])}`);
+      }
+    }
+  });
+
+  // Every spelling a person writes for one number must be masked. The wire text
+  // is the measurement, and only the digits this test put in a status, a uuid
+  // or a timestamp may survive. Five of the eight original spellings leaked
+  // before the round-2 fix, the two comma spellings before the round-3 fix,
+  // every separator and fullwidth spelling before the round-4 fix, every phone
+  // whose first eight digits spell a real date before the round-5 fix, and a
+  // phone whose gap held a letter before the round-6 fix.
+  const phoneForms = [
+    { text: "2026-09-12 4155550127", kept: "20260912" },
+    { text: "415/555/0127", kept: "" },
+    { text: "415\u00a0555\u00a00127", kept: "" },
+    { text: "415_555_0127", kept: "" },
+    { text: "4155 55 0127", kept: "" },
+    { text: "+1 415 555 0127", kept: "" },
+    { text: "415,555,0127", kept: "" },
+    { text: "415, 555 0127", kept: "" },
+    { text: "415\u2013555\u20130127", kept: "" },
+    { text: "415\u2014555\u20140127", kept: "" },
+    { text: "415\u200b555\u200b0127", kept: "" },
+    { text: "415\u00ad555\u00ad0127", kept: "" },
+    { text: "415\u2019555\u20190127", kept: "" },
+    { text: "415'555'0127", kept: "" },
+    { text: "415\\555\\0127", kept: "" },
+    { text: "415: 555: 0127", kept: "" },
+    { text: "415\u00b7555\u00b70127", kept: "" },
+    { text: "\uff14\uff11\uff15\uff15\uff15\uff15\uff10\uff11\uff12\uff17", kept: "" },
+    { text: "\uff08\uff14\uff11\uff15\uff09\uff15\uff15\uff15\uff10\uff11\uff12\uff17", kept: "" },
+    // A grouping whose first eight digits spell a real date is a phone number,
+    // not a timestamp. The lift spared it whole before the round-5 fix, so its
+    // last digits never reached the seven digit minimum.
+    { text: "4155-12-0127", kept: "" },
+    { text: "2026-09-1241", kept: "" },
+    { text: "2026-09-12 41", kept: "" },
+    { text: "+4155-12-0127", kept: "" },
+    { text: "4155-12-01-27", kept: "" },
+    // A real date keeps its digits only while every fragment of its run holds
+    // seven or more digits, as the comment above `maskRun` states.
+    { text: "2026-09-12-415-555-0127", kept: "20260912" },
+    { text: "2026-09-12T03:00:004155550127", kept: "20260912030000" },
+    // A gap may hold any code point that is not a decimal digit, so a letter
+    // joins the groups. The nine letter code points below are the ones people
+    // write for an apostrophe or a joiner, and each one broke the run before
+    // the round-6 fix. The two punctuation apostrophes above are the controls.
+    { text: "415\u02b9555\u02b90127", kept: "" },
+    { text: "415\u02bb555\u02bb0127", kept: "" },
+    { text: "415\u02bc555\u02bc0127", kept: "" },
+    { text: "415\u02bd555\u02bd0127", kept: "" },
+    { text: "415\u02be555\u02be0127", kept: "" },
+    { text: "415\u02bf555\u02bf0127", kept: "" },
+    { text: "415\u0640555\u06400127", kept: "" },
+    { text: "415\ua78c555\ua78c0127", kept: "" },
+    { text: "415\u3031555\u30310127", kept: "" },
+    { text: "415a555b0127", kept: "" },
+    // A gap of four characters still joins, which is the stated bound.
+    { text: "415 - 555 - 0127", kept: "" },
+    { text: "415    555    0127", kept: "" },
+  ];
 
   testFn("an RPC failure names its cause without a phone number or a key", async () => {
     const key = "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.c2lnbmF0dXJl";
+    const ownDigits = (spared: string) => `40022007${spared}${runId.replace(/\D/g, "")}20260912030000`;
+    for (const { text: phone, kept } of phoneForms) {
+      const keptDigits = ownDigits(kept);
+      const state: MockState = {
+        rpcBodies: [],
+        summary: () => { throw new Error("the failed RPC must not be summarised"); },
+        rpcFailure: () =>
+          Response.json({
+            code: "22007",
+            message: `invalid input syntax for type uuid: ${phone} for call run ${runId}`,
+            details: `key ${key} due 2026-09-12T03:00:00`,
+            hint: null,
+          }, { status: 400 }),
+      };
+      const message = await ingestTerminalRun({
+        callRunId: runId,
+        userId,
+        raw: { id: "call_rpc_failure", status: "completed" },
+        transcriptTurns: [],
+        structuredResult: null,
+      }, { apiUrl: baseUrl, serviceRoleKey: key, fetch: mock(state) }).then(
+        () => { throw new Error(`a failed RPC was accepted for ${phone}`); },
+        (error: Error) => error.message,
+      );
+      for (
+        const expected of [
+          "call result ingestion failed",
+          "HTTP 400",
+          "22007",
+          "invalid input syntax for type uuid",
+          runId,
+          "2026-09-12T03:00:00",
+        ]
+      ) {
+        if (!message.includes(expected)) throw new Error(`${phone} lost ${expected}: ${message}`);
+      }
+      if (message.includes(key) || message.includes("eyJ")) {
+        throw new Error(`the thrown cause leaked a key for ${phone}: ${message}`);
+      }
+      if (!message.includes("[masked number]")) throw new Error(`${phone} was not masked: ${message}`);
+      const digits = message.replace(/\D/g, "");
+      if (digits !== keptDigits) {
+        throw new Error(`${phone} left the digits ${digits} in the cause: ${message}`);
+      }
+    }
+  });
+
+  // The caller reads the joined cause, so the join is what the masker must see.
+  // The reviewer split a number across the message and the details fields, and
+  // the per part scrub let both halves through.
+  testFn("a number split across two response fields still masks", async () => {
     const state: MockState = {
       rpcBodies: [],
-      events: [],
       summary: () => { throw new Error("the failed RPC must not be summarised"); },
       rpcFailure: () =>
         Response.json({
           code: "22007",
-          message: `invalid input syntax for type uuid: "+1 415 555 0127" for call run ${runId}`,
-          details: `key ${key} due 2026-09-12T03:00:00`,
+          message: "invalid input syntax for type uuid: 415-555",
+          details: `0127" for call run ${runId}`,
           hint: null,
         }, { status: 400 }),
     };
     const message = await ingestTerminalRun({
       callRunId: runId,
       userId,
-      raw: { id: "call_rpc_failure", status: "completed" },
+      raw: { id: "call_split_fields", status: "completed" },
       transcriptTurns: [],
       structuredResult: null,
-    }, { apiUrl: baseUrl, serviceRoleKey: key, fetch: mock(state) }).then(
+    }, deps(mock(state))).then(
       () => { throw new Error("a failed RPC was accepted"); },
       (error: Error) => error.message,
     );
-    for (const expected of ["call result ingestion failed", "HTTP 400", "22007", "invalid input syntax for type uuid", runId, "2026-09-12T03:00:00"]) {
-      if (!message.includes(expected)) throw new Error(`the thrown cause lost ${expected}: ${message}`);
+    if (!message.includes("[masked number]")) {
+      throw new Error(`a number split across two fields reached the cause: ${message}`);
     }
-    if (message.includes("555") || message.includes(key) || message.includes("eyJ")) {
-      throw new Error(`the thrown cause leaked a number or a key: ${message}`);
+    const digits = message.replace(/\D/g, "");
+    if (digits !== `40022007${runId.replace(/\D/g, "")}`) {
+      throw new Error(`the split number left the digits ${digits} in the cause: ${message}`);
     }
-    if (!message.includes("[masked number]")) throw new Error("the phone number must be masked, not dropped");
+  });
+
+  // The masker cannot tell a number from a count. The comment above
+  // `PHONE_SCAN` names every shape it eats, and this test measures each one.
+  // The second half measures the other direction, which is that a value this
+  // module would store keeps its digits while the digits beside it mask.
+  const causeOf = async (shape: string): Promise<string> => {
+    const state: MockState = {
+      rpcBodies: [],
+      summary: () => { throw new Error("the failed RPC must not be summarised"); },
+      rpcFailure: () =>
+        Response.json({ code: "22007", message: shape, details: null, hint: null }, { status: 400 }),
+    };
+    return await ingestTerminalRun({
+      callRunId: runId,
+      userId,
+      raw: { id: "call_over_match", status: "completed" },
+      transcriptTurns: [],
+      structuredResult: null,
+    }, deps(mock(state))).then(
+      () => { throw new Error(`a failed RPC was accepted for ${shape}`); },
+      (error: Error) => error.message,
+    );
+  };
+
+  const overMatched = [
+    "value 2147483648 is out of range for type integer",
+    "deno 1.2.3.4.5.6.7",
+    "at 10:00:00.123456 the run started",
+    "paid 1,234,567.89 today",
+    "pi is 3.1415926535 exactly",
+    "scores 1, 2, 3, 4, 5, 6, 7 today",
+    "the id 20260912030000 is stored",
+    "due 2026-13-45 and nothing else",
+    "due 2026-9-12 with 415-555-0127",
+  ];
+
+  testFn("every shape the masker over-matches masks, and a stored value keeps its digits", async () => {
+    for (const shape of overMatched) {
+      const message = await causeOf(shape);
+      if (!message.includes("[masked number]")) {
+        throw new Error(`an over-matched shape kept its digits: ${message}`);
+      }
+    }
+    const timestamp = await causeOf("due 2026-09-12T03:00:00 and 415-555-0127 beside it");
+    if (!timestamp.includes("2026-09-12T03:00:00")) {
+      throw new Error(`a stored timestamp lost its digits: ${timestamp}`);
+    }
+    if (timestamp.replace(/\D/g, "").includes("4155550127")) {
+      throw new Error(`the number beside the timestamp kept its digits: ${timestamp}`);
+    }
+    const uuid = await causeOf(`run ${runId} 4155550127 beside it`);
+    if (uuid.replace(/\D/g, "") !== `40022007${runId.replace(/\D/g, "")}`) {
+      throw new Error(`a uuid beside a number did not keep its digits alone: ${uuid}`);
+    }
+    // The gap bound keeps two unrelated numbers apart. The comment states four
+    // characters as the widest gap that joins, so the space separated `has`
+    // never joins the count to the id beside it.
+    const bounded = await causeOf("the id 20260912030000 has 5 items");
+    if (bounded.replace(/\D/g, "") !== "400220075") {
+      throw new Error(`the gap bound joined two unrelated numbers: ${bounded}`);
+    }
+  });
+
+  // The comment above `maskRun` states that a timestamp keeps its digits only
+  // while every fragment of its run holds seven or more digits. Two stored
+  // values written side by side leave a zero digit fragment, which is too
+  // short, so that whole run masks. Before the round-6 fix both values came
+  // back whole and no digit of the run masked.
+  const storedPairs = [
+    "due 2026-09-12:2026-09-12",
+    "due 2026-09-12-2026-09-12",
+    "due 2026-09-12T03:00:00 2026-09-12T03:00:00",
+  ];
+
+  testFn("a run of two stored values masks whole", async () => {
+    for (const shape of storedPairs) {
+      const message = await causeOf(shape);
+      if (message.replace(/\D/g, "") !== "40022007") {
+        throw new Error(`a run of two stored values kept digits: ${message}`);
+      }
+    }
+  });
+
+  // The specification gives four dispositions, and this module is their only
+  // writer for a run ingestion finalises. A failed run and a canceled run each
+  // take their own, with a result and without one, because the terminal state
+  // decides before the result does. The completed pair is already driven by the
+  // fixtures above, which write `answered_extracted` and `answered_no_result`.
+  testFn("every terminal state takes its own disposition", async () => {
+    const captured = {
+      captured_items: [{ text: "Continental", evidence_offset_seconds: 44 }],
+      retired_items: [],
+    };
+    const cases: [string, unknown, string][] = [
+      ["failed", captured, "not_answered"],
+      ["failed", null, "not_answered"],
+      ["canceled", captured, "canceled"],
+      ["canceled", null, "canceled"],
+    ];
+    for (const [status, result, expected] of cases) {
+      const state: MockState = {
+        rpcBodies: [],
+        summary: () => ({
+          already_ingested: false,
+          disposition: expected,
+          counts: zeroCounts,
+          slot_change_requested: null,
+        }),
+      };
+      const answer = await ingestTerminalRun({
+        callRunId: runId,
+        userId,
+        raw: { id: `call_${status}`, status },
+        transcriptTurns: [],
+        structuredResult: result,
+      }, deps(mock(state)));
+      const body = state.rpcBodies[0];
+      if (body.p_state !== status || body.p_disposition !== expected) {
+        throw new Error(`a ${status} call was stored as ${String(body.p_state)} ${String(body.p_disposition)}`);
+      }
+      if (answer.disposition !== expected) {
+        throw new Error(`a ${status} call reported the disposition ${answer.disposition}`);
+      }
+    }
   });
 
   testFn("rejects an unparseable source before any write", async () => {

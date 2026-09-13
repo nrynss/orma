@@ -1,9 +1,9 @@
 -- T2.7: Turning a terminal call into rows must be one transaction. PostgREST
 -- cannot hold a transaction across several REST calls, so ingestion lives in
 -- this function. It locks the run, then writes the transcript, the result, the
--- items, their mentions, the retirements and the commitments in one unit.
--- A second ingest for the same run waits on the lock, then returns the
--- already_ingested marker and changes nothing.
+-- items, their mentions, the retirements, the commitments and the `ingested`
+-- timeline row in one unit. A second ingest for the same run waits on the
+-- lock, then returns the already_ingested marker and changes nothing.
 create function public.ingest_call_result(
   p_call_run_id uuid,
   p_user_id uuid,
@@ -15,7 +15,8 @@ create function public.ingest_call_result(
   p_state text,
   p_disposition text,
   p_mood text,
-  p_completed_at timestamptz
+  p_completed_at timestamptz,
+  p_skipped jsonb default '[]'::jsonb
 )
 returns jsonb
 language plpgsql
@@ -28,6 +29,9 @@ declare
   v_item_id uuid;
   v_offset integer;
   v_due timestamptz;
+  v_calle_call_id text;
+  v_slot_change text;
+  v_failure jsonb;
   v_items integer := 0;
   v_mentions integer := 0;
   v_retirements integer := 0;
@@ -54,7 +58,13 @@ begin
     raise exception 'call run % does not belong to user %', p_call_run_id, p_user_id;
   end if;
 
+  -- The run already holds its result. A retry's request never reaches this
+  -- summary, so a replay carrying another proposal reports what the run stored.
   if exists (select 1 from public.results where call_run_id = p_call_run_id) then
+    select r.structured ->> 'slot_change_requested'
+      into v_slot_change
+      from public.results r
+     where r.call_run_id = p_call_run_id;
     return jsonb_build_object(
       'already_ingested', true,
       'disposition', v_run.disposition,
@@ -64,7 +74,7 @@ begin
         'retirements', 0,
         'commitments', 0
       ),
-      'slot_change_requested', p_structured ->> 'slot_change_requested'
+      'slot_change_requested', v_slot_change
     );
   end if;
 
@@ -149,12 +159,45 @@ begin
     v_mentions := v_mentions + 1;
   end loop;
 
+  -- `calle_failure` holds CALL-E's own failure verbatim, so the payload's own
+  -- failure is the value whenever it names one. When it names none, only the
+  -- poll's give-up marker is contradicted, so only that marker clears.
+  v_calle_call_id := nullif(btrim(coalesce(p_raw ->> 'id', '')), '');
+  v_failure := case
+    when nullif(btrim(coalesce(p_raw ->> 'failure_code', '')), '') is not null then
+      jsonb_build_object(
+        'failure_code', p_raw ->> 'failure_code',
+        'failure_message', coalesce(p_raw ->> 'failure_message', '')
+      )
+    when v_run.calle_failure ->> 'failure_code' = 'poll_timeout' then null
+    else v_run.calle_failure
+  end;
   update public.call_runs
      set state = p_state,
          disposition = p_disposition,
          mood = p_mood,
+         calle_failure = v_failure,
          completed_at = coalesce(p_completed_at, now())
    where id = p_call_run_id;
+
+  -- The timeline row lands inside this transaction. A committed ingest can
+  -- never lose its row, and a second ingest can never write a second one.
+  insert into public.call_events (call_run_id, kind, detail)
+  values (
+    p_call_run_id,
+    'ingested',
+    jsonb_build_object(
+      'call_run_id', p_call_run_id,
+      'calle_call_id', v_calle_call_id,
+      'state', p_state,
+      'disposition', p_disposition,
+      'item_count', v_items,
+      'mention_count', v_mentions,
+      'retirement_count', v_retirements,
+      'commitment_count', v_commitments,
+      'skipped', coalesce(p_skipped, '[]'::jsonb)
+    )
+  );
 
   return jsonb_build_object(
     'already_ingested', false,
@@ -173,14 +216,14 @@ $$;
 -- The caller is the service role only. Ingestion writes for any user, so an
 -- authenticated or anonymous session must never reach it.
 revoke all on function public.ingest_call_result(
-  uuid, uuid, jsonb, jsonb, jsonb, boolean, text, text, text, text, timestamptz
+  uuid, uuid, jsonb, jsonb, jsonb, boolean, text, text, text, text, timestamptz, jsonb
 ) from public;
 revoke all on function public.ingest_call_result(
-  uuid, uuid, jsonb, jsonb, jsonb, boolean, text, text, text, text, timestamptz
+  uuid, uuid, jsonb, jsonb, jsonb, boolean, text, text, text, text, timestamptz, jsonb
 ) from anon;
 revoke all on function public.ingest_call_result(
-  uuid, uuid, jsonb, jsonb, jsonb, boolean, text, text, text, text, timestamptz
+  uuid, uuid, jsonb, jsonb, jsonb, boolean, text, text, text, text, timestamptz, jsonb
 ) from authenticated;
 grant execute on function public.ingest_call_result(
-  uuid, uuid, jsonb, jsonb, jsonb, boolean, text, text, text, text, timestamptz
+  uuid, uuid, jsonb, jsonb, jsonb, boolean, text, text, text, text, timestamptz, jsonb
 ) to service_role;
