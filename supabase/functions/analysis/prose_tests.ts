@@ -99,13 +99,14 @@ if (typeof testFn === "function" && !import.meta.main) {
   };
 
   // Every number traces to the fixture: the period boundaries, the morning
-  // local time, counts, ages, the retirement average and the item text run.
+  // local time, counts, ages, the retirement average and the quoted item
+  // text run.
   const validProse =
     "From 2026-09-01 to 2026-09-07 you completed 11 calls over 7 observed days. " +
     "The dentist item came up 4 times and has waited 29 days. " +
     "The physio item retired after 31 days. " +
     "Morning calls at 08:00 were answered at a rate of 0.88. " +
-    "You also asked to renew the 12 month pass.";
+    "You also asked to renew 12 month pass.";
 
   function candidateBody(text: string): string {
     return JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] });
@@ -261,11 +262,19 @@ if (typeof testFn === "function" && !import.meta.main) {
     }
   });
 
-  testFn("the validator allows digit runs that appear inside item text only", async () => {
-    const allowed = "You asked to renew the 12 month pass once.";
-    const outside = numbersOutsideFacts(allowed, fixtureFacts);
-    if (outside.length !== 0) {
-      throw new Error(`digit runs from item text must pass: ${outside.join(", ")}`);
+  testFn("a text digit run validates only while the source text appears in the prose", async () => {
+    const quoted = "She wants to renew 12 month pass this week.";
+    const quotedOutside = numbersOutsideFacts(quoted, fixtureFacts);
+    if (quotedOutside.length !== 0) {
+      throw new Error(`a quoted item text must validate its digit run: ${quotedOutside.join(", ")}`);
+    }
+    const caseFolded = "SHE WANTS TO RENEW 12  MONTH PASS this week.";
+    if (numbersOutsideFacts(caseFolded, fixtureFacts).length !== 0) {
+      throw new Error("matching must fold case and collapse whitespace around the quoted text");
+    }
+    const fabricated = "You completed 12 calls this week.";
+    if (numbersOutsideFacts(fabricated, fixtureFacts).length === 0) {
+      throw new Error("a text digit run must fail while its source text is absent");
     }
     const invented = "You asked to renew the 13 month pass once.";
     if (numbersOutsideFacts(invented, fixtureFacts).length === 0) {

@@ -30,6 +30,7 @@ type FactsAllowlist = {
   dates: Set<string>;
   times: Set<string>;
   numbers: Set<number>;
+  texts: Set<string>;
 };
 
 export function patternProseDepsFromEnv(
@@ -56,23 +57,54 @@ function requireNamedEnv(
 
 /**
  * Return every numeric token in the prose that no fact value explains. The
- * allowlist takes numeric fact values, the period boundaries, slot local
- * times and digit runs inside item text. Identifier digits never join it, so
- * a uuid echoed into the prose reads as invented.
+ * allowlist takes numeric fact values, the period boundaries and slot local
+ * times. A digit run from item text explains a token only while the complete
+ * source text appears in the prose, so a text number cannot float free as a
+ * quantity. Identifier digits never join it, so a uuid echoed into the
+ * prose reads as invented.
  */
 export function numbersOutsideFacts(prose: string, facts: unknown): string[] {
   const allowlist = allowlistFromFacts(facts);
+  const normalizedProse = normalizeText(prose);
   const outside: string[] = [];
   for (const match of prose.matchAll(numericToken)) {
-    if (!tokenAllowed(match[0], allowlist)) outside.push(match[0]);
+    if (!tokenAllowed(match[0], allowlist, normalizedProse)) outside.push(match[0]);
   }
   return outside;
 }
 
-function tokenAllowed(token: string, allowlist: FactsAllowlist): boolean {
+function tokenAllowed(
+  token: string,
+  allowlist: FactsAllowlist,
+  normalizedProse: string,
+): boolean {
   if (isoDateToken.test(token)) return allowlist.dates.has(token);
   if (clockTimeToken.test(token)) return allowlist.times.has(token);
-  return allowlist.numbers.has(Number(token.replace(/,/g, "")));
+  if (allowlist.numbers.has(Number(token.replace(/,/g, "")))) return true;
+  return textRunAllowed(token, allowlist, normalizedProse);
+}
+
+// A text digit run explains a prose token only while the complete source
+// text appears in the prose. Matching folds case and collapses whitespace,
+// and the digits stay part of the comparison.
+function textRunAllowed(
+  token: string,
+  allowlist: FactsAllowlist,
+  normalizedProse: string,
+): boolean {
+  for (const text of allowlist.texts) {
+    if (!normalizedProse.includes(text)) continue;
+    for (const run of text.matchAll(/\d+/g)) {
+      if (run[0] === token) return true;
+    }
+  }
+  return false;
+}
+
+// Fold case and collapse whitespace for source text matching. Digits are
+// never stripped.
+function normalizeText(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function allowlistFromFacts(facts: unknown): FactsAllowlist {
@@ -80,6 +112,7 @@ function allowlistFromFacts(facts: unknown): FactsAllowlist {
     dates: new Set<string>(),
     times: new Set<string>(),
     numbers: new Set<number>(),
+    texts: new Set<string>(),
   };
   collectFactValue(facts, undefined, allowlist);
   return allowlist;
@@ -97,9 +130,7 @@ function collectFactValue(
   if (typeof value === "string") {
     if (key === "period_start" || key === "period_end") into.dates.add(value);
     else if (key === "local_time") into.times.add(value);
-    else if (key === "text") {
-      for (const run of value.matchAll(/\d+/g)) into.numbers.add(Number(run[0]));
-    }
+    else if (key === "text") into.texts.add(normalizeText(value));
     return;
   }
   if (Array.isArray(value)) {
