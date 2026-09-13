@@ -961,3 +961,24 @@ opened, and their fix is measured with round 3's own instrument: terminal runs a
 rest with a null disposition went from two to zero, and the corrected instrument
 passes 59 of 59. The orchestrator also ran the acceptance: 283 Deno tests green,
 `test-ingest.sh` green, and the fresh migration check green.
+
+### 2026-09-13 · P2 on the deployment, after the forward migration
+
+The first push carried `20260913130000_finalise_attempts.sql` before remediation
+rounds 2 and 3 changed it. The CLI tracks an applied migration by version, so the
+linked project kept the older `abandon_call_run`, the one with neither the
+disposition nor the state. `20260913140000_abandon_writes_state.sql` carries the
+current body, and a fresh database reaches the same body, md5
+`1aa1124a4ea9a88dcfbbd6b60ddef630`.
+
+The three functions were redeployed after those migration edits, so the deployment
+bundles the landed code rather than the earlier revision.
+
+Probed after the second push: `assemble_briefing`, `abandon_call_run`,
+`record_finalise_failure`, `ingest_call_result` and `claim_due_call_runs` are all
+present and answer `42501` for `anon`, and `tick`, `materialise` and
+`calle-webhook` answer `401` with their own auth mode.
+
+The operator step is unchanged. Write `ORMA_MATERIALISE_SECRET_KEY` into the
+deployed database's Vault, holding a secret API key named `materialise`. The two
+cron jobs stay fail-closed until it exists.
