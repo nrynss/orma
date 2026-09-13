@@ -160,7 +160,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P2 | 12 / 12 | **Complete.** Every task and the e2e remediation landed, and the deployment carries the phase. The operator still owes the Vault scheduler key. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 4 / 4 | **Complete.** MCP live at `orma-api.nryn.dev/mcp`, six tools wired, docs published at `docs/mcp.md`. |
-| P5 | 1 / 4 | T5.1 landed. T5.2 and T5.3 claimed. T5.4 waits on T5.3. |
+| P5 | 2 / 4 | T5.1 and T5.2 landed. T5.3 in remediation. T5.4 waits on T5.3. |
 | P6 | 0 / 6 | Not started. Blocked on T5.3. |
 | P7 | 0 / 4 | Not started. Soft-blocked on P2. T3.4 delivery is ready. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
@@ -1084,3 +1084,35 @@ scripts should use `SUPABASE_SERVICE_ROLE_KEY`. The email rate limiter rolls
 by the hour, not by the clock. Review rounds added about forty emails to one
 rolling hour, all addressed to undeliverable probe inboxes, and every probe
 user was deleted and verified gone.
+
+### 2026-09-13 · T5.2 landed, Telegram login bridge
+
+T5.2 is done. `auth-telegram` verifies the Login Widget HMAC, refuses a stale
+payload, and mints a session through `generateLink` then `verifyOtp`. Nothing
+is signed in the database. Gateway JWT is off for this function only. A
+flipped hash still returns 401.
+
+Telegram-first users get `tg-{id}@telegram.invalid`. An email session plus a
+valid widget attaches to that email user. A later widget POST with no bearer
+returns the same user id, and the same items.
+
+Round 1 returned APPROVE with zero findings. Live pins used
+`orma-api.nryn.dev/functions/v1/auth-telegram`. CORS origin is
+`https://orma.nryn.dev`. Eleven in-file checks pass.
+
+**What T5.3 must know.** The login page POSTs the widget JSON to that URL.
+It then calls `setSession` with the returned tokens. The function checks HMAC,
+not an API key.
+
+Probe users were deleted. `auth.users` read back empty after the review.
+
+### 2026-09-13 · T5.3 round 1, mint helper blocked
+
+T5.3 round 1 returned REMEDIATE, C1. Settings calls `mintLinkToken` as
+required. That helper sends the user JWT as `apikey`. Live PostgREST through
+the front door returns 401 Invalid API key, so no `telegram_link_tokens` row
+is inserted. Anon `apikey` plus user Bearer returns 201 and count 1.
+
+The helper lives in `web/src/lib/telegram-link.ts`, outside the original owns
+line. The operator confirmed a contract change is valid when the task needs
+it. T5.3 now owns that file for the header fix. Remediation round 1 follows.

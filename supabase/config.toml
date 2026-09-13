@@ -24,6 +24,11 @@ verify_jwt = false
 [functions.mcp]
 verify_jwt = false
 
+# T5.2 owns this block. The Login Widget posts with no session JWT, so the
+# gateway check stays off. The handler still verifies HMAC and auth_date.
+[functions.auth-telegram]
+verify_jwt = false
+
 # T5.1 owns everything below. Email magic link is the only email login path.
 # Custom SMTP sends from Supabase's own servers, so the Edge Function port
 # block does not apply here. Resend's SMTP interface is the sender, so one

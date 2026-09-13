@@ -45,7 +45,7 @@ requires:   T5.1, T3.1
 fixture-ok: yes
 size:       L · frontier
 owns:       supabase/functions/auth-telegram/index.ts, supabase/config.toml ([functions.auth-telegram] only)
-status:     claimed:orma-impl-52
+status:     done
 ```
 The browser posts the widget payload with no session JWT, so this task also owns
 `[functions.auth-telegram] verify_jwt = false`. Do not edit any other block in
@@ -71,12 +71,14 @@ A Telegram identity linked to an existing email account attaches to that account
 requires:   T5.1
 fixture-ok: yes
 size:       M · mid
-owns:       web/src/lib/supabase.ts, web/src/routes/+layout.ts, web/src/routes/+layout.svelte, web/src/hooks.server.ts, web/src/routes/login/, web/src/routes/app/settings/+page.svelte, web/package.json, web/package-lock.json
+owns:       web/src/lib/supabase.ts, web/src/lib/telegram-link.ts, web/src/routes/+layout.ts, web/src/routes/+layout.server.ts, web/src/routes/+layout.svelte, web/src/hooks.server.ts, web/src/routes/login/, web/src/routes/app/settings/+page.svelte, web/package.json, web/package-lock.json, web/scripts/
 status:     claimed:orma-impl-53
 ```
 Cookie sessions need the server hook and the existing layout. Settings must
 read the signed-in session rather than a pasted JWT. The package files take
-the publishable client and the secret-key build check.
+the publishable client and the secret-key build check. `web/scripts/` maps
+existing env names onto SvelteKit PUBLIC_ names and fails the build if a
+secret key appears under `web/`.
 
 Add to the deployed app: a Supabase client, session handling across server and
 client rendering, route protection, and the login page carrying both paths.
