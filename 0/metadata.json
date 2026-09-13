@@ -1,0 +1,71 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2E28BDMGKE3KYX39YEGF4HA",
+  "session_id": "01a09bdb-1b09-7a70-93b2-7781ac088ae2",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-13T19:00:12.69547892Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "dev-diary/adversarial-review/t5.3-contract-change.md",
+    "web/package-lock.json",
+    "web/package.json",
+    "web/src/lib/telegram-link.ts",
+    "web/src/routes/+layout.svelte",
+    "web/src/routes/app/settings/+page.svelte"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "e2e27d5492a4",
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-13T19:00:12.612749338Z",
+    "agent_lines": 203,
+    "agent_removed": 45,
+    "human_added": 1232,
+    "human_modified": 24,
+    "human_removed": 0,
+    "total_committed": 1447,
+    "total_lines_changed": 1508,
+    "agent_percentage": 16.445623342175068,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 1005,
+      "user_lines_removed": 12,
+      "agent_lines_added": 239,
+      "agent_lines_removed": 57,
+      "user_added_per_file": {
+        "dev-diary/adversarial-review/t5.3-round1.md": 58,
+        "web/package.json": 1,
+        "web/scripts/check-no-secret-key.mjs": 98,
+        "web/scripts/check-telegram-link-headers.ts": 130,
+        "web/scripts/with-public-env.mjs": 102,
+        "web/src/hooks.server.ts": 57,
+        "web/src/lib/supabase.ts": 106,
+        "web/src/lib/telegram-link.ts": 20,
+        "web/src/routes/+layout.server.ts": 12,
+        "web/src/routes/+layout.ts": 9,
+        "web/src/routes/app/settings/+page.svelte": 3,
+        "web/src/routes/login/+page.svelte": 296,
+        "web/src/routes/login/+page.ts": 1,
+        "web/src/routes/login/callback/+page.server.ts": 40,
+        "web/src/routes/login/callback/+page.svelte": 72
+      },
+      "user_removed_per_file": {
+        "web/package.json": 1,
+        "web/src/lib/telegram-link.ts": 9,
+        "web/src/routes/app/settings/+page.svelte": 2
+      }
+    }
+  ]
+}
