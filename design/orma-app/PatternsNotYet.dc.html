@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap">
+  <style>
+html, body { margin: 0; background: #fbfaf8; }
+body.dark-body { background: #14130f; }
+a { color: #7a5283; text-underline-offset: 3px; }
+a:hover { color: #7a5283; text-decoration-thickness: 2px; }
+.o {
+  --paper: #fbfaf8; --ink: #22201c; --muted: #716b61; --rule: #d8d2c6; --hair: #e6e1d7;
+  --line: #948f83; --plum: #7a5283; --wash: #f6ecf8; --danger: #8a2b2b; --on-accent: #fbfaf8;
+  background: var(--paper); color: var(--ink);
+  font: 16px/1.6 'Source Serif 4', ui-serif, Georgia, 'Times New Roman', serif;
+  font-optical-sizing: auto; font-variant-numeric: lining-nums tabular-nums;
+  -webkit-font-smoothing: antialiased; box-sizing: border-box;
+}
+.o.dark {
+  --paper: #14130f; --ink: #e8e4dc; --muted: #938c80; --rule: #3a352c; --hair: #2a2620;
+  --line: #6e685e; --plum: #cfa7d8; --wash: #271e29; --danger: #e08a8a; --on-accent: #14130f;
+}
+.o *, .o *::before, .o *::after { box-sizing: border-box; }
+.o a { color: var(--plum); }
+.o p { margin: 0; text-wrap: pretty; }
+.o h1 { font-size: 2rem; line-height: 1.15; margin: 0; letter-spacing: -0.01em; font-weight: 600; }
+.o h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0; font-weight: 600; }
+.mono { font-family: 'Source Code Pro', ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 0.8rem; letter-spacing: 0; }
+.muted { color: var(--muted); }
+.gloss { color: var(--muted); font-size: 0.95rem; }
+.lede { font-size: 1.2rem; line-height: 1.5; }
+.label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.stack { display: flex; flex-direction: column; }
+.rowx { display: flex; align-items: center; }
+.hair { border-top: 1px solid var(--hair); }
+.btn { font: inherit; font-size: 0.95rem; font-weight: 500; min-height: 44px; padding: 0 1.1rem; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; border: 1px solid transparent; cursor: pointer; white-space: nowrap; text-decoration: none; }
+.btn-primary { background: var(--plum); color: var(--on-accent); }
+.btn-secondary { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn-danger { background: var(--danger); color: var(--on-accent); }
+.btn-text { background: transparent; color: var(--plum); padding: 0 0.5rem; min-width: 44px; }
+.field { display: flex; flex-direction: column; gap: 0.35rem; }
+.field-label { font-size: 0.95rem; font-weight: 600; }
+.input { font: inherit; min-height: 44px; padding: 0 0.75rem; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink); display: flex; align-items: center; }
+.input.focus { outline: 2px solid var(--plum); outline-offset: 2px; }
+.hint { font-size: 0.9rem; color: var(--muted); line-height: 1.5; }
+.tag { font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 0.7rem; letter-spacing: 0.02em; padding: 0.05rem 0.4rem; border: 1px solid var(--line); border-radius: 3px; color: var(--muted); white-space: nowrap; }
+.tag-plum { border-color: var(--plum); color: var(--plum); }
+.wash { background: var(--wash); border-radius: 6px; }
+.mood { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+.mood i { width: 8px; height: 8px; border-radius: 50%; background: var(--plum); display: inline-block; }
+.mood i.none { background: transparent; border: 1.5px solid var(--line); }
+.turn { display: grid; grid-template-columns: 3rem 3.6rem minmax(0, 1fr); gap: 0.25rem 0.5rem; padding: 0.3rem 0.5rem; border-radius: 4px; align-items: baseline; }
+.turn .who { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.turn.mark { background: var(--wash); }
+.dot-live { width: 10px; height: 10px; border-radius: 50%; background: var(--plum); box-shadow: 0 0 0 4px var(--wash); display: inline-block; flex: none; }
+.nav a { color: var(--ink); text-decoration: none; min-height: 44px; display: flex; align-items: center; }
+.nav a.on { color: var(--plum); font-weight: 600; }
+.switch { width: 40px; height: 24px; border-radius: 12px; border: 1px solid var(--line); position: relative; flex: none; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--line); }
+.switch.on { background: var(--plum); border-color: var(--plum); }
+.switch.on::after { left: 19px; background: var(--on-accent); }
+</style>
+</helmet>
+<div class="o">
+<div style="width: 390px; min-height: 844px; display: flex; flex-direction: column;">
+  <header style="padding: 1.25rem 1.5rem 0; display: flex; flex-direction: column; gap: 0.25rem;">
+    <div class="rowx" style="justify-content: space-between;">
+      <div style="font-size: 1.35rem; font-weight: 600; letter-spacing: -0.01em;">Orma</div>
+      <span class="muted" style="font-size: 0.85rem;">Narayan</span>
+    </div>
+    <nav class="nav rowx" style="gap: 1.25rem; overflow: hidden; white-space: nowrap; font-size: 0.95rem; border-bottom: 1px solid var(--hair);"><a class="" style="padding: 0 0.1rem; border-bottom: 2px solid transparent;">Today</a><a class="" style="padding: 0 0.1rem; border-bottom: 2px solid transparent;">Items</a><a class="" style="padding: 0 0.1rem; border-bottom: 2px solid transparent;">History</a><a class="on" style="padding: 0 0.1rem; border-bottom: 2px solid var(--plum);">Patterns</a><a class="" style="padding: 0 0.1rem; border-bottom: 2px solid transparent;">Timeline</a><a class="" style="padding: 0 0.1rem; border-bottom: 2px solid transparent;">Settings</a></nav>
+  </header>
+  <main style="padding: 1.75rem 1.5rem 3rem; display: flex; flex-direction: column; gap: 2.25rem;">
+<section class="stack" style="gap: 0.4rem;"><span class="label">Your first week</span><h1>Patterns</h1></section>
+<section class="wash stack" style="padding: 1.5rem 1.25rem; gap: 0.75rem;">
+  <div style="font-size: 1.4rem; line-height: 1.2; font-weight: 600;">Not enough calls yet</div>
+  <p>A pattern needs a run of days. You have had 2 calls. The first report comes after 7.</p>
+  <p class="hint">Orma won't guess at a trend from two mornings.</p>
+</section>
+  </main>
+</div>
+</div>
+</x-dc>
+</body>
+</html>

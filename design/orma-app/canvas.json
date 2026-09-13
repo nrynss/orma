@@ -1,0 +1,242 @@
+{
+  "pages": [
+    {
+      "id": "phone",
+      "name": "Phone"
+    },
+    {
+      "id": "desktop",
+      "name": "Desktop"
+    },
+    {
+      "id": "states",
+      "name": "States"
+    },
+    {
+      "id": "system",
+      "name": "System"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Today \u00b7 phone",
+      "page": "phone",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 1300
+    },
+    {
+      "file": "Login.dc.html",
+      "title": "Login \u00b7 phone",
+      "page": "phone",
+      "x": 490,
+      "y": 0,
+      "w": 390,
+      "h": 900
+    },
+    {
+      "file": "Onboarding.dc.html",
+      "title": "Onboarding \u00b7 phone",
+      "page": "phone",
+      "x": 980,
+      "y": 0,
+      "w": 390,
+      "h": 2400
+    },
+    {
+      "file": "Items.dc.html",
+      "title": "Items \u00b7 phone",
+      "page": "phone",
+      "x": 1470,
+      "y": 0,
+      "w": 390,
+      "h": 1500
+    },
+    {
+      "file": "History.dc.html",
+      "title": "History \u00b7 phone",
+      "page": "phone",
+      "x": 1960,
+      "y": 0,
+      "w": 390,
+      "h": 1700
+    },
+    {
+      "file": "Patterns.dc.html",
+      "title": "Patterns \u00b7 phone",
+      "page": "phone",
+      "x": 2450,
+      "y": 0,
+      "w": 390,
+      "h": 1500
+    },
+    {
+      "file": "Settings.dc.html",
+      "title": "Settings \u00b7 phone",
+      "page": "phone",
+      "x": 2940,
+      "y": 0,
+      "w": 390,
+      "h": 2100
+    },
+    {
+      "file": "Timeline.dc.html",
+      "title": "Timeline \u00b7 phone",
+      "page": "phone",
+      "x": 3430,
+      "y": 0,
+      "w": 390,
+      "h": 1500
+    },
+    {
+      "file": "DeskToday.dc.html",
+      "title": "Today \u00b7 desktop",
+      "page": "desktop",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1250
+    },
+    {
+      "file": "DeskLogin.dc.html",
+      "title": "Login \u00b7 desktop",
+      "page": "desktop",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "DeskOnboarding.dc.html",
+      "title": "Onboarding \u00b7 desktop",
+      "page": "desktop",
+      "x": 0,
+      "y": 2500,
+      "w": 1440,
+      "h": 2100
+    },
+    {
+      "file": "DeskItems.dc.html",
+      "title": "Items \u00b7 desktop",
+      "page": "desktop",
+      "x": 1560,
+      "y": 2500,
+      "w": 1440,
+      "h": 1500
+    },
+    {
+      "file": "DeskHistory.dc.html",
+      "title": "History \u00b7 desktop",
+      "page": "desktop",
+      "x": 0,
+      "y": 5000,
+      "w": 1440,
+      "h": 1700
+    },
+    {
+      "file": "DeskPatterns.dc.html",
+      "title": "Patterns \u00b7 desktop",
+      "page": "desktop",
+      "x": 1560,
+      "y": 5000,
+      "w": 1440,
+      "h": 1300
+    },
+    {
+      "file": "DeskSettings.dc.html",
+      "title": "Settings \u00b7 desktop",
+      "page": "desktop",
+      "x": 0,
+      "y": 7500,
+      "w": 1440,
+      "h": 1900
+    },
+    {
+      "file": "DeskTimeline.dc.html",
+      "title": "Timeline \u00b7 desktop",
+      "page": "desktop",
+      "x": 1560,
+      "y": 7500,
+      "w": 1440,
+      "h": 1500
+    },
+    {
+      "file": "TodayFirstRun.dc.html",
+      "title": "Today \u00b7 first run",
+      "page": "states",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 1000
+    },
+    {
+      "file": "TodayLive.dc.html",
+      "title": "Today \u00b7 call in progress",
+      "page": "states",
+      "x": 490,
+      "y": 0,
+      "w": 390,
+      "h": 1100
+    },
+    {
+      "file": "TimelineLive.dc.html",
+      "title": "Timeline \u00b7 live",
+      "page": "states",
+      "x": 980,
+      "y": 0,
+      "w": 390,
+      "h": 1100
+    },
+    {
+      "file": "PatternsNotYet.dc.html",
+      "title": "Patterns \u00b7 not enough calls",
+      "page": "states",
+      "x": 1470,
+      "y": 0,
+      "w": 390,
+      "h": 844
+    },
+    {
+      "file": "TodayDark.dc.html",
+      "title": "Today \u00b7 dark",
+      "page": "states",
+      "x": 1960,
+      "y": 0,
+      "w": 390,
+      "h": 1300
+    },
+    {
+      "file": "System.dc.html",
+      "title": "System",
+      "page": "system",
+      "x": 0,
+      "y": 0,
+      "w": 1200,
+      "h": 1800
+    }
+  ],
+  "annotations": [
+    {
+      "id": "note-phone",
+      "page": "phone",
+      "x": 0,
+      "y": -200,
+      "w": 520,
+      "text": "Sample data throughout. Numbers agree across screens: the 14 Sept call retired the seeded dentist item at 0:12 and wrote 4 mentions. Consent wording v1 is draft copy for review."
+    },
+    {
+      "id": "note-states",
+      "page": "states",
+      "x": 0,
+      "y": -200,
+      "w": 520,
+      "text": "Live states update without a reload. A no-result call never says extraction failed, it just shows the transcript."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "phone"
+  }
+}

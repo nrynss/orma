@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap">
+  <style>
+html, body { margin: 0; background: #fbfaf8; }
+body.dark-body { background: #14130f; }
+a { color: #7a5283; text-underline-offset: 3px; }
+a:hover { color: #7a5283; text-decoration-thickness: 2px; }
+.o {
+  --paper: #fbfaf8; --ink: #22201c; --muted: #716b61; --rule: #d8d2c6; --hair: #e6e1d7;
+  --line: #948f83; --plum: #7a5283; --wash: #f6ecf8; --danger: #8a2b2b; --on-accent: #fbfaf8;
+  background: var(--paper); color: var(--ink);
+  font: 16px/1.6 'Source Serif 4', ui-serif, Georgia, 'Times New Roman', serif;
+  font-optical-sizing: auto; font-variant-numeric: lining-nums tabular-nums;
+  -webkit-font-smoothing: antialiased; box-sizing: border-box;
+}
+.o.dark {
+  --paper: #14130f; --ink: #e8e4dc; --muted: #938c80; --rule: #3a352c; --hair: #2a2620;
+  --line: #6e685e; --plum: #cfa7d8; --wash: #271e29; --danger: #e08a8a; --on-accent: #14130f;
+}
+.o *, .o *::before, .o *::after { box-sizing: border-box; }
+.o a { color: var(--plum); }
+.o p { margin: 0; text-wrap: pretty; }
+.o h1 { font-size: 2rem; line-height: 1.15; margin: 0; letter-spacing: -0.01em; font-weight: 600; }
+.o h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0; font-weight: 600; }
+.mono { font-family: 'Source Code Pro', ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 0.8rem; letter-spacing: 0; }
+.muted { color: var(--muted); }
+.gloss { color: var(--muted); font-size: 0.95rem; }
+.lede { font-size: 1.2rem; line-height: 1.5; }
+.label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.stack { display: flex; flex-direction: column; }
+.rowx { display: flex; align-items: center; }
+.hair { border-top: 1px solid var(--hair); }
+.btn { font: inherit; font-size: 0.95rem; font-weight: 500; min-height: 44px; padding: 0 1.1rem; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; border: 1px solid transparent; cursor: pointer; white-space: nowrap; text-decoration: none; }
+.btn-primary { background: var(--plum); color: var(--on-accent); }
+.btn-secondary { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn-danger { background: var(--danger); color: var(--on-accent); }
+.btn-text { background: transparent; color: var(--plum); padding: 0 0.5rem; min-width: 44px; }
+.field { display: flex; flex-direction: column; gap: 0.35rem; }
+.field-label { font-size: 0.95rem; font-weight: 600; }
+.input { font: inherit; min-height: 44px; padding: 0 0.75rem; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink); display: flex; align-items: center; }
+.input.focus { outline: 2px solid var(--plum); outline-offset: 2px; }
+.hint { font-size: 0.9rem; color: var(--muted); line-height: 1.5; }
+.tag { font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 0.7rem; letter-spacing: 0.02em; padding: 0.05rem 0.4rem; border: 1px solid var(--line); border-radius: 3px; color: var(--muted); white-space: nowrap; }
+.tag-plum { border-color: var(--plum); color: var(--plum); }
+.wash { background: var(--wash); border-radius: 6px; }
+.mood { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+.mood i { width: 8px; height: 8px; border-radius: 50%; background: var(--plum); display: inline-block; }
+.mood i.none { background: transparent; border: 1.5px solid var(--line); }
+.turn { display: grid; grid-template-columns: 3rem 3.6rem minmax(0, 1fr); gap: 0.25rem 0.5rem; padding: 0.3rem 0.5rem; border-radius: 4px; align-items: baseline; }
+.turn .who { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.turn.mark { background: var(--wash); }
+.dot-live { width: 10px; height: 10px; border-radius: 50%; background: var(--plum); box-shadow: 0 0 0 4px var(--wash); display: inline-block; flex: none; }
+.nav a { color: var(--ink); text-decoration: none; min-height: 44px; display: flex; align-items: center; }
+.nav a.on { color: var(--plum); font-weight: 600; }
+.switch { width: 40px; height: 24px; border-radius: 12px; border: 1px solid var(--line); position: relative; flex: none; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--line); }
+.switch.on { background: var(--plum); border-color: var(--plum); }
+.switch.on::after { left: 19px; background: var(--on-accent); }
+</style>
+</helmet>
+<div class="o">
+<div style="width: 1440px; display: flex; justify-content: center;"><div style="width: 38rem; padding: 3.5rem 1.5rem 4rem; display: flex; flex-direction: column; gap: 1.75rem;"><div style="font-size: 1.6rem; font-weight: 600;">Orma</div><section class="stack" style="gap: 0.5rem;"><h1>Set up your call</h1><p class="gloss">Six short steps, once.</p></section>
+<section class="stack" style="gap: 0.85rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);">
+  <div class="rowx" style="gap: 0.75rem;"><span class="mono muted">1</span><span style="font-size: 1.15rem; font-weight: 600;">Your name</span></div>
+  <div class="field"><span class="input">Narayan</span><span class="hint">Orma says it when it calls, so you know who it is for.</span></div>
+</section>
+<section class="stack" style="gap: 0.85rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);">
+  <div class="rowx" style="gap: 0.75rem;"><span class="mono muted">2</span><span style="font-size: 1.15rem; font-weight: 600;">Your phone</span></div>
+  <div class="field"><span class="input focus">+91 98&#8226;&#8226;&#8226; &#8226;&#8226;321</span><span class="hint">In international format, starting with +. Orma has no text messages, so it cannot check this number. Your first call confirms it.</span></div>
+</section>
+<section class="stack" style="gap: 0.85rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);">
+  <div class="rowx" style="gap: 0.75rem;"><span class="mono muted">3</span><span style="font-size: 1.15rem; font-weight: 600;">Your consent</span></div>
+  <div class="wash stack" style="padding: 1rem; gap: 0.5rem;"><span class="label">Wording v1</span><p style="font-size: 0.97rem;">Orma will phone +91 98&#8226;&#8226;&#8226; &#8226;&#8226;321 at the times you choose. Calls are placed through CALL-E, recorded and transcribed, so Orma can remember what you said. You can cancel a call, pause every call, or withdraw this consent at any time in Settings.</p></div><a class="btn btn-primary" style="align-self: flex-start;">I agree to these calls</a><p class="hint">Without this, Orma will not call. You can agree later in Settings.</p>
+</section>
+<section class="stack" style="gap: 0.85rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);">
+  <div class="rowx" style="gap: 0.75rem;"><span class="mono muted">4</span><span style="font-size: 1.15rem; font-weight: 600;">When to call</span></div>
+  <div class="field"><span class="field-label" style="font-size: 0.9rem;">Time</span><span class="input">08:00</span></div><div class="field"><span class="field-label" style="font-size: 0.9rem;">Days</span><div class="rowx" style="gap: 0.3rem; flex-wrap: wrap;"><span class="rowx" style="justify-content: center; min-width: 44px; min-height: 44px; border-radius: 4px; background: var(--plum); color: var(--on-accent); font-size: 0.85rem;">M</span><span class="rowx" style="justify-content: center; min-width: 44px; min-height: 44px; border-radius: 4px; background: var(--plum); color: var(--on-accent); font-size: 0.85rem;">T</span><span class="rowx" style="justify-content: center; min-width: 44px; min-height: 44px; border-radius: 4px; background: var(--plum); color: var(--on-accent); font-size: 0.85rem;">W</span><span class="rowx" style="justify-content: center; min-width: 44px; min-height: 44px; border-radius: 4px; background: var(--plum); color: var(--on-accent); font-size: 0.85rem;">T</span><span class="rowx" style="justify-content: center; min-width: 44px; min-height: 44px; border-radius: 4px; background: var(--plum); color: var(--on-accent); font-size: 0.85rem;">F</span><span class="rowx" style="justify-content: center; min-width: 44px; min-height: 44px; border-radius: 4px; background: var(--plum); color: var(--on-accent); font-size: 0.85rem;">S</span><span class="rowx" style="justify-content: center; min-width: 44px; min-height: 44px; border-radius: 4px; background: var(--plum); color: var(--on-accent); font-size: 0.85rem;">S</span></div></div><div class="field"><span class="field-label" style="font-size: 0.9rem;">Time zone</span><span class="input rowx" style="justify-content: space-between;">Asia/Kolkata (IST)<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6l4.5 4.5L12.5 6"></path></svg></span></div>
+</section>
+<section class="stack" style="gap: 0.85rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);">
+  <div class="rowx" style="gap: 0.75rem;"><span class="mono muted">5</span><span style="font-size: 1.15rem; font-weight: 600;">Receipts on Telegram</span></div>
+  <p>After each call, Orma can send what it captured. One Start press lets the bot message you.</p><a class="btn btn-secondary" style="align-self: flex-start;"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 2.5L9 11"></path><path d="M17.5 2.5L12 17.5l-3-6.5-6.5-3z"></path></svg>Open @orma_tele_bot</a><p class="hint">Optional. Receipts only, never reminders.</p>
+</section>
+<section class="stack" style="gap: 0.85rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);">
+  <div class="rowx" style="gap: 0.75rem;"><span class="mono muted">6</span><span style="font-size: 1.15rem; font-weight: 600;">Before the first call</span></div>
+  <div class="wash stack" style="padding: 1rem; gap: 0.5rem;"><p style="font-weight: 600;">It will come from a number you won't recognise.</p><p>A different one each time, and your phone may say it is likely spam. Answer it anyway. It is Orma.</p><p class="hint">We cannot stop that warning, and there is no number to save.</p></div>
+</section>
+<section class="stack" style="gap: 0.75rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);">
+  <p>Your first call is <strong>tomorrow at 08:00</strong>.</p>
+  <a class="btn btn-primary" style="width: 100%;">Start my calls</a>
+</section></div></div>
+</div>
+</x-dc>
+</body>
+</html>

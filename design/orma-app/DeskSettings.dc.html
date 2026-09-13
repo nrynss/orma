@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap">
+  <style>
+html, body { margin: 0; background: #fbfaf8; }
+body.dark-body { background: #14130f; }
+a { color: #7a5283; text-underline-offset: 3px; }
+a:hover { color: #7a5283; text-decoration-thickness: 2px; }
+.o {
+  --paper: #fbfaf8; --ink: #22201c; --muted: #716b61; --rule: #d8d2c6; --hair: #e6e1d7;
+  --line: #948f83; --plum: #7a5283; --wash: #f6ecf8; --danger: #8a2b2b; --on-accent: #fbfaf8;
+  background: var(--paper); color: var(--ink);
+  font: 16px/1.6 'Source Serif 4', ui-serif, Georgia, 'Times New Roman', serif;
+  font-optical-sizing: auto; font-variant-numeric: lining-nums tabular-nums;
+  -webkit-font-smoothing: antialiased; box-sizing: border-box;
+}
+.o.dark {
+  --paper: #14130f; --ink: #e8e4dc; --muted: #938c80; --rule: #3a352c; --hair: #2a2620;
+  --line: #6e685e; --plum: #cfa7d8; --wash: #271e29; --danger: #e08a8a; --on-accent: #14130f;
+}
+.o *, .o *::before, .o *::after { box-sizing: border-box; }
+.o a { color: var(--plum); }
+.o p { margin: 0; text-wrap: pretty; }
+.o h1 { font-size: 2rem; line-height: 1.15; margin: 0; letter-spacing: -0.01em; font-weight: 600; }
+.o h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0; font-weight: 600; }
+.mono { font-family: 'Source Code Pro', ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 0.8rem; letter-spacing: 0; }
+.muted { color: var(--muted); }
+.gloss { color: var(--muted); font-size: 0.95rem; }
+.lede { font-size: 1.2rem; line-height: 1.5; }
+.label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.stack { display: flex; flex-direction: column; }
+.rowx { display: flex; align-items: center; }
+.hair { border-top: 1px solid var(--hair); }
+.btn { font: inherit; font-size: 0.95rem; font-weight: 500; min-height: 44px; padding: 0 1.1rem; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; border: 1px solid transparent; cursor: pointer; white-space: nowrap; text-decoration: none; }
+.btn-primary { background: var(--plum); color: var(--on-accent); }
+.btn-secondary { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn-danger { background: var(--danger); color: var(--on-accent); }
+.btn-text { background: transparent; color: var(--plum); padding: 0 0.5rem; min-width: 44px; }
+.field { display: flex; flex-direction: column; gap: 0.35rem; }
+.field-label { font-size: 0.95rem; font-weight: 600; }
+.input { font: inherit; min-height: 44px; padding: 0 0.75rem; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink); display: flex; align-items: center; }
+.input.focus { outline: 2px solid var(--plum); outline-offset: 2px; }
+.hint { font-size: 0.9rem; color: var(--muted); line-height: 1.5; }
+.tag { font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 0.7rem; letter-spacing: 0.02em; padding: 0.05rem 0.4rem; border: 1px solid var(--line); border-radius: 3px; color: var(--muted); white-space: nowrap; }
+.tag-plum { border-color: var(--plum); color: var(--plum); }
+.wash { background: var(--wash); border-radius: 6px; }
+.mood { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+.mood i { width: 8px; height: 8px; border-radius: 50%; background: var(--plum); display: inline-block; }
+.mood i.none { background: transparent; border: 1.5px solid var(--line); }
+.turn { display: grid; grid-template-columns: 3rem 3.6rem minmax(0, 1fr); gap: 0.25rem 0.5rem; padding: 0.3rem 0.5rem; border-radius: 4px; align-items: baseline; }
+.turn .who { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.turn.mark { background: var(--wash); }
+.dot-live { width: 10px; height: 10px; border-radius: 50%; background: var(--plum); box-shadow: 0 0 0 4px var(--wash); display: inline-block; flex: none; }
+.nav a { color: var(--ink); text-decoration: none; min-height: 44px; display: flex; align-items: center; }
+.nav a.on { color: var(--plum); font-weight: 600; }
+.switch { width: 40px; height: 24px; border-radius: 12px; border: 1px solid var(--line); position: relative; flex: none; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--line); }
+.switch.on { background: var(--plum); border-color: var(--plum); }
+.switch.on::after { left: 19px; background: var(--on-accent); }
+</style>
+</helmet>
+<div class="o">
+<div style="width: 1440px; min-height: 900px; display: grid; grid-template-columns: 248px minmax(0, 1fr);">
+  <aside style="border-right: 1px solid var(--hair); padding: 2.5rem 1.25rem; display: flex; flex-direction: column; gap: 2rem;">
+    <div style="padding: 0 0.75rem;">
+      <div style="font-size: 1.6rem; font-weight: 600; letter-spacing: -0.02em;">Orma</div>
+      <p class="gloss" style="font-size: 0.85rem;">&#3363;&#3374;&#3405;&#3374; &#183; it remembers</p>
+    </div>
+    <nav class="nav stack" style="gap: 0.1rem;"><a class="" style="padding: 0 0.75rem; border-radius: 4px; ">Today</a><a class="" style="padding: 0 0.75rem; border-radius: 4px; ">Items</a><a class="" style="padding: 0 0.75rem; border-radius: 4px; ">History</a><a class="" style="padding: 0 0.75rem; border-radius: 4px; ">Patterns</a><a class="" style="padding: 0 0.75rem; border-radius: 4px; ">Timeline</a><a class="on" style="padding: 0 0.75rem; border-radius: 4px; background: var(--wash);">Settings</a></nav>
+    <div style="margin-top: auto; padding: 0 0.75rem;" class="stack">
+      <span style="font-size: 0.9rem;">Narayan</span>
+      <a style="font-size: 0.85rem;">Sign out</a>
+    </div>
+  </aside>
+  <main style="padding: 3.5rem 4rem 5rem;">
+    <div style="max-width: 38rem; display: flex; flex-direction: column; gap: 2.5rem;">
+<section class="stack" style="gap: 0.4rem;"><h1>Settings</h1></section>
+<section class="stack" style="gap: 0.9rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);"><h2>Your call</h2><div class="rowx" style="justify-content: space-between; gap: 0.75rem;">
+  <div class="stack"><span style="font-size: 1.3rem; font-weight: 600;">08:00</span><span class="muted" style="font-size: 0.9rem;">Every day &#183; morning</span></div>
+  <a class="btn btn-secondary">Edit</a>
+</div>
+<a class="btn btn-text" style="align-self: flex-start; padding-left: 0;">Add another time</a>
+<div class="field"><span class="field-label">Time zone</span><span class="input rowx" style="justify-content: space-between;">Asia/Kolkata (IST)<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6l4.5 4.5L12.5 6"></path></svg></span></div></section>
+<section class="stack" style="gap: 0.9rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);"><h2>Skip or pause</h2><div class="rowx" style="gap: 0.5rem; flex-wrap: wrap;"><a class="btn btn-secondary">Cancel tomorrow's call</a><a class="btn btn-secondary">Pause all calls</a></div>
+<p class="hint">Cancelling skips one call. Pausing stops new calls until you resume.</p></section>
+<section class="stack" style="gap: 0.9rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);"><h2>Phone</h2><div class="rowx" style="justify-content: space-between; gap: 0.75rem;">
+  <div class="stack"><span>+91 98&#8226;&#8226;&#8226; &#8226;&#8226;321</span><span class="muted" style="font-size: 0.9rem;">Confirmed by your first call on 11 September</span></div>
+  <a class="btn btn-secondary">Change</a>
+</div></section>
+<section class="stack" style="gap: 0.9rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);"><h2>Consent</h2><div class="stack" style="gap: 0.2rem;"><span>Calls are allowed</span><span class="muted" style="font-size: 0.9rem;">Agreed on the web, 11 September 2026 &#183; wording v1</span></div>
+<a style="font-size: 0.95rem;">Read what you agreed to</a>
+<div class="rowx" style="gap: 0.5rem;"><a class="btn btn-secondary">Withdraw consent</a></div>
+<p class="hint">Calls stop from the next minute, not the next day.</p></section>
+<section class="stack" style="gap: 0.9rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);"><h2>Receipts</h2><div class="rowx" style="justify-content: space-between; gap: 1rem; min-height: 44px;"><span>Telegram</span><span class="switch on"></span></div>
+<div class="rowx" style="justify-content: space-between; gap: 1rem; min-height: 44px;"><span>Email</span><span class="switch"></span></div>
+<p class="hint">Receipts arrive after a call. Orma never sends a reminder.</p></section>
+<section class="stack" style="gap: 0.9rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);"><h2>Telegram</h2><div class="rowx" style="justify-content: space-between; gap: 0.75rem;">
+  <div class="stack"><span>Linked to @orma_tele_bot</span><span class="muted" style="font-size: 0.9rem;">Chat ending &#8226;&#8226;17 &#183; send thoughts there any time</span></div>
+  <a class="btn btn-secondary">Unlink</a>
+</div></section>
+<section class="stack" style="gap: 0.9rem; padding-top: 1.5rem; border-top: 1px solid var(--hair);"><h2>Account</h2><p>Deleting your account removes your profile, items, calls, transcripts, reports and receipts. It cannot be undone.</p>
+<div class="rowx"><a class="btn btn-danger">Delete my account</a></div></section>
+    </div>
+  </main>
+</div>
+</div>
+</x-dc>
+</body>
+</html>

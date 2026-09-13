@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&amp;family=Source+Code+Pro:wght@400;500&amp;display=swap">
+  <style>
+html, body { margin: 0; background: #fbfaf8; }
+body.dark-body { background: #14130f; }
+a { color: #7a5283; text-underline-offset: 3px; }
+a:hover { color: #7a5283; text-decoration-thickness: 2px; }
+.o {
+  --paper: #fbfaf8; --ink: #22201c; --muted: #716b61; --rule: #d8d2c6; --hair: #e6e1d7;
+  --line: #948f83; --plum: #7a5283; --wash: #f6ecf8; --danger: #8a2b2b; --on-accent: #fbfaf8;
+  background: var(--paper); color: var(--ink);
+  font: 16px/1.6 'Source Serif 4', ui-serif, Georgia, 'Times New Roman', serif;
+  font-optical-sizing: auto; font-variant-numeric: lining-nums tabular-nums;
+  -webkit-font-smoothing: antialiased; box-sizing: border-box;
+}
+.o.dark {
+  --paper: #14130f; --ink: #e8e4dc; --muted: #938c80; --rule: #3a352c; --hair: #2a2620;
+  --line: #6e685e; --plum: #cfa7d8; --wash: #271e29; --danger: #e08a8a; --on-accent: #14130f;
+}
+.o *, .o *::before, .o *::after { box-sizing: border-box; }
+.o a { color: var(--plum); }
+.o p { margin: 0; text-wrap: pretty; }
+.o h1 { font-size: 2rem; line-height: 1.15; margin: 0; letter-spacing: -0.01em; font-weight: 600; }
+.o h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0; font-weight: 600; }
+.mono { font-family: 'Source Code Pro', ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 0.8rem; letter-spacing: 0; }
+.muted { color: var(--muted); }
+.gloss { color: var(--muted); font-size: 0.95rem; }
+.lede { font-size: 1.2rem; line-height: 1.5; }
+.label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.stack { display: flex; flex-direction: column; }
+.rowx { display: flex; align-items: center; }
+.hair { border-top: 1px solid var(--hair); }
+.btn { font: inherit; font-size: 0.95rem; font-weight: 500; min-height: 44px; padding: 0 1.1rem; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; border: 1px solid transparent; cursor: pointer; white-space: nowrap; text-decoration: none; }
+.btn-primary { background: var(--plum); color: var(--on-accent); }
+.btn-secondary { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn-danger { background: var(--danger); color: var(--on-accent); }
+.btn-text { background: transparent; color: var(--plum); padding: 0 0.5rem; min-width: 44px; }
+.field { display: flex; flex-direction: column; gap: 0.35rem; }
+.field-label { font-size: 0.95rem; font-weight: 600; }
+.input { font: inherit; min-height: 44px; padding: 0 0.75rem; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink); display: flex; align-items: center; }
+.input.focus { outline: 2px solid var(--plum); outline-offset: 2px; }
+.hint { font-size: 0.9rem; color: var(--muted); line-height: 1.5; }
+.tag { font-family: 'Source Code Pro', ui-monospace, monospace; font-size: 0.7rem; letter-spacing: 0.02em; padding: 0.05rem 0.4rem; border: 1px solid var(--line); border-radius: 3px; color: var(--muted); white-space: nowrap; }
+.tag-plum { border-color: var(--plum); color: var(--plum); }
+.wash { background: var(--wash); border-radius: 6px; }
+.mood { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--muted); }
+.mood i { width: 8px; height: 8px; border-radius: 50%; background: var(--plum); display: inline-block; }
+.mood i.none { background: transparent; border: 1.5px solid var(--line); }
+.turn { display: grid; grid-template-columns: 3rem 3.6rem minmax(0, 1fr); gap: 0.25rem 0.5rem; padding: 0.3rem 0.5rem; border-radius: 4px; align-items: baseline; }
+.turn .who { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.turn.mark { background: var(--wash); }
+.dot-live { width: 10px; height: 10px; border-radius: 50%; background: var(--plum); box-shadow: 0 0 0 4px var(--wash); display: inline-block; flex: none; }
+.nav a { color: var(--ink); text-decoration: none; min-height: 44px; display: flex; align-items: center; }
+.nav a.on { color: var(--plum); font-weight: 600; }
+.switch { width: 40px; height: 24px; border-radius: 12px; border: 1px solid var(--line); position: relative; flex: none; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--line); }
+.switch.on { background: var(--plum); border-color: var(--plum); }
+.switch.on::after { left: 19px; background: var(--on-accent); }
+</style>
+</helmet>
+<div class="o">
+<div style="width: 390px; min-height: 844px; display: flex; flex-direction: column;">
+  <header style="padding: 1.25rem 1.5rem 0; display: flex; flex-direction: column; gap: 0.25rem;">
+    <div class="rowx" style="justify-content: space-between;">
+      <div style="font-size: 1.35rem; font-weight: 600; letter-spacing: -0.01em;">Orma</div>
+      <span class="muted" style="font-size: 0.85rem;">Narayan</span>
+    </div>
+    <nav class="nav rowx" style="gap: 1.25rem; overflow: hidden; white-space: nowrap; font-size: 0.95rem; border-bottom: 1px solid var(--hair);"><a class="" style="padding: 0 0.1rem; border-bottom: 2px solid transparent;">Today</a><a class="" style="padding: 0 0.1rem; border-bottom: 2px solid transparent;">Items</a><a class="on" style="padding: 0 0.1rem; border-bottom: 2px solid var(--plum);">History</a><a class="" style="padding: 0 0.1rem; border-bottom: 2px solid transparent;">Patterns</a><a class="" style="padding: 0 0.1rem; border-bottom: 2px solid transparent;">Timeline</a><a class="" style="padding: 0 0.1rem; border-bottom: 2px solid transparent;">Settings</a></nav>
+  </header>
+  <main style="padding: 1.75rem 1.5rem 3rem; display: flex; flex-direction: column; gap: 2.25rem;">
+<section class="stack" style="gap: 0.4rem;"><h1>History</h1><p class="gloss">Every call, newest first. Mood is what the call heard.</p></section>
+<section class="stack" style="gap: 0.9rem;">
+  <div class="stack" style="gap: 0.15rem;">
+    <div class="rowx" style="justify-content: space-between; gap: 0.75rem;"><span style="font-size: 1.15rem; font-weight: 600;">Monday 14 September</span><span class="mood"><i></i>ok</span></div>
+    <span class="muted" style="font-size: 0.9rem;">08:00 &#183; 45 seconds &#183; Answered</span>
+  </div>
+  <div class="rowx" style="gap: 0.4rem; flex-wrap: wrap;">
+    <span class="tag">retired 1</span><span class="tag">committed 1</span><span class="tag">captured 1</span><span class="tag">mentions 4</span>
+  </div>
+  <div class="stack" style="gap: 0.1rem; border-left: 2px solid var(--rule); padding-left: 0.4rem;"><div class="turn"><a class="mono" style="text-decoration: none;">0:00</a><span class="who">Orma</span><span>Hello. This is Orma.</span></div><div class="turn"><a class="mono" style="text-decoration: none;">0:02</a><span class="who">You</span><span>Hello.</span></div><div class="turn"><a class="mono" style="text-decoration: none;">0:03</a><span class="who">Orma</span><span>Can you hear me?</span></div><div class="turn"><a class="mono" style="text-decoration: none;">0:05</a><span class="who">You</span><span>Yes.</span></div><div class="turn"><a class="mono" style="text-decoration: none;">0:06</a><span class="who">Orma</span><span>You've mentioned the dentist three times. It's been 34 days.</span></div><div class="turn mark"><a class="mono" style="text-decoration: none;">0:12</a><span class="who">You</span><span>Kill it. I'm never doing that.</span></div><div class="rowx" style="gap: 0.4rem; padding: 0 0.5rem 0.4rem 7.5rem;"><span class="tag tag-plum">retired</span><span style="font-size: 0.85rem; color: var(--plum);">Book a dentist appointment</span></div><div class="turn"><a class="mono" style="text-decoration: none;">0:15</a><span class="who">Orma</span><span>Done. It's gone.</span></div><div class="turn"><a class="mono" style="text-decoration: none;">0:18</a><span class="who">Orma</span><span>The passport is still open, and so is calling Amma.</span></div><div class="turn"><a class="mono" style="text-decoration: none;">0:26</a><span class="who">You</span><span>I'll call Amma tonight.</span></div><div class="turn"><a class="mono" style="text-decoration: none;">0:30</a><span class="who">Orma</span><span>Anything new to capture?</span></div><div class="turn"><a class="mono" style="text-decoration: none;">0:33</a><span class="who">You</span><span>Renew the car insurance.</span></div><div class="turn"><a class="mono" style="text-decoration: none;">0:37</a><span class="who">Orma</span><span>Got it. Anything to let go of?</span></div><div class="turn"><a class="mono" style="text-decoration: none;">0:40</a><span class="who">You</span><span>No, that's it.</span></div><div class="turn"><a class="mono" style="text-decoration: none;">0:42</a><span class="who">Orma</span><span>Tomorrow at eight, then. Bye.</span></div></div>
+</section>
+<section class="stack">
+  <h2 style="margin-bottom: 0.4rem;">Earlier</h2>
+  <div class="rowx" style="padding: 0.85rem 0; border-top: 1px solid var(--hair); gap: 0.75rem;">
+  <div class="stack" style="flex: 1; gap: 0.15rem;">
+    <span>Sunday 13 September</span>
+    <span class="rowx muted" style="font-size: 0.88rem; gap: 0.6rem; flex-wrap: wrap;">08:00 &#183; 1 min 52 s &#183; Answered <span class="mood"><i></i>low</span></span>
+    <span style="font-size: 0.92rem;">Captured 2</span>
+  </div>
+  <span class="muted"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l4.5 4.5L6 12.5"></path></svg></span>
+</div><div class="rowx" style="padding: 0.85rem 0; border-top: 1px solid var(--hair); gap: 0.75rem;">
+  <div class="stack" style="flex: 1; gap: 0.15rem;">
+    <span>Saturday 12 September</span>
+    <span class="rowx muted" style="font-size: 0.88rem; gap: 0.6rem; flex-wrap: wrap;">08:00 &#183; Not answered </span>
+    <span style="font-size: 0.92rem;">The call did not connect.</span>
+  </div>
+  <span class="muted"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l4.5 4.5L6 12.5"></path></svg></span>
+</div><div class="rowx" style="padding: 0.85rem 0; border-top: 1px solid var(--hair); gap: 0.75rem;">
+  <div class="stack" style="flex: 1; gap: 0.15rem;">
+    <span>Friday 11 September</span>
+    <span class="rowx muted" style="font-size: 0.88rem; gap: 0.6rem; flex-wrap: wrap;">08:00 &#183; 2 min 06 s &#183; Answered <span class="mood"><i></i>stressed</span></span>
+    <span style="font-size: 0.92rem;">Nothing new</span>
+  </div>
+  <span class="muted"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5l4.5 4.5L6 12.5"></path></svg></span>
+</div>
+</section>
+  </main>
+</div>
+</div>
+</x-dc>
+</body>
+</html>
