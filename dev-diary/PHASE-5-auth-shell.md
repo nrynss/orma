@@ -24,9 +24,12 @@ requires:   []
 fixture-ok: yes
 size:       S · mid
 owns:       supabase/config.toml (auth block)
-status:     not-started
+status:     done
 ```
-Enable email magic link. Configure Resend as the sender over its HTTP API, because Supabase's built-in mailer is rate limited to a handful of messages an hour and Edge Functions block outbound ports 25 and 587.
+Enable email magic link. Configure Resend as the sender through Supabase custom
+SMTP, which speaks Resend's SMTP interface from Supabase's own servers. The
+built-in mailer is rate limited to a handful of messages an hour, and the
+outbound port block binds Edge Functions only, not the auth service.
 
 Do not edit `[functions.telegram]`. T3.1 owns that block and sets `verify_jwt = false`.
 
@@ -41,9 +44,13 @@ Set the site URL and the allowed redirect list to the Pages domain. A redirect l
 requires:   T5.1, T3.1
 fixture-ok: yes
 size:       L · frontier
-owns:       supabase/functions/auth-telegram/index.ts
-status:     not-started
+owns:       supabase/functions/auth-telegram/index.ts, supabase/config.toml ([functions.auth-telegram] only)
+status:     done
 ```
+The browser posts the widget payload with no session JWT, so this task also owns
+`[functions.auth-telegram] verify_jwt = false`. Do not edit any other block in
+`config.toml`. T5.1 owns `[auth]`. T3.1 owns `[functions.telegram]`.
+
 Verify the Login Widget payload by computing `HMAC-SHA256` over the data-check string with `SHA256(bot_token)` as the key and comparing against `hash`. Reject a payload older than a short window, which is what stops a captured payload being replayed later.
 
 Then find or create the user and mint a session in two steps:
@@ -64,9 +71,15 @@ A Telegram identity linked to an existing email account attaches to that account
 requires:   T5.1
 fixture-ok: yes
 size:       M · mid
-owns:       web/src/lib/supabase.ts, web/src/routes/+layout.ts, web/src/routes/login/
-status:     not-started
+owns:       web/src/lib/supabase.ts, web/src/lib/telegram-link.ts, web/src/routes/+layout.ts, web/src/routes/+layout.server.ts, web/src/routes/+layout.svelte, web/src/hooks.server.ts, web/src/routes/login/, web/src/routes/app/settings/+page.svelte, web/package.json, web/package-lock.json, web/scripts/
+status:     done
 ```
+Cookie sessions need the server hook and the existing layout. Settings must
+read the signed-in session rather than a pasted JWT. The package files take
+the publishable client and the secret-key build check. `web/scripts/` maps
+existing env names onto SvelteKit PUBLIC_ names and fails the build if a
+secret key appears under `web/`.
+
 Add to the deployed app: a Supabase client, session handling across server and
 client rendering, route protection, and the login page carrying both paths.
 
@@ -109,9 +122,13 @@ reload keeps the session, and no request in the browser network tab goes to a
 requires:   T5.3, T1.1
 fixture-ok: yes
 size:       M · frontier
-owns:       web/src/routes/app/onboarding/
-status:     not-started
+owns:       web/src/routes/app/onboarding/, web/src/hooks.server.ts, web/src/routes/login/, web/src/routes/+layout.server.ts
+status:     done
 ```
+A signed-in account with no profile must land here, not on Settings. That gate
+lives in `hooks.server.ts` (the `/login` redirect today) and the server layout.
+T5.3 already owns those files. This task takes the missing-profile branch only.
+
 The sequence that turns a signed-in account into a profile the dispatcher will accept: name, phone in E.164, explicit consent, timezone, and a first slot.
 
 Consent is a row and not a checkbox. Store the exact wording shown, the moment, and the surface. The wording is versioned, so a later change does not silently rewrite what someone agreed to.

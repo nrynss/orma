@@ -4,16 +4,20 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build && printf '_worker.js\\n_routes.json\\n_headers\\n' > .svelte-kit/cloudflare/.assetsignore",
+		"dev": "node scripts/with-public-env.mjs vite dev",
+		"build": "node scripts/with-public-env.mjs vite build && printf '_worker.js\\n_routes.json\\n_headers\\n' > .svelte-kit/cloudflare/.assetsignore",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"check": "node scripts/check-no-secret-key.mjs && node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/check-telegram-link-headers.ts && node scripts/check-auth-telegram-headers.mjs && node --experimental-strip-types --disable-warning=ExperimentalWarning src/routes/app/onboarding/check.ts && node scripts/with-public-env.mjs svelte-kit sync && node scripts/with-public-env.mjs svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "node scripts/with-public-env.mjs svelte-kit sync && node scripts/with-public-env.mjs svelte-check --tsconfig ./tsconfig.json --watch",
 		"deploy": "npm run build && wrangler deploy",
 		"cf-typegen": "wrangler types",
 		"types:generate": "sh -ceu 'tmp=$(mktemp); supabase gen types typescript --project-id pyuubklpkhjngiqqwypf > \"$tmp\"; cp \"$tmp\" src/lib/database.types.ts; cp \"$tmp\" ../supabase/functions/_shared/database.types.ts; rm -f \"$tmp\"'",
 		"types:check": "supabase gen types typescript --project-id pyuubklpkhjngiqqwypf | diff -u src/lib/database.types.ts - && diff -u src/lib/database.types.ts ../supabase/functions/_shared/database.types.ts"
+	},
+	"dependencies": {
+		"@supabase/ssr": "^0.12.7",
+		"@supabase/supabase-js": "^2.116.0"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-cloudflare": "^7.2.9",

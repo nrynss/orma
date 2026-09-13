@@ -11,8 +11,9 @@ Where a phase document and specification conflict, the specification wins. Recor
 
 Each document provides complete context for an engineer starting cold.
 
-**Current status:** P0, P1, P2, P3 and P4 are complete. Schema, policies, types,
-fixtures, validation and local seed data are frozen.
+**Current status:** P0, P1, P2, P3, P4 and P5 are complete. Schema, policies, types,
+fixtures, validation and local seed data are frozen. Auth and the web
+shell are live.
 
 P0 is complete. What exists is listed in [PHASE-0-ground.md](PHASE-0-ground.md): the repository, the Supabase project with its extensions and secrets, the deployed app and front door, the bot, verified email, and a proven CALL-E path. Start at P1.
 
@@ -160,8 +161,8 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P2 | 12 / 12 | **Complete.** Every task and the e2e remediation landed, and the deployment carries the phase. The operator still owes the Vault scheduler key. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 4 / 4 | **Complete.** MCP live at `orma-api.nryn.dev/mcp`, six tools wired, docs published at `docs/mcp.md`. |
-| P5 | 0 / 4 | T5.1 can start. |
-| P6 | 0 / 6 | Not started. Blocked on T5.3. |
+| P5 | 4 / 4 | **P5 e2e clean.** Auth, Telegram bridge, web sessions, and onboarding are live. |
+| P6 | 0 / 6 | Not started. Unblocked. T5.3 and T5.4 are live. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
 
@@ -1050,6 +1051,144 @@ rule deserves a look before P8.
 **Probe hygiene.** Every probe account, item, slot and profile row was deleted
 after use, and each deletion was verified by count and by a 404 read. Nothing
 remains.
+
+### 2026-09-13 · T5.1 landed, email auth live
+
+T5.1 is done. Email magic link is on, with Resend as the sender through
+Supabase custom SMTP speaking `smtp.resend.com`. The key and the sender address
+are env references, so the repo file plus `.env` reproduces production, and
+`supabase config diff` reads clean. The site URL and the redirect list pin to
+`orma.nryn.dev`, proven live by following an admin-minted magic link to the
+app. Signup is on for judges.
+
+Round 1 returned one H, one M and two L. The H: thirty emails an hour is a
+rolling-hour cap, and the review rounds alone tripped it, which would strand
+judge sign-ins. It now reads ninety an hour, under Resend's hundred-a-day free
+ceiling. The M: four live settings were undeclared, so a rebuild would have
+flipped confirmation behaviour and OTP length. They are pinned now. Round 2
+returned APPROVE with zero findings and zero residue.
+
+The task prose said Resend's HTTP API, and the transport GoTrue actually
+speaks is SMTP. The prose was corrected under the documentation shortcut.
+
+**Accepted drift, recorded.** Six live settings sit outside every owns line:
+`db.pooler.default_pool_size`, `db.pooler.max_client_conn`,
+`storage.analytics.enabled`, `storage.analytics.max_namespaces`,
+`storage.image_transformation.enabled` and `auth.sms.twilio.enabled`. A
+rebuild from the repo cannot restore them. They predate this task. Giving them
+an owner is a separate contract decision.
+
+**Operator notes.** Run `supabase config push` with the `.env` values
+exported, or the SMTP sender address shows a phantom diff from an unresolved
+env reference. The admin API rejects the new-format `SUPABASE_SECRET_KEY`, so
+scripts should use `SUPABASE_SERVICE_ROLE_KEY`. The email rate limiter rolls
+by the hour, not by the clock. Review rounds added about forty emails to one
+rolling hour, all addressed to undeliverable probe inboxes, and every probe
+user was deleted and verified gone.
+
+### 2026-09-13 · T5.2 landed, Telegram login bridge
+
+T5.2 is done. `auth-telegram` verifies the Login Widget HMAC, refuses a stale
+payload, and mints a session through `generateLink` then `verifyOtp`. Nothing
+is signed in the database. Gateway JWT is off for this function only. A
+flipped hash still returns 401.
+
+Telegram-first users get `tg-{id}@telegram.invalid`. An email session plus a
+valid widget attaches to that email user. A later widget POST with no bearer
+returns the same user id, and the same items.
+
+Round 1 returned APPROVE with zero findings. Live pins used
+`orma-api.nryn.dev/functions/v1/auth-telegram`. CORS origin is
+`https://orma.nryn.dev`. Eleven in-file checks pass.
+
+**What T5.3 must know.** The login page POSTs the widget JSON to that URL.
+It then calls `setSession` with the returned tokens. The function checks HMAC,
+not an API key.
+
+Probe users were deleted. `auth.users` read back empty after the review.
+
+### 2026-09-13 · T5.3 round 1, mint helper blocked
+
+T5.3 round 1 returned REMEDIATE, C1. Settings calls `mintLinkToken` as
+required. That helper sends the user JWT as `apikey`. Live PostgREST through
+the front door returns 401 Invalid API key, so no `telegram_link_tokens` row
+is inserted. Anon `apikey` plus user Bearer returns 201 and count 1.
+
+The helper lives in `web/src/lib/telegram-link.ts`, outside the original owns
+line. The operator confirmed a contract change is valid when the task needs
+it. T5.3 now owns that file for the header fix. Remediation round 1 follows.
+
+### 2026-09-14 · T5.3 landed, web sessions live
+
+T5.3 is done. The Worker at `orma.nryn.dev` has a Supabase client pointed at
+`orma-api.nryn.dev`, cookie sessions, login with email magic link and the
+Telegram widget, and Settings mint from `getSession()`. A signed-out visit to
+`/app/settings` redirects to `/login`. A signed-in reload keeps the cookie.
+
+Round 1 found C1: `telegram-link.ts` sent the user JWT as `apikey`, so mint
+returned 401 and inserted zero rows. The helper now requires the publishable
+anon key as `apikey` and the user JWT as Bearer. Round 2 returned APPROVE with
+zero residue. Live mint inserted one `telegram_link_tokens` row. The JWT-as
+`apikey` control still 401s.
+
+Contract change also covers `web/scripts/` (PUBLIC_ env mapping and the secret
+key scan) and `+layout.server.ts`. The operator confirmed those rows.
+
+**What T5.4 must know.** An auth user has no `public.profiles` row until
+onboarding writes one. `telegram_link_tokens.user_id` references profiles, so
+mint fails before that row exists. Login currently sends a signed-in user to
+`/app/settings`. New accounts should go to onboarding first.
+
+The landing footer still says sign-ups are closed. T5.3 does not own
+`+page.svelte`.
+
+### 2026-09-14 · T5.4 landed, P5 complete
+
+T5.4 is done. Onboarding writes a dispatchable profile in one pass: name,
+E.164 phone, `outbound_calls` consent as a row with the wording shown,
+timezone, and a first slot. Skip consent still writes the profile and slot,
+and inserts no consent row, so the dispatcher refuses.
+
+The number is self-declared. The screen says the first call confirms it.
+Submit still sets `phone_confirmed_at`, because the dispatcher will not place
+that first call without it. The spam-number expectation is on the last step.
+There is no number to save.
+
+A signed-in account with no profile is gated onto `/app/onboarding` from
+`/login`, `/app`, and Settings. A completed profile is not bounced back.
+Signed-out `/app` still goes to `/login`.
+
+Round 1 returned APPROVE with zero findings. Live agree path inserted
+profile, consent, and slot. Live skip path had zero `outbound_calls` rows.
+Malformed `+012345678` returned 400 `23514`. Probe rows were deleted.
+
+**What P6 must know.** `/app` still 404s for a completed profile. T6.1 owns
+that index. Settings still has no consent UI, so a skip user cannot agree
+later until T6.5. The landing footer still says sign-ups are closed. No P5
+task owns `web/src/routes/+page.svelte`.
+
+P6 can start. It required T5.3, which landed earlier today.
+
+### 2026-09-14 · P5 e2e clean
+
+Phase e2e round 1 returned REMEDIATE, C1 H1. Per-task APPROVE verdicts stood.
+The integrated product failed on the live Telegram login path.
+
+F1: `/login` sent the publishable key as `Authorization: Bearer`. The handler
+treated every bearer as a user session, GoTrue returned 403, and the function
+answered 401. Continue with Telegram never minted a JWT. Login now posts the
+widget with no Authorization. A non-user bearer is treated as missing.
+
+F2: a signed-in user never saw the widget, so email then Telegram minted a
+second `tg-…@telegram.invalid` account. Settings now hosts the Login Widget
+and posts the user JWT. A later no-bearer widget returns the same id.
+
+Round 2 returned APPROVE with zero residue. Live anon-key Bearer still 200s.
+A flipped hash still 401s. Email plus Settings attach plus a later widget
+login is one user and one items row.
+
+**Still leftover for P6.** `/app` 404s. Settings has no consent UI. The
+landing footer still says sign-ups are closed. Sign in is in the shell nav.
 
 ### 2026-09-14 · P7 complete, analysis and receipts
 
