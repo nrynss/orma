@@ -145,3 +145,27 @@ Pin locally:
 `deno test --allow-read supabase/functions/_shared/receipt.ts supabase/functions/_shared/receipt_tests.ts`
 
 **Done when:** the completed fixture produces a receipt naming captures and retirements, the invalid-result fixture produces one that does not reveal the failure, and neither contains a call to action.
+
+---
+
+### T7.5: Wire the post-call receipt
+```yaml
+requires:   T7.4, T2.7a
+fixture-ok: yes
+size:       S · mid
+owns:       supabase/functions/_shared/finalise.ts,
+            supabase/functions/_shared/calle.ts (telegramBotToken field only),
+            supabase/functions/tick/index.ts (deps threading only)
+status:     done
+```
+The phase e2e review found the landed T7.4 receipt unreachable in production. This
+task adds the one production caller after a successful ingestion.
+
+After the `finalised` timeline row, resolve retired and commitment ids through items,
+call `deliverIngestionReceipt`, and never let a receipt failure un-finalise the run.
+A replay must not send a second receipt. Missing receipts toggle or chat id is a skip
+inside the existing seam.
+
+**Done when:** a successful finalise produces one `post_call` Telegram delivery naming
+resolved texts, a replay produces none, a receipt failure is logged while the run stays
+finalised, and the existing finalise suites remain green.
