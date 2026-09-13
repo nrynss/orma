@@ -1,0 +1,70 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2E0KMBBMGJ7A5XZPRQH7TTH",
+  "session_id": "01a09bdb-1b09-7a70-93b2-7781ac088ae2",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-13T18:31:25.372917549Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "supabase/config.toml"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "5ff8f4323050",
+  "checkpoint_transcript_start": 214,
+  "transcript_lines_at_start": 214,
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-13T18:31:25.279393757Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 151,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 151,
+    "total_lines_changed": 155,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 1924,
+      "user_lines_removed": 57,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "dev-diary/adversarial-review/t5.3-contract-change.md": 1,
+        "supabase/config.toml": 5,
+        "supabase/functions/auth-telegram/index.ts": 892,
+        "web/package-lock.json": 133,
+        "web/package.json": 8,
+        "web/scripts/check-no-secret-key.mjs": 98,
+        "web/scripts/with-public-env.mjs": 102,
+        "web/src/hooks.server.ts": 57,
+        "web/src/lib/supabase.ts": 106,
+        "web/src/routes/+layout.server.ts": 12,
+        "web/src/routes/+layout.svelte": 69,
+        "web/src/routes/+layout.ts": 9,
+        "web/src/routes/app/settings/+page.svelte": 23,
+        "web/src/routes/login/+page.svelte": 296,
+        "web/src/routes/login/+page.ts": 1,
+        "web/src/routes/login/callback/+page.server.ts": 40,
+        "web/src/routes/login/callback/+page.svelte": 72
+      },
+      "user_removed_per_file": {
+        "web/package-lock.json": 5,
+        "web/package.json": 4,
+        "web/src/routes/+layout.svelte": 2,
+        "web/src/routes/app/settings/+page.svelte": 46
+      }
+    }
+  ]
+}
