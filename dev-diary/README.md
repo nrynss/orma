@@ -162,7 +162,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P4 | 4 / 4 | **Complete.** MCP live at `orma-api.nryn.dev/mcp`, six tools wired, docs published at `docs/mcp.md`. |
 | P5 | 0 / 4 | T5.1 can start. |
 | P6 | 0 / 6 | Not started. Blocked on T5.3. |
-| P7 | 0 / 4 | Not started. Soft-blocked on P2. T3.4 delivery is ready. |
+| P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
 
 ---
@@ -1050,3 +1050,40 @@ rule deserves a look before P8.
 **Probe hygiene.** Every probe account, item, slot and profile row was deleted
 after use, and each deletion was verified by count and by a 404 read. Nothing
 remains.
+
+### 2026-09-14 · P7 complete, analysis and receipts
+
+P7 landed six tasks instead of four. T7.2a and T7.5 were authorized during the phase.
+T7.2a extracted the Vertex service-account and URL path into `_shared/vertex.ts`, so
+voice and analysis share one credential mechanism. T7.5 wired the T7.4 receipt into
+`finaliseRun`, closing the production gap every earlier review had recorded.
+
+T7.1 computes every report number in `compute_pattern_facts`. Its harness pins the
+profile-timezone conversion, the exact three-day boundary, the top-five cap, window
+edges, canceled and null-slot handling, and a clean scratch stack. Round 1 proved three
+of those pins were too weak, and remediation added boundary fixtures plus cleanup guards.
+
+T7.2 validates every numeric token in generated prose against the facts. A digit inside
+item text is accepted only when the full source text is quoted. This blocks a fabricated
+count from riding in on unrelated text. Identical facts produce identical requests at
+temperature zero.
+
+T7.3 derives the report window in each profile timezone, skips insufficient history,
+stores `pattern_reports` before delivery, and sends the same prose through Telegram and
+Resend. The account email comes from the Auth admin endpoint, because `profiles` has no
+email column. Each toggle prevents only its own row and send. One broken profile does
+not block the next.
+
+T7.5 sends one receipt after a successful non-replay finalise. A receipt failure never
+un-finalises the run. If captured or resolved item text trips the no-CTA guard, the
+wrapper sends one honest generic receipt and writes no duplicate row.
+
+Review path: every task reached APPROVE with zero residue. The phase e2e round 1 found
+one H, the missing receipt caller. T7.5 closed it. Phase e2e round 2 returned APPROVE
+with zero findings.
+
+**Next agent notes.** The analysis cron is named `analysis-report` and reuses the
+`ORMA_MATERIALISE_SECRET_KEY` Vault value. It stays fail-closed until that key exists.
+The migration is not deployed yet. Do not add an email column to `profiles`, and do not
+create a second Vertex client. `TELEGRAM_BOT_TOKEN` is now required by the tick env
+factory as well as the Telegram function.
