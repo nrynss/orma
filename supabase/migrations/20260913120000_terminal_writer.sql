@@ -14,4 +14,4 @@ alter table public.call_runs
   add column terminal_writer text;
 
 comment on column public.call_runs.terminal_writer is
-  'Names the guarded write that moved this run to a terminal state. The webhook writes webhook:<event_id>. The poll writes poll. Null while no terminal writer has claimed the move.';
+  'Names the write that moved this run to a terminal state. The poll writes poll. The webhook writes webhook:<event_id>. A dry dispatch writes dry_run. A dispatcher that fails a stranded run writes dispatch_recovery. A refusal or a rejected dispatch leaves it null.';

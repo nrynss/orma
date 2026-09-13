@@ -247,8 +247,8 @@ leaves the run queued for the next tick and its siblings finalised.
 requires:   T2.4, T2.7
 fixture-ok: yes
 size:       M · mid
-owns:       supabase/functions/_shared/dispatch-mode.ts, supabase/functions/_shared/calle.ts
-status:     claimed:orchestrator-p2
+owns:       supabase/functions/_shared/dispatch-mode.ts, supabase/functions/_shared/calle.ts, supabase/functions/tick/index.ts, supabase/migrations/20260913120000_terminal_writer.sql, .env.example, .github/workflows/_env-example.yml, scripts/bootstrap-env.sh
+status:     done
 ```
 A first-class mode, not a flag bolted on for the submission checklist.
 

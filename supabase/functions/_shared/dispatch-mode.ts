@@ -5,6 +5,10 @@
  * live dispatcher hands it the already-serialized body, so dry mode can prove
  * exactly what it would have sent while being structurally unable to dial.
  *
+ * The body a dry run records is a masked copy of those bytes. The exact body
+ * carries the webhook secret and the callee's full number, and the run's owner
+ * may read the recorded row.
+ *
  * The two fixtures below are the recorded CALL-E payloads, embedded rather than
  * read from `testdata/`. A deployed Edge Function bundles only the function
  * directory, so a runtime read of `testdata/` fails in production. A test in
@@ -282,25 +286,58 @@ export function dryRunFixture(
 }
 
 /**
+ * The fixture an operator selected for the next dry dispatch.
+ *
+ * Set the function secret `ORMA_DRY_RUN_FIXTURE` to `failed` to rehearse the
+ * failed terminal shape end to end. That shape carries no transcript turn and
+ * no structured result, so it is the only way to reach the invalid-result path
+ * without placing a call. Any other value selects the completed default, and an
+ * unrecognised value is refused rather than guessed, because a rehearsal that
+ * silently runs the wrong shape is worse than one that fails.
+ */
+export function dryRunFixtureName(
+  getEnv: (name: string) => string | undefined = (name) => Deno.env.get(name),
+): DryRunFixtureName {
+  const value = getEnv("ORMA_DRY_RUN_FIXTURE");
+  if (value === undefined || value.trim() === "" || value === "completed") return "completed";
+  if (value === "failed") return "failed";
+  throw new Error("ORMA_DRY_RUN_FIXTURE must be completed or failed");
+}
+
+/**
  * The payload a dry run replays through the same ingestion seam a real call
  * uses. A failed fixture carries no turns and no structured result, which is
  * what makes the invalid branch reachable without spending a call.
+ *
+ * `completedAt` is the rehearsal clock. Ingestion owns `completed_at` and reads
+ * it out of this payload, so a rehearsal that dispatched now must also report
+ * finishing now. The recording's own timestamp makes a run read as completed
+ * before it was dispatched.
  */
 export function dryRunSource(
   callRunId: string,
   userId: string,
   fixture: CallTaskFixture,
+  completedAt: string,
 ): TerminalCallSource {
   const attempt = fixture.recipients[0]?.attempts[0];
   return {
     callRunId,
     userId,
-    raw: fixture,
+    raw: { ...fixture, completed_at: completedAt },
     transcriptTurns: attempt?.transcript_turns ?? [],
     structuredResult: fixture.structured_result,
   };
 }
 
+/**
+ * The terminal write a dry run applies before it ingests. It deliberately omits
+ * `completed_at`, because the ingestion transaction owns that column for a live
+ * call too. Only an ingested run reads as final.
+ *
+ * `terminal_writer` names this write, like the poll and the webhook writes name
+ * theirs, so a reader never reads null as nobody having moved the run.
+ */
 export type DryRunTerminalPatch = {
   state: "completed" | "failed" | "canceled";
   disposition: "answered_extracted" | "answered_no_result" | "not_answered" | "canceled";
@@ -308,8 +345,8 @@ export type DryRunTerminalPatch = {
   calle_confidence: CallTaskFixture["completion_confidence"];
   calle_failure: { failure_code: string; failure_message: string } | null;
   billable: false;
+  terminal_writer: "dry_run";
   dispatched_at: string;
-  completed_at: string;
 };
 
 export type DryRunEvent = {
@@ -368,6 +405,51 @@ export function exactRequestBody(requestBody: string): string {
   return requestBody;
 }
 
+/**
+ * Keeps the leading seven characters of a number and masks the rest, so an
+ * operator can still read the shape of a dialled number and never its digits.
+ */
+function maskPhoneNumber(phone: string): string {
+  if (phone.length <= 7) return "X".repeat(phone.length);
+  return `${phone.slice(0, 7)}${"X".repeat(phone.length - 7)}`;
+}
+
+/**
+ * Drops the secret a webhook URL keeps in its final path segment. The scheme,
+ * the host and the route stay, so the recorded target is still legible.
+ */
+function maskWebhookUrl(url: string): string {
+  const cut = url.lastIndexOf("/");
+  if (cut <= url.indexOf("//") + 1) return "<redacted>";
+  return `${url.slice(0, cut + 1)}<redacted>`;
+}
+
+/**
+ * The body a dry run records. `call_events` is readable by the run's owner, so
+ * the recorded copy redacts the two values that must never leave the process,
+ * the webhook secret inside `webhook_url` and the callee's full number. Every
+ * other byte stays, which keeps the shape legible to an operator.
+ */
+export function maskedRequestBody(requestBody: string): string {
+  const body = JSON.parse(exactRequestBody(requestBody)) as Record<string, unknown>;
+  const masked: Record<string, unknown> = { ...body };
+  if (typeof body.webhook_url === "string") {
+    masked.webhook_url = maskWebhookUrl(body.webhook_url);
+  }
+  if (Array.isArray(body.recipients)) {
+    masked.recipients = body.recipients.map((recipient) => {
+      if (typeof recipient !== "object" || recipient === null) return recipient;
+      const phones = (recipient as { phones?: unknown }).phones;
+      if (!Array.isArray(phones)) return recipient;
+      return {
+        ...recipient,
+        phones: phones.map((phone) => typeof phone === "string" ? maskPhoneNumber(phone) : phone),
+      };
+    });
+  }
+  return JSON.stringify(masked);
+}
+
 function terminalState(fixture: CallTaskFixture): DryRunTerminalPatch["state"] {
   if (fixture.status === "completed") return "completed";
   if (fixture.status === "canceled") return "canceled";
@@ -401,19 +483,28 @@ export function terminalPatchFromFixture(
       ? { failure_code: failureCode, failure_message: failureMessage ?? "" }
       : null,
     billable: false,
+    terminal_writer: "dry_run",
     dispatched_at: now.toISOString(),
-    completed_at: fixture.completed_at ?? now.toISOString(),
   };
 }
 
 /**
- * Persist the exact would-be request and move the run to the selected terminal
- * fixture. This does not receive a fetch implementation by design.
+ * Moves the run to the selected terminal fixture, then replays that fixture
+ * through the ingestion seam a live completion uses. This receives no fetch
+ * implementation, by design, so it cannot dial.
+ *
+ * The `dispatched` row records a masked copy of the would-be body rather than
+ * the body itself. The exact body carries the webhook secret inside its
+ * `webhook_url` and the callee's full number, and `call_events` is readable by
+ * the run's owner. The mask keeps the shape an operator reads and redacts only
+ * those two values. `requestBody` comes back unchanged, so the dispatcher can
+ * still compare the rehearsed bytes against what a live dispatch sends.
  *
  * Ordering: the terminal row is written first, then the dispatch is recorded,
  * then the fixture is ingested, then finalisation is recorded. Recording
  * `dispatched` before the write would leave a timeline entry for a dispatch
- * that never durably happened.
+ * that never durably happened. The ingestion path sets `completed_at` inside
+ * its transaction, so the terminal write alone never reads as a finished run.
  */
 export async function executeDryRun(
   callRunId: string,
@@ -436,10 +527,14 @@ export async function executeDryRun(
       dispatch_mode: "dry_run",
       fixture: selectedFixture,
       outbound_request_made: false,
-      request_body: exactBody,
+      request_body: maskedRequestBody(exactBody),
+      request_body_masked: true,
     },
   });
-  const ingested = await deps.ingest(dryRunSource(callRunId, userId, fixture));
+  // The rehearsal clock drives both ends of the run. The dispatch stamp comes
+  // from the terminal patch, and ingestion reads `completed_at` out of this
+  // payload, so a rehearsal can never read as completed before it dispatched.
+  const ingested = await deps.ingest(dryRunSource(callRunId, userId, fixture, now.toISOString()));
   await deps.recordEvent({
     callRunId,
     kind: "finalised",
@@ -495,7 +590,7 @@ if (typeof testFn === "function") {
     }
   });
 
-  testFn("dry dispatch records the byte-exact body and makes no outbound request", async () => {
+  testFn("dry dispatch records a mask of the exact body and makes no outbound request", async () => {
     const body = '{"task":"hello","recipients":[{"phones":["+91XXXXXXXXXX"]}]}';
     const events: DryRunEvent[] = [];
     let patch: DryRunTerminalPatch | undefined;
@@ -506,9 +601,11 @@ if (typeof testFn === "function") {
       now: () => new Date("2026-09-12T00:00:00.000Z"),
     });
     if (result.requestBody !== body) throw new Error("dry mode rewrote the live request body");
-    if (events[0]?.detail.request_body !== body) throw new Error("recorded request body differs from live body");
+    if (events[0]?.detail.request_body !== maskedRequestBody(body)) throw new Error("the recorded body is not the mask of the live body");
+    if (events[0]?.detail.request_body_masked !== true) throw new Error("the recorded body does not name its own masking");
     if (events.some((event) => event.detail.outbound_request_made !== false)) throw new Error("dry mode reported an outbound request");
     if (patch?.state !== "completed" || patch.billable !== false) throw new Error("recorded completed fixture state was not persisted");
+    if (patch.terminal_writer !== "dry_run") throw new Error("the dry terminal write named no writer");
     if (patch.calle_call_id.startsWith("call_")) throw new Error("a synthetic dry run carried a provider call id");
   });
 
@@ -556,9 +653,56 @@ if (typeof testFn === "function") {
   });
 
   testFn("a failed fixture replays an empty transcript and no result", () => {
-    const source = dryRunSource("run-1", "user-1", dryRunFixture("failed"));
+    const source = dryRunSource("run-1", "user-1", dryRunFixture("failed"), "2026-09-13T00:00:00.000Z");
     if (source.transcriptTurns.length !== 0) throw new Error("the failed fixture must replay no turns");
     if (source.structuredResult !== null) throw new Error("the failed fixture must reach the no-result path");
+  });
+
+  testFn("the recorded dry body redacts the secret and the number, and nothing else", () => {
+    const live = JSON.stringify({
+      task: "call the dentist",
+      recipients: [{ phones: ["+919999999991"], status: "queued" }],
+      result_schema: { type: "object" },
+      webhook_url: "https://orma-api.nryn.dev/functions/v1/calle-webhook/deployment-secret",
+      metadata: { call_run_id: "run-1" },
+    });
+    const masked = maskedRequestBody(live);
+    const parsed = JSON.parse(masked) as {
+      recipients: Array<{ phones: string[]; status: string }>;
+      webhook_url: string;
+    };
+    if (masked.includes("deployment-secret")) throw new Error("the recorded body still carries the webhook secret");
+    if (masked.includes("+919999999991")) throw new Error("the recorded body still carries the callee's number");
+    if (parsed.webhook_url !== "https://orma-api.nryn.dev/functions/v1/calle-webhook/<redacted>") {
+      throw new Error(`the recorded webhook url is not the redacted route, saw ${parsed.webhook_url}`);
+    }
+    if (parsed.recipients[0].phones[0] !== "+919999XXXXXX") {
+      throw new Error(`the recorded number is not masked, saw ${parsed.recipients[0].phones[0]}`);
+    }
+    if (parsed.recipients[0].status !== "queued") throw new Error("the mask dropped a field beside the number");
+    const restored = masked
+      .replace("+919999XXXXXX", "+919999999991")
+      .replace("/<redacted>", "/deployment-secret");
+    if (restored !== live) throw new Error("the mask changed bytes outside the number and the secret");
+  });
+
+  testFn("a dry run takes both stamps from the rehearsal clock", async () => {
+    const rehearsal = new Date("2026-09-13T09:50:57.284Z");
+    let patch: DryRunTerminalPatch | undefined;
+    let source: TerminalCallSource | undefined;
+    await executeDryRun("run-1", "user-1", "{}", dryRunFixture(), {
+      recordEvent: async () => undefined,
+      updateRun: async (_runId, nextPatch) => { patch = nextPatch; },
+      ingest: async (next) => { source = next; return emptySummary; },
+      now: () => rehearsal,
+    });
+    if (patch?.dispatched_at !== rehearsal.toISOString()) {
+      throw new Error(`the dispatch stamp is not the rehearsal clock, saw ${patch?.dispatched_at}`);
+    }
+    const raw = source?.raw as { completed_at?: string } | undefined;
+    if (raw?.completed_at !== rehearsal.toISOString()) {
+      throw new Error(`ingestion was handed the recording's clock, saw ${raw?.completed_at}`);
+    }
   });
 
   testFn("dry dispatch rejects invalid bodies before writing anything", async () => {
@@ -589,6 +733,24 @@ if (typeof testFn === "function") {
     const finalised = events.find((event) => event.kind === "finalised");
     if (finalised?.detail.failure_reason !== DRY_RUN_FAILED_FIXTURE.failure_message) {
       throw new Error("failed dry-run timeline lost the recorded terminal reason");
+    }
+  });
+
+  testFn("an operator selects the failed dry fixture by environment", () => {
+    if (dryRunFixtureName(() => undefined) !== "completed") {
+      throw new Error("the completed fixture must be the default");
+    }
+    if (dryRunFixtureName((name) => (name === "ORMA_DRY_RUN_FIXTURE" ? "" : "true")) !== "completed") {
+      throw new Error("an empty fixture setting must select the default");
+    }
+    if (dryRunFixture(dryRunFixtureName(() => "failed")).status !== "failed") {
+      throw new Error("the selected failed fixture did not reach the dispatcher");
+    }
+    try {
+      dryRunFixtureName(() => "no-answer");
+      throw new Error("an unrecognised fixture name was accepted");
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== "ORMA_DRY_RUN_FIXTURE must be completed or failed") throw error;
     }
   });
 }

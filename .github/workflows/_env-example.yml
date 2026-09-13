@@ -14,6 +14,8 @@ jobs:
       # Configuration. Safe to print.
       ORMA_ENV: ${{ vars.ORMA_ENV }}
       ORMA_DRY_RUN: ${{ vars.ORMA_DRY_RUN }}
+      # Selects which recorded fixture a dry run synthesises. Defaults to completed.
+      ORMA_DRY_RUN_FIXTURE: ${{ vars.ORMA_DRY_RUN_FIXTURE }}
       ORMA_PUBLIC_URL: ${{ vars.ORMA_PUBLIC_URL }}
       ORMA_API_URL: ${{ vars.ORMA_API_URL }}
       SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}

@@ -13,7 +13,6 @@ import {
   depsFromEnv as calleDepsFromEnv,
   dispatchClaimedRun,
 } from "../_shared/calle.ts";
-import { recordCallEvent } from "../_shared/events.ts";
 import { pollRun } from "../_shared/poll.ts";
 
 const CLAIM_LIMIT = 20;
@@ -44,6 +43,14 @@ export type TickDeps = {
 };
 
 export type TickResult = {
+  /**
+   * The dispatch steps that ran to completion. A step counts only when its
+   * claim and its dispatch both returned, so a dispatch that threw is never
+   * counted. That holds when CALL-E accepted the call and a later write
+   * failed, when the recovery failed the run, and when the run completed and
+   * only the last timeline write failed. `polled` and `finalised` count the
+   * same way, and neither counts a step that threw.
+   */
   claimed: number;
   polled: number;
   finalised: number;
@@ -86,13 +93,35 @@ export async function pollStep(
 }
 
 /**
+ * One run's claim-and-dispatch step, isolated from the rest. The dispatcher
+ * records the claim, and it repairs the run when either the claim or the
+ * dispatch throws, so a failed dispatch costs that run and never the poll or
+ * the finalise stages that follow it.
+ */
+export async function dispatchStep(
+  run: ClaimedTickRun,
+  deps: TickDeps,
+): Promise<boolean> {
+  try {
+    await deps.dispatchClaimed!(run);
+    return true;
+  } catch (error) {
+    console.error(
+      `dispatch failed for run ${run.id}`,
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return false;
+  }
+}
+
+/**
  * Runs one step per run in isolation and counts only the steps that landed.
  * A step fails when it throws or reports false, and the tick then must not
  * claim it in the response body.
  */
-async function countSucceeded(
-  runs: TickRun[],
-  step: (run: TickRun) => Promise<boolean | void>,
+async function countSucceeded<T extends TickRun>(
+  runs: T[],
+  step: (run: T) => Promise<boolean | void>,
   stage: string,
 ): Promise<number> {
   const results = await Promise.all(runs.map(async (run) => {
@@ -118,7 +147,7 @@ export function depsFromEnv(
     apiUrl: requireNamedEnv("ORMA_API_URL", getEnv),
     serviceRoleKey: requireNamedEnv("SUPABASE_SERVICE_ROLE_KEY", getEnv),
     fetch: fetchImpl,
-    dispatchClaimed: (run) => dispatchClaimedRun(run, calleDeps),
+    dispatchClaimed: async (run) => { await dispatchClaimedRun(run, calleDeps); },
     pollDue: (run) => pollStep(run, calleDeps),
     finalise: unavailable("finalisation"),
     now: () => new Date(),
@@ -193,12 +222,12 @@ export async function terminalRuns(deps: TickDeps): Promise<TickRun[]> {
 
 export async function tick(deps: TickDeps): Promise<TickResult> {
   const claimed = deps.dispatchClaimed ? await claimDueRuns(deps) : [];
-  if (deps.dispatchClaimed) {
-    await Promise.all(claimed.map(async (run) => {
-      await recordCallEvent(run.id, "claimed", { state: run.state }, deps);
-      await deps.dispatchClaimed!(run);
-    }));
-  }
+  // Each claimed run dispatches in isolation, like the poll and finalise
+  // stages below. One run that cannot dispatch costs its siblings nothing and
+  // stays out of the count the response reports.
+  const dispatched = deps.dispatchClaimed
+    ? await countSucceeded(claimed, (run) => dispatchStep(run, deps), "dispatch")
+    : 0;
 
   const polls = await duePolls(deps);
   const polled = await countSucceeded(polls, deps.pollDue, "poll");
@@ -208,7 +237,7 @@ export async function tick(deps: TickDeps): Promise<TickResult> {
   // finalise stays selected for the next tick and costs its siblings nothing.
   const finalised = await countSucceeded(terminal, deps.finalise, "finalise");
 
-  return { claimed: claimed.length, polled, finalised };
+  return { claimed: dispatched, polled, finalised };
 }
 
 export function createTickHandler(
@@ -460,6 +489,67 @@ if (typeof testFn === "function" && !import.meta.main) {
       }
     },
   );
+
+  testFn(
+    "a run that cannot dispatch costs neither the tick nor its siblings",
+    async () => {
+      const fetchStub: typeof fetch = async (input, init) => {
+        const url = new URL(new Request(String(input), init).url);
+        if (url.pathname.endsWith("/rpc/claim_due_call_runs")) {
+          return Response.json([
+            { id: "run-broken", state: "claimed", poll_after: null, user_id: "user-1", idempotency_key: "k1", slot_id: "slot-1", dry_run: false },
+            { id: "run-healthy", state: "claimed", poll_after: null, user_id: "user-1", idempotency_key: "k2", slot_id: "slot-1", dry_run: false },
+          ]);
+        }
+        if (url.searchParams.get("state") === "in.(dispatched,awaiting_result)") {
+          return Response.json([{ id: "run-pending", state: "awaiting_result", poll_after: null }]);
+        }
+        if (url.searchParams.get("completed_at") === "is.null") {
+          return Response.json([{ id: "run-terminal", state: "completed", poll_after: null }]);
+        }
+        return Response.json([]);
+      };
+      const dispatched: string[] = [];
+      const polled: string[] = [];
+      const finalised: string[] = [];
+      const deps: TickDeps = {
+        ...baseDeps(fetchStub),
+        dispatchClaimed: async (run) => {
+          if (run.id === "run-broken") throw new Error("call_runs dispatch update failed");
+          dispatched.push(run.id);
+        },
+        pollDue: async (run) => { polled.push(run.id); },
+        finalise: async (run) => { finalised.push(run.id); },
+      };
+      const response = await createTickHandler(deps)(
+        new Request("https://orma-api.nryn.dev/functions/v1/tick", { method: "POST" }),
+      );
+      const body = await response.json() as TickResult;
+      if (response.status !== 200) {
+        throw new Error(`a failed dispatch must not turn the tick red, saw ${response.status}`);
+      }
+      if (dispatched.join(",") !== "run-healthy") {
+        throw new Error(`a failed dispatch cost its sibling, saw ${JSON.stringify(dispatched)}`);
+      }
+      if (body.claimed !== 1 || body.polled !== 1 || body.finalised !== 1) {
+        throw new Error(`the tick must report the stages that landed, saw ${JSON.stringify(body)}`);
+      }
+      if (polled.join(",") !== "run-pending" || finalised.join(",") !== "run-terminal") {
+        throw new Error(`a failed dispatch skipped a later stage, saw ${JSON.stringify({ polled, finalised })}`);
+      }
+    },
+  );
+
+  testFn("dispatchStep reports a swallowed dispatch failure as false", async () => {
+    const landed = await dispatchStep(
+      { id: "run-1", state: "claimed", poll_after: null, user_id: "user-1", idempotency_key: "k1", slot_id: "slot-1", dry_run: false },
+      {
+        ...baseDeps(async () => Response.json([])),
+        dispatchClaimed: async () => { throw new Error("call_runs dispatch update failed"); },
+      },
+    );
+    if (landed !== false) throw new Error(`a dispatch that throws must report false, saw ${landed}`);
+  });
 
   testFn(
     "the tick reports only the polls and finalisations that landed",

@@ -158,7 +158,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
 | P1 | 7 / 7 | Complete. Contracts are frozen. |
-| P2 | 8 / 11 | T2.1 through T2.7 and T2.5a landed. T2.8 remediation is next, off T2.7's landing. T2.7a and T2.9 are not started. |
+| P2 | 9 / 11 | T2.1 through T2.8 and T2.5a landed. T2.7a (split from T2.7) and T2.9 remain. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 0 / 3 | T4.1 can start. |
 | P5 | 0 / 4 | T5.1 can start. |
@@ -806,3 +806,46 @@ the state, the disposition, the call id, four counts and the repair list.
 hand, so its execute revokes had to be re-applied there. A fresh migration run
 produces them. The stack now reads `anon=false`, `authenticated=false`,
 `service_role=true`.
+
+### 2026-09-13 · T2.8 landed, dry-run mode
+
+T2.8 is done. `ORMA_DRY_RUN` defaults to true, and a run is dry when that setting
+is unset or true or when `call_runs.dry_run` says so. The dispatcher assembles the
+serialized body once and branches to `executeDryRun` before the only outbound call
+it can reach. The dry module holds no CALL-E address, no key and no fetch.
+
+The dry run writes the terminal `call_runs` row first, then `dispatched`, then
+ingests, then records `finalised`. Ingestion owns `completed_at`. The dry terminal
+write tags `terminal_writer = dry_run`, and both stamps come from the rehearsal
+clock.
+
+Three review rounds. Round 1 found the module unreferenced by the production path,
+no ingestion, and the wrong ordering. Round 2 found a real leak: the recorded body
+carried the webhook secret and the full number into a row the run owner can read.
+The stored body is now a mask of the assembled body, and the byte for byte
+equality between the dry and live bodies stays pinned where both are assembled.
+Round 3 found two holes in the recovery, one where a failed `claimed` timeline
+insert still stranded a run, and one where a call CALL-E had accepted could be
+recorded as never made. Both are fixed. A placed call now ends in a state the poll
+picks up, with its call id written.
+
+`ORMA_DRY_RUN_FIXTURE` selects which recorded fixture a dry run synthesises. It
+defaults to `completed` and refuses any other value. It is in `.env.example`, the
+workflow example block and `scripts/bootstrap-env.sh`, and the GitHub repository
+variable is set to `completed`.
+
+**One deviation from the loop, on the user's authority.** The orchestrator landed
+after remediation round 3 with no round 4 review. The two M findings carry
+revert-based pins, and the orchestrator ran the acceptance itself: `deno check`
+clean, 168 Deno tests green, the round 3 driver 56 of 56 against the shared stack,
+and the stack back to its baseline rows.
+
+**Contract changes**, each recorded in the task's remediation files. The `owns`
+line widened to `tick/index.ts`, the terminal writer column comment and the three
+settings files. The T2.8 block says a dry run writes the exact request body to
+`call_events`, which conflicts with the masking rule in `AGENTS.md`, so the stored
+body is masked and the discrepancy is recorded here.
+
+**What T2.7a must know.** `tick` now isolates each claimed run through
+`dispatchStep`, and `dispatchClaimedRun` recovers a stranded run itself. A recovery
+that holds a call id hands the run to the poll.

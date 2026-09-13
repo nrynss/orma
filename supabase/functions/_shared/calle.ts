@@ -7,7 +7,13 @@
  */
 
 import { assembleBriefing, renderCallTask, storeBriefing } from "./briefing.ts";
-import { dryRunFixture, executeDryRun, isDryRun } from "./dispatch-mode.ts";
+import {
+  dryRunFixture,
+  dryRunFixtureName,
+  executeDryRun,
+  isDryRun,
+  maskedRequestBody,
+} from "./dispatch-mode.ts";
 import { recordCallEvent } from "./events.ts";
 import type { CallStatus, CallTaskFixture } from "./fixtures.ts";
 import { loadCallFixtures } from "./fixtures.ts";
@@ -221,13 +227,58 @@ function acceptedState(status: CallStatus): "dispatched" | "awaiting_result" {
 }
 
 /**
+ * What one dispatch did. `requestBody` is the exact body the dispatcher
+ * assembled, and it is the same string in both modes, so a caller can compare
+ * what a rehearsal would have sent against what a live dispatch posted. A
+ * refused run assembled nothing.
+ */
+export type DispatchOutcome = {
+  mode: "dry_run" | "live" | "refused";
+  requestBody: string | null;
+};
+
+/** The tag the write that fails a stranded run stores. */
+const RECOVERY_WRITER = "dispatch_recovery";
+
+/**
+ * The call CALL-E accepted before the run could store it. A failed write after
+ * the POST would otherwise lose the only id a reconciler can match the call on.
+ */
+type PlacedCall = { callId: string | null };
+
+/**
  * Dispatches one claimed run. A missing or revoked consent is terminally
  * canceled before any CALL-E request. A 409 is terminally visible and is never
  * retried with a different key.
+ *
+ * The claim is recorded here, inside the recovery, rather than by the caller. A
+ * failed insert would otherwise strand the run in `claimed`, where no selector
+ * takes it again, exactly as a failed dispatch does.
+ *
+ * A throw repairs the run before it is reported. When CALL-E accepted the call,
+ * the repair reconciles it, because the call exists whether or not this process
+ * recorded it.
  */
-export async function dispatchClaimedRun(run: ClaimedRun, deps: CalleDeps): Promise<void> {
+export async function dispatchClaimedRun(
+  run: ClaimedRun,
+  deps: CalleDeps,
+): Promise<DispatchOutcome> {
   if (run.state !== "claimed") throw new Error("only claimed runs may dispatch");
+  const placed: PlacedCall = { callId: null };
+  try {
+    await recordCallEvent(run.id, "claimed", { state: run.state }, deps);
+    return await dispatchOne(run, deps, placed);
+  } catch (error) {
+    await recoverStrandedRun(deps, run, error, placed);
+    throw error;
+  }
+}
 
+async function dispatchOne(
+  run: ClaimedRun,
+  deps: CalleDeps,
+  placed: PlacedCall,
+): Promise<DispatchOutcome> {
   const profile = await readOne<DispatchProfile>(
     deps,
     "profiles",
@@ -235,7 +286,7 @@ export async function dispatchClaimedRun(run: ClaimedRun, deps: CalleDeps): Prom
   );
   if (!profile?.phone_e164 || !profile.phone_confirmed_at) {
     await refuseRun(deps, run.id, "profile has no confirmed E.164 number");
-    return;
+    return { mode: "refused", requestBody: null };
   }
 
   const consent = await readOne<Consent>(
@@ -245,12 +296,12 @@ export async function dispatchClaimedRun(run: ClaimedRun, deps: CalleDeps): Prom
   );
   if (!consent) {
     await refuseRun(deps, run.id, "profile has no live outbound_calls consent");
-    return;
+    return { mode: "refused", requestBody: null };
   }
 
   if (!run.slot_id) {
     await refuseRun(deps, run.id, "call run has no source slot");
-    return;
+    return { mode: "refused", requestBody: null };
   }
   const slot = await readOne<Slot>(
     deps,
@@ -259,7 +310,7 @@ export async function dispatchClaimedRun(run: ClaimedRun, deps: CalleDeps): Prom
   );
   if (!slot?.local_time) {
     await refuseRun(deps, run.id, "call run source slot no longer exists");
-    return;
+    return { mode: "refused", requestBody: null };
   }
 
   const briefing = await assembleBriefing(
@@ -276,9 +327,11 @@ export async function dispatchClaimedRun(run: ClaimedRun, deps: CalleDeps): Prom
 
   // Dry mode is decided here, ahead of anything that can reach the network, and
   // it reuses the serialized body the live path would send. A run is dry when
-  // the run says so, or when ORMA_DRY_RUN is unset or true.
+  // the run says so, or when ORMA_DRY_RUN is unset or true. The operator picks
+  // which recorded terminal shape the rehearsal replays.
   if (isDryRun(run.dry_run, deps.getEnv)) {
-    await executeDryRun(run.id, run.user_id, requestBody, dryRunFixture(), {
+    const fixture = dryRunFixture(dryRunFixtureName(deps.getEnv));
+    const rehearsed = await executeDryRun(run.id, run.user_id, requestBody, fixture, {
       recordEvent: async (event) => {
         await recordCallEvent(event.callRunId, event.kind, event.detail, deps);
       },
@@ -291,7 +344,9 @@ export async function dispatchClaimedRun(run: ClaimedRun, deps: CalleDeps): Prom
         }),
       now: deps.now,
     });
-    return;
+    // The rehearsal hands the assembled body back unchanged, so the two modes
+    // stay comparable byte for byte even though only a mask is stored.
+    return { mode: "dry_run", requestBody: rehearsed.requestBody };
   }
 
   const response = await deps.fetch(`${deps.calleApiBase.replace(/\/+$/, "")}/v1/calls`, {
@@ -322,6 +377,10 @@ export async function dispatchClaimedRun(run: ClaimedRun, deps: CalleDeps): Prom
 
   const call = asCallTask(await response.json());
   const now = deps.now();
+  // The id is held before the write. CALL-E has accepted the call, so the
+  // recovery must be able to reconcile it even when this write fails and the
+  // id never reaches the row.
+  placed.callId = call.id;
   await updateRun(deps, run.id, {
     state: acceptedState(call.status),
     calle_call_id: call.id,
@@ -336,6 +395,67 @@ export async function dispatchClaimedRun(run: ClaimedRun, deps: CalleDeps): Prom
     { calle_call_id: call.id, state: acceptedState(call.status) },
     deps,
   );
+  return { mode: "live", requestBody };
+}
+
+/**
+ * Repairs the run a failed dispatch would otherwise strand in `claimed`. That
+ * state is invisible to the claim RPC, to the poll selector and to the
+ * terminal selector, so nothing would dial the run and nothing would retry it.
+ *
+ * A call this attempt placed is reconciled, never failed. The id comes from the
+ * response when the run's own write did not land, because the phone rang and
+ * the poll must be able to answer for it. A run with no call id fails with the
+ * reason and a completion time. Neither path returns the run to `scheduled`,
+ * because a second dispatch could dial the same person twice.
+ *
+ * A recovery write can itself fail, and then the run keeps the state it had.
+ * The log names the accepted call id so an operator can reconcile it by hand.
+ * Nothing re-queues the run, because the second dial is the worse outcome.
+ */
+async function recoverStrandedRun(
+  deps: CalleDeps,
+  run: ClaimedRun,
+  cause: unknown,
+  placed: PlacedCall,
+): Promise<void> {
+  const reason = cause instanceof Error ? cause.message : "unknown error";
+  try {
+    const current = await readOne<{ state: string; calle_call_id: string | null }>(
+      deps,
+      "call_runs",
+      new URLSearchParams({ select: "state,calle_call_id", id: `eq.${run.id}` }),
+    );
+    // A refusal, a 409 or a landed dispatch has already moved the run. The
+    // recovery never overwrites a state another writer landed.
+    if (!current || current.state !== "claimed") return;
+    const now = deps.now();
+    const callId = current.calle_call_id ?? placed.callId;
+    if (callId) {
+      await updateRun(deps, run.id, {
+        state: "awaiting_result",
+        calle_call_id: callId,
+        dispatched_at: now.toISOString(),
+        poll_after: new Date(now.getTime() + POLL_DELAY_MS).toISOString(),
+      });
+      return;
+    }
+    await updateRun(deps, run.id, {
+      state: "failed",
+      terminal_writer: RECOVERY_WRITER,
+      disposition: "not_answered",
+      calle_failure: failure("dispatch_failed", reason),
+      completed_at: now.toISOString(),
+    });
+  } catch (error) {
+    console.error(
+      `dispatch recovery failed for run ${run.id}`,
+      error instanceof Error ? error.message : "unknown error",
+      placed.callId
+        ? `accepted call ${placed.callId} needs manual reconciliation`
+        : "no call was placed",
+    );
+  }
 }
 
 const testFn = (Deno as { test?: (name: string, fn: () => void | Promise<void>) => void }).test;
@@ -350,7 +470,9 @@ if (typeof testFn === "function") {
     calleApiBase: "https://api.call-e.test", calleApiKey: "calle-key",
     webhookUrl: "https://orma-api.nryn.dev/functions/v1/calle-webhook/secret",
     fetch: fetchImpl, now: () => new Date("2026-09-12T00:00:00.000Z"),
-    getEnv: () => "false",
+    // Only the dry-run switch is live for these tests. Every other name reads
+    // as unset, so the fixture choice stays on its default.
+    getEnv: (name) => (name === "ORMA_DRY_RUN" ? "false" : undefined),
   });
   const stubFetch = (requests: Request[]): typeof fetch => async (input, init) => {
     const request = new Request(input, init);
@@ -410,12 +532,19 @@ if (typeof testFn === "function") {
       if (request.url.includes("/slots")) return Response.json([{ local_time: "08:00" }]);
       if (request.url.includes("assemble_briefing")) return Response.json({ user_name: "Narayan", open_count: 0, lead_line: "Nothing urgent today.", open_items: "Nothing open.", last_call_summary: "", slot_local_time: "08:00" });
       if (request.url.endsWith("/v1/calls")) return new Response(null, { status: 409 });
+      if (request.url.includes("/call_runs")) return Response.json([{ state: "failed", calle_call_id: null }]);
       return new Response(null, { status: 204 });
     };
     await dispatchClaimedRun(run, baseDeps(fetchStub)).then(() => { throw new Error("409 must fail"); }, () => undefined);
     if (requests.filter((request) => request.url.endsWith("/v1/calls")).length !== 1) throw new Error("409 must not retry");
-    const patch = requests.filter((request) => request.method === "PATCH").at(-1);
-    if (!patch || !(await patch.text()).includes("idempotency_conflict")) throw new Error("409 was not recorded");
+    const patches = await Promise.all(
+      requests.filter((request) => request.method === "PATCH")
+        .map(async (request) => await request.text()),
+    );
+    if (!patches.some((body) => body.includes("idempotency_conflict"))) throw new Error("409 was not recorded");
+    if (patches.some((body) => body.includes("dispatch_recovery") || body.includes("awaiting_result"))) {
+      throw new Error("the recovery overwrote a state another writer landed");
+    }
   });
 
   testFn("dispatch uses the committed CALL-E fixture and pins the complete request", async () => {
@@ -471,29 +600,89 @@ if (typeof testFn === "function") {
     }
   });
 
-  testFn("a dry run records the exact body the live path would send", async () => {
+  testFn("a dry run assembles the live body byte for byte and records a mask of it", async () => {
     const live: Request[] = [];
-    await dispatchClaimedRun(run, baseDeps(stubFetch(live)));
+    const posted = await dispatchClaimedRun(run, baseDeps(stubFetch(live)));
     const liveRequest = live.find((candidate) => candidate.url.endsWith("/v1/calls"));
     if (!liveRequest) throw new Error("the live path did not call CALL-E");
     const liveBody = await liveRequest.text();
+    if (posted.requestBody !== liveBody) throw new Error("the live path reported a different body than it posted");
 
     const dry: Request[] = [];
-    await dispatchClaimedRun({ ...run, dry_run: true }, baseDeps(stubFetch(dry)));
+    const rehearsed = await dispatchClaimedRun({ ...run, dry_run: true }, baseDeps(stubFetch(dry)));
     if (dry.some((candidate) => candidate.url.endsWith("/v1/calls"))) {
       throw new Error("a dry run called CALL-E");
     }
-    const posted = await Promise.all(
+    if (rehearsed.requestBody !== liveBody) {
+      throw new Error("the dry run assembled a different body than the live path posts");
+    }
+    const events = await Promise.all(
       dry.filter((candidate) => candidate.url.includes("call_events")).map(async (candidate) => await candidate.json()),
     );
-    const dispatched = posted.find((event) => event.kind === "dispatched");
+    const dispatched = events.find((event) => event.kind === "dispatched");
     if (!dispatched) throw new Error("a dry run recorded no dispatch");
-    if (dispatched.detail.request_body !== liveBody) {
-      throw new Error("the dry run recorded a different body than the live path sends");
+    const recorded = String(dispatched.detail.request_body);
+    if (recorded === liveBody) throw new Error("the dry run recorded the live body unmasked");
+    if (recorded !== maskedRequestBody(liveBody)) {
+      throw new Error("the recorded body is not the mask of the body the live path posts");
     }
+    if (recorded.includes("calle-webhook/secret")) throw new Error("the recorded body still carries the webhook secret");
+    if (recorded.includes("+919999999999")) throw new Error("the recorded body still carries the callee's number");
     if (dispatched.detail.outbound_request_made !== false) {
       throw new Error("the dry run claimed an outbound request");
     }
+  });
+
+  const recoveryStub = (
+    patches: Array<Record<string, unknown>>,
+    callId: string | null,
+  ): typeof fetch => async (input, init) => {
+    const request = new Request(input, init);
+    if (request.url.includes("/profiles")) return new Response(null, { status: 500 });
+    if (request.method === "PATCH") {
+      patches.push(JSON.parse(await request.text()) as Record<string, unknown>);
+      return new Response(null, { status: 204 });
+    }
+    if (request.url.includes("/call_runs")) {
+      return Response.json([{ state: "claimed", calle_call_id: callId }]);
+    }
+    return new Response(null, { status: 204 });
+  };
+
+  testFn("a dispatch that throws before its terminal write leaves no run claimed", async () => {
+    const patches: Array<Record<string, unknown>> = [];
+    await dispatchClaimedRun(run, baseDeps(recoveryStub(patches, null))).then(
+      () => { throw new Error("a failing profile read was reported as a dispatch"); },
+      (error) => {
+        if (!(error instanceof Error) || error.message !== "profiles read failed") throw error;
+      },
+    );
+    const recovered = patches.at(-1);
+    if (!recovered || recovered.state !== "failed") {
+      throw new Error(`a stranded run stayed out of every selector, saw ${JSON.stringify(recovered)}`);
+    }
+    if (recovered.terminal_writer !== "dispatch_recovery") throw new Error("the recovery write named no writer");
+    if (!recovered.completed_at) throw new Error("the failed stranded run carried no completion time");
+    const recordedFailure = JSON.stringify(recovered.calle_failure);
+    if (recordedFailure !== JSON.stringify({ failure_code: "dispatch_failed", failure_message: "profiles read failed" })) {
+      throw new Error(`the recovery recorded no reason, saw ${recordedFailure}`);
+    }
+  });
+
+  testFn("a stranded run that recorded a call id is handed to the poll", async () => {
+    const patches: Array<Record<string, unknown>> = [];
+    await dispatchClaimedRun(run, baseDeps(recoveryStub(patches, "call-1"))).then(
+      () => undefined,
+      () => undefined,
+    );
+    const recovered = patches.at(-1);
+    if (!recovered || recovered.state !== "awaiting_result") {
+      throw new Error(`a stranded run with a call id cannot be polled, saw ${JSON.stringify(recovered)}`);
+    }
+    if (typeof recovered.poll_after !== "string" || new Date(recovered.poll_after).getTime() <= Date.parse("2026-09-12T00:00:00.000Z")) {
+      throw new Error(`the recovered run has no poll window, saw ${JSON.stringify(recovered.poll_after)}`);
+    }
+    if (recovered.terminal_writer !== undefined) throw new Error("a pending recovery tagged a terminal writer");
   });
 
   testFn("a dry run replays the recording into the ingestion seam", async () => {
@@ -512,6 +701,100 @@ if (typeof testFn === "function") {
     const moved = seen.filter((candidate) => candidate.method === "PATCH").at(-1);
     if (!moved || !(await moved.text()).includes('"billable":false')) {
       throw new Error("a dry run did not move the run without billing it");
+    }
+  });
+
+  testFn("a failed claim insert leaves no run in the dispatch step", async () => {
+    const patches: Array<Record<string, unknown>> = [];
+    const fetchStub: typeof fetch = async (input, init) => {
+      const request = new Request(input, init);
+      if (request.url.includes("/call_events") && request.method === "POST") {
+        const body = JSON.parse(await request.text()) as { kind?: string };
+        if (body.kind === "claimed") return new Response(null, { status: 500 });
+        return new Response(null, { status: 204 });
+      }
+      if (request.method === "PATCH") {
+        patches.push(JSON.parse(await request.text()) as Record<string, unknown>);
+        return new Response(null, { status: 204 });
+      }
+      if (request.url.includes("/call_runs")) {
+        return Response.json([{ state: "claimed", calle_call_id: null }]);
+      }
+      throw new Error(`the dispatcher reached an unexpected endpoint, saw ${request.url}`);
+    };
+    await dispatchClaimedRun(run, baseDeps(fetchStub)).then(
+      () => { throw new Error("a failed claim insert was reported as a dispatch"); },
+      (error) => {
+        if (!(error instanceof Error) || error.message !== "call event insert failed") throw error;
+      },
+    );
+    const recovered = patches.at(-1);
+    if (recovered?.state !== "failed" || recovered.terminal_writer !== RECOVERY_WRITER) {
+      throw new Error(`a run whose claim insert failed stayed out of every selector, saw ${JSON.stringify(recovered)}`);
+    }
+    if (!recovered.completed_at) throw new Error("the failed claim insert left no completion time");
+  });
+
+  testFn("a call CALL-E accepted is handed to the poll when its write fails", async () => {
+    const patches: Array<Record<string, unknown>> = [];
+    let stateWrites = 0;
+    const fetchStub: typeof fetch = async (input, init) => {
+      const request = new Request(input, init);
+      if (request.url.endsWith("/v1/calls")) {
+        return Response.json({ id: "call-1", status: "queued", completion_confidence: null });
+      }
+      if (request.url.includes("/profiles")) return Response.json([{ id: "user-1", phone_e164: "+919999999999", phone_confirmed_at: "2026-09-01T00:00:00Z" }]);
+      if (request.url.includes("/consents")) return Response.json([{ id: "consent-1" }]);
+      if (request.url.includes("/slots")) return Response.json([{ local_time: "08:00" }]);
+      if (request.url.includes("assemble_briefing")) return Response.json({ user_name: "Narayan", open_count: 0, lead_line: "Nothing urgent today.", open_items: "Nothing open.", last_call_summary: "", slot_local_time: "08:00" });
+      if (request.method === "PATCH") {
+        const patch = JSON.parse(await request.text()) as Record<string, unknown>;
+        patches.push(patch);
+        // Only the dispatcher's own state write fails, and the call is placed.
+        if (typeof patch.state === "string" && patch.terminal_writer !== RECOVERY_WRITER && stateWrites++ === 0) {
+          return new Response(null, { status: 500 });
+        }
+        return new Response(null, { status: 204 });
+      }
+      if (request.url.includes("/call_runs")) {
+        return Response.json([{ state: "claimed", calle_call_id: null }]);
+      }
+      return new Response(null, { status: 204 });
+    };
+    await dispatchClaimedRun(run, baseDeps(fetchStub)).then(
+      () => { throw new Error("a failed write after the call was reported as a dispatch"); },
+      () => undefined,
+    );
+    const recovered = patches.at(-1);
+    if (recovered?.state !== "awaiting_result" || recovered.calle_call_id !== "call-1") {
+      throw new Error(`the accepted call was not handed to the poll, saw ${JSON.stringify(recovered)}`);
+    }
+    if (typeof recovered.poll_after !== "string") throw new Error("the reconciled run carries no poll window");
+    if (recovered.terminal_writer !== undefined) throw new Error("the reconciliation tagged a terminal writer");
+  });
+
+  testFn("the dispatcher rehearses the fixture the operator selected", async () => {
+    const requests: Request[] = [];
+    const deps: CalleDeps = {
+      ...baseDeps(stubFetch(requests)),
+      getEnv: (name: string) => (name === "ORMA_DRY_RUN_FIXTURE" ? "failed" : undefined),
+    };
+    await dispatchClaimedRun({ ...run, dry_run: true }, deps);
+    const events = await Promise.all(
+      requests.filter((candidate) => candidate.url.includes("call_events") && candidate.method === "POST")
+        .map(async (candidate) => await candidate.json() as { kind: string; detail: Record<string, unknown> }),
+    );
+    const dispatched = events.find((event) => event.kind === "dispatched");
+    if (dispatched?.detail.fixture !== "failed") {
+      throw new Error(`a selected failed fixture was not rehearsed, saw ${JSON.stringify(dispatched?.detail.fixture)}`);
+    }
+    const patches = await Promise.all(
+      requests.filter((candidate) => candidate.method === "PATCH" && candidate.url.includes("call_runs"))
+        .map(async (candidate) => JSON.parse(await candidate.text()) as Record<string, unknown>),
+    );
+    const terminal = patches.find((patch) => typeof patch.state === "string");
+    if (terminal?.state !== "failed" || terminal.terminal_writer !== "dry_run") {
+      throw new Error(`the failed rehearsal landed the wrong terminal shape, saw ${JSON.stringify(terminal)}`);
     }
   });
 }
