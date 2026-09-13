@@ -511,7 +511,7 @@ def settings_content():
   <div class="stack"><span>{PHONE_MASKED}</span><span class="muted" style="font-size: 0.9rem;">Confirmed by your first call on 11 September</span></div>
   <a class="btn btn-secondary">Change</a>
 </div>"""
-    consent = """<div class="stack" style="gap: 0.2rem;"><span>Calls are allowed</span><span class="muted" style="font-size: 0.9rem;">Agreed on the web, 11 September 2026 &#183; wording v1</span></div>
+    consent = """<div class="stack" style="gap: 0.2rem;"><span>Calls are allowed</span><span class="muted" style="font-size: 0.9rem;">Agreed on the web, 10 September 2026 &#183; wording v1</span></div>
 <a style="font-size: 0.95rem;">Read what you agreed to</a>
 <div class="rowx" style="gap: 0.5rem;"><a class="btn btn-secondary">Withdraw consent</a></div>
 <p class="hint">Calls stop from the next minute, not the next day.</p>"""
@@ -750,7 +750,7 @@ def main():
         x_by_page[page] = (x_by_page.get(page, 0) + 1) if page == "desktop" else x + w + 100
     notes = [
         ("phone", "note-phone", "Sample data throughout. Numbers agree across screens: the 14 Sept call retired the seeded dentist item at 0:12 and wrote 4 mentions. Consent wording v1 is draft copy for review."),
-        ("states", "note-states", "Live states update without a reload. A no-result call never says extraction failed, it just shows the transcript."),
+        ("states", "note-states", "Live states update without a reload. First run is a separate new account on its first day, not the account in the other screens. A no-result call never says extraction failed, it just shows the transcript."),
     ]
     for page, nid, text in notes:
         canvas["annotations"].append({"id": nid, "page": page, "x": 0, "y": -200, "w": 520, "text": text})
