@@ -11,6 +11,7 @@
  */
 
 import { withSupabase } from "npm:@supabase/server@1.6.0";
+import { type CallEventDetail, recordCallEvent } from "../_shared/events.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HORIZON_MS = 48 * 60 * 60 * 1000;
@@ -212,14 +213,42 @@ async function removeFutureRuns(deps: MaterialiseDeps, slotId: string, now: Date
   if (!response.ok) throw new Error("future call_runs delete failed");
 }
 
-async function insertRuns(deps: MaterialiseDeps, runs: MaterialisedRun[]): Promise<void> {
-  if (runs.length === 0) return;
-  const response = await deps.fetch(restUrl(deps.apiUrl, "call_runs"), {
-    method: "POST",
-    headers: serviceHeaders(deps.serviceRoleKey, "resolution=ignore-duplicates"),
-    body: JSON.stringify(runs),
-  });
+/** A run row PostgREST returned, which only carries rows it really inserted. */
+type InsertedRun = MaterialisedRun & { id: string };
+
+/**
+ * Inserts the candidates and returns the rows the database actually created.
+ * A duplicate idempotency key is ignored, so it is absent from this result and
+ * gains no timeline row.
+ */
+async function insertRuns(deps: MaterialiseDeps, runs: MaterialisedRun[]): Promise<InsertedRun[]> {
+  if (runs.length === 0) return [];
+  // `on_conflict` names the unique key the ignore applies to. Without it
+  // PostgREST targets the primary key, which never conflicts, and a repeat run
+  // fails on the idempotency key instead of being ignored.
+  const response = await deps.fetch(
+    restUrl(deps.apiUrl, "call_runs", "on_conflict=idempotency_key"),
+    {
+      method: "POST",
+      headers: serviceHeaders(deps.serviceRoleKey, "resolution=ignore-duplicates,return=representation"),
+      body: JSON.stringify(runs),
+    },
+  );
   if (!response.ok) throw new Error("call_runs insert failed");
+  return await response.json() as InsertedRun[];
+}
+
+/**
+ * What an operator reads to explain why this run exists. The slot and the
+ * instant are the two facts the materialiser decided, and both are durable.
+ */
+function materialisedDetail(run: InsertedRun): CallEventDetail {
+  return {
+    slot_id: run.slot_id,
+    local_date: run.local_date,
+    part_of_day: run.part_of_day,
+    scheduled_for: run.scheduled_for,
+  };
 }
 
 export async function materialise(deps: MaterialiseDeps): Promise<{ candidates: number }> {
@@ -236,7 +265,12 @@ export async function materialise(deps: MaterialiseDeps): Promise<{ candidates: 
     if (!profile) throw new Error("slot profile missing");
     return runsForSlot(slot, profile, now);
   });
-  await insertRuns(deps, runs);
+  const inserted = await insertRuns(deps, runs);
+  // Only after the insert commits, because a materialise that fails must not
+  // leave a timeline claiming a run that no slot produced.
+  for (const run of inserted) {
+    await recordCallEvent(run.id, "materialised", materialisedDetail(run), deps);
+  }
   return { candidates: runs.length };
 }
 
@@ -289,7 +323,9 @@ if (typeof testFn === "function" && !import.meta.main) {
 
   testFn("a second materialisation relies on the durable key and creates no duplicate", async () => {
     const stored = new Map<string, MaterialisedRun>();
+    const events: Array<{ call_run_id: string; kind: string }> = [];
     const requests: Array<{ method: string; url: URL }> = [];
+    let minted = 0;
     const fetchStub: typeof fetch = async (input, init = {}) => {
       const url = new URL(String(input));
       const method = init.method ?? "GET";
@@ -298,7 +334,25 @@ if (typeof testFn === "function" && !import.meta.main) {
       if (url.pathname.endsWith("/slots")) return Response.json([slot]);
       if (url.pathname.endsWith("/call_runs") && method === "POST") {
         const rows = JSON.parse(String(init.body)) as MaterialisedRun[];
-        for (const row of rows) if (!stored.has(row.idempotency_key)) stored.set(row.idempotency_key, row);
+        // PostgREST only ignores a conflict it was told the arbiter for. A
+        // request without `on_conflict` targets the primary key, so a repeat
+        // row raises 23505 exactly as the real stack does.
+        if (url.searchParams.get("on_conflict") !== "idempotency_key") {
+          const duplicate = rows.some((row) => stored.has(row.idempotency_key));
+          if (duplicate) return new Response(null, { status: 409 });
+        }
+        const created: InsertedRun[] = [];
+        for (const row of rows) {
+          if (stored.has(row.idempotency_key)) continue;
+          stored.set(row.idempotency_key, row);
+          minted += 1;
+          created.push({ ...row, id: `00000000-0000-4000-8000-${String(minted).padStart(12, "0")}` });
+        }
+        // PostgREST answers `ignore-duplicates` with only the rows it created.
+        return Response.json(created);
+      }
+      if (url.pathname.endsWith("/call_events") && method === "POST") {
+        events.push(JSON.parse(String(init.body)));
         return new Response(null, { status: 201 });
       }
       return new Response(null, { status: 500 });
@@ -314,6 +368,87 @@ if (typeof testFn === "function" && !import.meta.main) {
     if (stored.size !== 2) throw new Error(`expected two horizon rows, got ${stored.size}`);
     const inserts = requests.filter(({ method, url }) => method === "POST" && url.pathname.endsWith("/call_runs"));
     if (inserts.length !== 2) throw new Error("each job invocation must submit its idempotent candidates");
+    if (events.length !== 2) throw new Error(`an ignored duplicate records no event, got ${events.length}`);
+    if (new Set(events.map((event) => event.call_run_id)).size !== 2) {
+      throw new Error("each inserted run carries its own materialised event");
+    }
+  });
+
+  testFn("materialise records one ordered event per inserted run, naming the slot and the instant", async () => {
+    const events: Array<{ call_run_id: string; kind: string; detail: Record<string, unknown> }> = [];
+    const insertedIds: string[] = [];
+    const fetchStub: typeof fetch = async (input, init = {}) => {
+      const url = new URL(String(input));
+      const method = init.method ?? "GET";
+      if (url.pathname.endsWith("/profiles")) return Response.json([profile]);
+      if (url.pathname.endsWith("/slots")) return Response.json([slot]);
+      if (url.pathname.endsWith("/call_runs") && method === "POST") {
+        const rows = JSON.parse(String(init.body)) as MaterialisedRun[];
+        return Response.json(rows.map((row, index) => {
+          const id = `00000000-0000-4000-8000-00000000001${index}`;
+          insertedIds.push(id);
+          return { ...row, id };
+        }));
+      }
+      if (url.pathname.endsWith("/call_events") && method === "POST") {
+        events.push(JSON.parse(String(init.body)));
+        return new Response(null, { status: 201 });
+      }
+      return new Response(null, { status: 500 });
+    };
+    const result = await materialise({
+      apiUrl: "https://orma-api.nryn.dev", serviceRoleKey: "test-service-key", fetch: fetchStub,
+      now: () => new Date("2026-09-12T00:00:00.000Z"),
+    });
+    if (insertedIds.length !== 2) throw new Error(`expected two horizon rows, got ${insertedIds.length}`);
+    if (events.length !== result.candidates) {
+      throw new Error(`one event per inserted run, got ${events.length} for ${result.candidates}`);
+    }
+    if (events.some((event) => event.kind !== "materialised")) {
+      throw new Error("an inserted run must record a materialised event");
+    }
+    if (events.map((event) => event.call_run_id).join(",") !== insertedIds.join(",")) {
+      throw new Error("the events must follow the inserted rows in order");
+    }
+    const detail = events[0].detail;
+    if (detail.slot_id !== slot.id) throw new Error(`the event must name the slot, got ${detail.slot_id}`);
+    if (detail.scheduled_for !== "2026-09-12T02:30:00.000Z") {
+      throw new Error(`the event must name the instant, got ${detail.scheduled_for}`);
+    }
+    if (detail.local_date !== "2026-09-12" || detail.part_of_day !== "morning") {
+      throw new Error("the event must name the local date and the part of day");
+    }
+  });
+
+  testFn("a failed call_runs insert records no materialised event", async () => {
+    let events = 0;
+    const fetchStub: typeof fetch = async (input, init = {}) => {
+      const url = new URL(String(input));
+      const method = init.method ?? "GET";
+      if (url.pathname.endsWith("/profiles")) return Response.json([profile]);
+      if (url.pathname.endsWith("/slots")) return Response.json([slot]);
+      if (url.pathname.endsWith("/call_runs") && method === "POST") {
+        return new Response(null, { status: 500 });
+      }
+      if (url.pathname.endsWith("/call_events")) {
+        events += 1;
+        return new Response(null, { status: 201 });
+      }
+      return new Response(null, { status: 500 });
+    };
+    let surfaced = "";
+    try {
+      await materialise({
+        apiUrl: "https://orma-api.nryn.dev", serviceRoleKey: "test-service-key", fetch: fetchStub,
+        now: () => new Date("2026-09-12T00:00:00.000Z"),
+      });
+    } catch (error) {
+      surfaced = error instanceof Error ? error.message : "unknown";
+    }
+    if (surfaced !== "call_runs insert failed") {
+      throw new Error(`a failed insert must surface, got ${surfaced}`);
+    }
+    if (events !== 0) throw new Error(`a failed insert records no event, recorded ${events}`);
   });
 
   testFn("deactivating a slot deletes scheduled future runs and nothing else", async () => {

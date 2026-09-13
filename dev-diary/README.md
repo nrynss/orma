@@ -158,7 +158,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
 | P1 | 7 / 7 | Complete. Contracts are frozen. |
-| P2 | 10 / 11 | T2.1 through T2.8, T2.5a and T2.7a landed. T2.9 is the last task. |
+| P2 | 11 / 11 | **Complete.** Every task landed. The phase e2e review is next. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 0 / 3 | T4.1 can start. |
 | P5 | 0 / 4 | T5.1 can start. |
@@ -884,3 +884,40 @@ poll-terminalised run, `webhook_received, refetched, ingested, finalised` for a
 webhook one, and `claimed, dispatched, ingested, finalised` for a dry run. A run
 abandoned for a spent retry budget carries `finalised` with `outcome: abandoned`
 and its reason.
+
+### 2026-09-13 · T2.9 landed, the operator timeline
+
+T2.9 is done. Every transition writes one `call_events` row through
+`recordCallEvent`: materialised, claimed, dispatched, polled, webhook_received,
+refetched, ingested and finalised. Eight kinds, no new one, and the round 2
+reviewer measured a production caller and real rows for each.
+
+`materialise` now writes one `materialised` row per created run, with the slot and
+the instant, and nothing when the insert fails. Its insert names
+`on_conflict=idempotency_key` and asks for the representation, so a repeat
+materialisation is ignored rather than raising 23505. The old 409 was a bug, and
+the reviewer reverted it to prove the new shape is the guard.
+
+Four paths in `calle.ts` that end a run without ingestion now record `finalised`
+with a reason: a refusal, a 409, a rejected dispatch, and a recovery with no call
+id. A path that hands the run to the poll records nothing, because that run's
+story continues.
+
+`recordCallEvent` retries an append three times with 250 ms between attempts, and
+it still throws when the budget is spent. The finaliser's own retry loop is gone,
+so one budget covers both, and the run row still records a lost append as
+`finalise_error`.
+
+Round 2 returned one M for the lost append and one L for a sentence in the note
+that overstated a 409. Both are fixed. Two residuals stand, recorded in
+`t2.9-contract-change.md`: a retry after a lost response can append a second row,
+because `call_events` has no key that could refuse it, and a repeated kind is
+legitimate, so a unique key on the pair would be wrong. The doc comment names it.
+
+**Deviation from the loop.** The orchestrator landed after remediation round 2
+with no round 3 review, on the user's authority, and ran the acceptance itself:
+`deno check` clean, 113 Deno tests green, the driver 58 of 58, and the stack at
+its baseline rows.
+
+**The delivery reading.** The receipt is T3.4's `deliveries` row, keyed by
+`call_run_id`, and not a ninth kind. Record 1 of the note carries the evidence.

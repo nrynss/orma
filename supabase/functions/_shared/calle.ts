@@ -14,7 +14,7 @@ import {
   isDryRun,
   maskedRequestBody,
 } from "./dispatch-mode.ts";
-import { recordCallEvent } from "./events.ts";
+import { type CallEventDetail, recordCallEvent } from "./events.ts";
 import type { CallStatus, CallTaskFixture } from "./fixtures.ts";
 import { loadCallFixtures } from "./fixtures.ts";
 import { ingestTerminalRun } from "./ingest.ts";
@@ -189,6 +189,19 @@ function failure(code: string, message: string): Record<string, string> {
   return { failure_code: code, failure_message: message };
 }
 
+/**
+ * The row a dispatcher writes when it ends a run before any call exists. The
+ * shape matches the finaliser's abandoned row, so one reader handles both, and
+ * it satisfies the helper's terminal contract with a state and a reason.
+ */
+function finalisedFailureDetail(
+  outcome: string,
+  reason: string,
+  state: string,
+): CallEventDetail {
+  return { calle_call_id: null, state, outcome, failure_reason: reason };
+}
+
 async function refuseRun(deps: CalleDeps, runId: string, reason: string): Promise<void> {
   await updateRun(deps, runId, {
     state: "canceled",
@@ -196,6 +209,14 @@ async function refuseRun(deps: CalleDeps, runId: string, reason: string): Promis
     completed_at: deps.now().toISOString(),
     calle_failure: failure("dispatch_refused", reason),
   });
+  // No call exists, so the run is terminal and its story ends here. The row
+  // names the reason, because the refusal never reaches CALL-E.
+  await recordCallEvent(
+    runId,
+    "finalised",
+    finalisedFailureDetail("refused", reason, "canceled"),
+    deps,
+  );
 }
 
 export function buildCallRequest(
@@ -359,19 +380,33 @@ async function dispatchOne(
     body: requestBody,
   });
   if (response.status === 409) {
+    const reason = "CALL-E rejected this idempotency key with different inputs";
     await updateRun(deps, run.id, {
       state: "failed",
-      calle_failure: failure("idempotency_conflict", "CALL-E rejected this idempotency key with different inputs"),
+      calle_failure: failure("idempotency_conflict", reason),
       completed_at: deps.now().toISOString(),
     });
+    await recordCallEvent(
+      run.id,
+      "finalised",
+      finalisedFailureDetail("idempotency_conflict", reason, "failed"),
+      deps,
+    );
     throw new Error("CALL-E idempotency conflict");
   }
   if (!response.ok) {
+    const reason = `CALL-E dispatch returned HTTP ${response.status}`;
     await updateRun(deps, run.id, {
       state: "failed",
-      calle_failure: failure("dispatch_failed", `CALL-E dispatch returned HTTP ${response.status}`),
+      calle_failure: failure("dispatch_failed", reason),
       completed_at: deps.now().toISOString(),
     });
+    await recordCallEvent(
+      run.id,
+      "finalised",
+      finalisedFailureDetail("dispatch_failed", reason, "failed"),
+      deps,
+    );
     throw new Error("CALL-E dispatch failed");
   }
 
@@ -408,6 +443,10 @@ async function dispatchOne(
  * the poll must be able to answer for it. A run with no call id fails with the
  * reason and a completion time. Neither path returns the run to `scheduled`,
  * because a second dispatch could dial the same person twice.
+ *
+ * The run it fails records the `finalised` row that names the reason, so the
+ * timeline ends with a cause rather than a bare claim. A reconciliation that
+ * hands the run to the poll records no such row, because that story continues.
  *
  * A recovery write can itself fail, and then the run keeps the state it had.
  * The log names the accepted call id so an operator can reconcile it by hand.
@@ -447,6 +486,12 @@ async function recoverStrandedRun(
       calle_failure: failure("dispatch_failed", reason),
       completed_at: now.toISOString(),
     });
+    await recordCallEvent(
+      run.id,
+      "finalised",
+      finalisedFailureDetail("dispatch_failed", reason, "failed"),
+      deps,
+    );
   } catch (error) {
     console.error(
       `dispatch recovery failed for run ${run.id}`,
@@ -486,6 +531,25 @@ if (typeof testFn === "function") {
     return new Response(null, { status: 204 });
   };
 
+  /** Every `call_events` row one dispatch posted, in the order it posted them. */
+  const recordedEvents = async (requests: Request[]) =>
+    await Promise.all(
+      requests
+        .filter((request) => request.url.includes("call_events") && request.method === "POST")
+        .map(async (request) =>
+          await request.json() as { kind: string; detail: Record<string, unknown> }
+        ),
+    );
+
+  /** The one row a run that ends before any call exists must append. */
+  const onlyFinalised = async (requests: Request[]) => {
+    const events = await recordedEvents(requests);
+    if (events.map((event) => event.kind).join(",") !== "claimed,finalised") {
+      throw new Error(`a failed run must read claimed then finalised, saw ${events.map((event) => event.kind).join(",")}`);
+    }
+    return events.at(-1)!.detail;
+  };
+
   testFn("dispatch sends the durable key and records the returned CALL-E id", async () => {
     const requests: Request[] = [];
     const fetchStub: typeof fetch = async (input, init) => {
@@ -520,6 +584,13 @@ if (typeof testFn === "function") {
     if (requests.some((request) => request.url.endsWith("/v1/calls"))) throw new Error("dispatch called CALL-E without consent");
     const patch = requests.find((request) => request.method === "PATCH");
     if (!patch || !(await patch.text()).includes("dispatch_refused")) throw new Error("consent refusal was not recorded");
+    const refused = await onlyFinalised(requests);
+    if (
+      refused.state !== "canceled" || refused.outcome !== "refused" ||
+      refused.failure_reason !== "profile has no live outbound_calls consent"
+    ) {
+      throw new Error(`the refusal row must name the reason, saw ${JSON.stringify(refused)}`);
+    }
   });
 
   testFn("a CALL-E 409 is visible and does not retry with a fresh key", async () => {
@@ -543,6 +614,50 @@ if (typeof testFn === "function") {
     );
     if (!patches.some((body) => body.includes("idempotency_conflict"))) throw new Error("409 was not recorded");
     if (patches.some((body) => body.includes("dispatch_recovery") || body.includes("awaiting_result"))) {
+      throw new Error("the recovery overwrote a state another writer landed");
+    }
+    const conflict = await onlyFinalised(requests);
+    if (
+      conflict.state !== "failed" || conflict.outcome !== "idempotency_conflict" ||
+      conflict.failure_reason !== "CALL-E rejected this idempotency key with different inputs"
+    ) {
+      throw new Error(`the 409 row must name the conflict, saw ${JSON.stringify(conflict)}`);
+    }
+  });
+
+  testFn("a rejected dispatch names the provider status on the timeline", async () => {
+    const requests: Request[] = [];
+    // The stub models the run, because the recovery must read the state the
+    // rejected write landed and not write a second row for the same move.
+    let state = "claimed";
+    const fetchStub: typeof fetch = async (input, init) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      if (request.url.includes("/profiles")) return Response.json([{ id: "user-1", phone_e164: "+919999999999", phone_confirmed_at: "2026-09-01T00:00:00Z" }]);
+      if (request.url.includes("/consents")) return Response.json([{ id: "consent-1" }]);
+      if (request.url.includes("/slots")) return Response.json([{ local_time: "08:00" }]);
+      if (request.url.includes("assemble_briefing")) return Response.json({ user_name: "Narayan", open_count: 0, lead_line: "Nothing urgent today.", open_items: "Nothing open.", last_call_summary: "", slot_local_time: "08:00" });
+      if (request.url.endsWith("/v1/calls")) return new Response(null, { status: 503 });
+      if (request.method === "PATCH") {
+        const patch = JSON.parse(await request.text()) as { state?: string };
+        if (typeof patch.state === "string") state = patch.state;
+        return new Response(null, { status: 204 });
+      }
+      if (request.url.includes("/call_runs")) return Response.json([{ state, calle_call_id: null }]);
+      return new Response(null, { status: 204 });
+    };
+    await dispatchClaimedRun(run, baseDeps(fetchStub)).then(
+      () => { throw new Error("a rejected dispatch was reported as a dispatch"); },
+      () => undefined,
+    );
+    const rejected = await onlyFinalised(requests);
+    if (
+      rejected.state !== "failed" || rejected.outcome !== "dispatch_failed" ||
+      rejected.failure_reason !== "CALL-E dispatch returned HTTP 503"
+    ) {
+      throw new Error(`the rejected dispatch must name the status, saw ${JSON.stringify(rejected)}`);
+    }
+    if (requests.some((request) => request.method === "PATCH" && request.url.includes("awaiting_result"))) {
       throw new Error("the recovery overwrote a state another writer landed");
     }
   });
@@ -636,8 +751,10 @@ if (typeof testFn === "function") {
   const recoveryStub = (
     patches: Array<Record<string, unknown>>,
     callId: string | null,
+    requests: Request[] = [],
   ): typeof fetch => async (input, init) => {
     const request = new Request(input, init);
+    requests.push(request);
     if (request.url.includes("/profiles")) return new Response(null, { status: 500 });
     if (request.method === "PATCH") {
       patches.push(JSON.parse(await request.text()) as Record<string, unknown>);
@@ -651,7 +768,8 @@ if (typeof testFn === "function") {
 
   testFn("a dispatch that throws before its terminal write leaves no run claimed", async () => {
     const patches: Array<Record<string, unknown>> = [];
-    await dispatchClaimedRun(run, baseDeps(recoveryStub(patches, null))).then(
+    const requests: Request[] = [];
+    await dispatchClaimedRun(run, baseDeps(recoveryStub(patches, null, requests))).then(
       () => { throw new Error("a failing profile read was reported as a dispatch"); },
       (error) => {
         if (!(error instanceof Error) || error.message !== "profiles read failed") throw error;
@@ -667,11 +785,19 @@ if (typeof testFn === "function") {
     if (recordedFailure !== JSON.stringify({ failure_code: "dispatch_failed", failure_message: "profiles read failed" })) {
       throw new Error(`the recovery recorded no reason, saw ${recordedFailure}`);
     }
+    const stranded = await onlyFinalised(requests);
+    if (
+      stranded.state !== "failed" || stranded.outcome !== "dispatch_failed" ||
+      stranded.failure_reason !== "profiles read failed"
+    ) {
+      throw new Error(`the stranded row must name the cause, saw ${JSON.stringify(stranded)}`);
+    }
   });
 
   testFn("a stranded run that recorded a call id is handed to the poll", async () => {
     const patches: Array<Record<string, unknown>> = [];
-    await dispatchClaimedRun(run, baseDeps(recoveryStub(patches, "call-1"))).then(
+    const requests: Request[] = [];
+    await dispatchClaimedRun(run, baseDeps(recoveryStub(patches, "call-1", requests))).then(
       () => undefined,
       () => undefined,
     );
@@ -683,6 +809,10 @@ if (typeof testFn === "function") {
       throw new Error(`the recovered run has no poll window, saw ${JSON.stringify(recovered.poll_after)}`);
     }
     if (recovered.terminal_writer !== undefined) throw new Error("a pending recovery tagged a terminal writer");
+    const events = await recordedEvents(requests);
+    if (events.some((event) => event.kind === "finalised")) {
+      throw new Error("a run handed to the poll must record no finalised row");
+    }
   });
 
   testFn("a dry run replays the recording into the ingestion seam", async () => {
@@ -780,10 +910,7 @@ if (typeof testFn === "function") {
       getEnv: (name: string) => (name === "ORMA_DRY_RUN_FIXTURE" ? "failed" : undefined),
     };
     await dispatchClaimedRun({ ...run, dry_run: true }, deps);
-    const events = await Promise.all(
-      requests.filter((candidate) => candidate.url.includes("call_events") && candidate.method === "POST")
-        .map(async (candidate) => await candidate.json() as { kind: string; detail: Record<string, unknown> }),
-    );
+    const events = await recordedEvents(requests);
     const dispatched = events.find((event) => event.kind === "dispatched");
     if (dispatched?.detail.fixture !== "failed") {
       throw new Error(`a selected failed fixture was not rehearsed, saw ${JSON.stringify(dispatched?.detail.fixture)}`);

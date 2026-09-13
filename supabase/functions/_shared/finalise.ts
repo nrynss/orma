@@ -26,8 +26,8 @@
  * written as completed when CALL-E later reports the call finished.
  *
  * Ingestion commits `completed_at` first, so a failed `finalised` append would
- * lose that row for good. The append is retried before its failure is
- * reported, and a lost append is named on the run row.
+ * lose that row for good. `recordCallEvent` owns the append retry, from one
+ * budget, and a lost append is named on the run row.
  *
  * A dry run never reaches this module. `dispatch-mode.ts` replays its recorded
  * fixture into ingestion inside the dispatch step, and ingestion completes the
@@ -35,11 +35,7 @@
  */
 
 import type { CalleDeps } from "./calle.ts";
-import {
-  type CallEventDetail,
-  type CallEventKind,
-  recordCallEvent,
-} from "./events.ts";
+import { EVENT_APPEND_ATTEMPTS, recordCallEvent } from "./events.ts";
 import type { CallTaskFixture } from "./fixtures.ts";
 import {
   type IngestDeps,
@@ -69,12 +65,6 @@ export const FINALISE_MAX_ATTEMPTS = 3;
 
 /** The wait a failed attempt sets before the tick may select the run again. */
 export const FINALISE_RETRY_WAIT_MS = 5 * 60_000;
-
-/** How many times one timeline append is attempted before it is reported. */
-export const TIMELINE_APPEND_ATTEMPTS = 3;
-
-/** The pause between timeline append attempts. */
-export const TIMELINE_APPEND_WAIT_MS = 250;
 
 /** Injected so the checks run without a real pause. */
 export type Sleep = (ms: number) => Promise<void>;
@@ -169,32 +159,6 @@ function serviceHeaders(key: string): HeadersInit {
   };
 }
 
-/**
- * Appends one timeline row, with a bounded retry. Ingestion commits
- * `completed_at` before this runs, so the run never returns to the queue and a
- * lost append is lost for good. A transient failure therefore gets two more
- * tries before the caller hears about it.
- */
-async function appendTimelineRow(
-  runId: string,
-  kind: CallEventKind,
-  detail: CallEventDetail,
-  deps: CalleDeps,
-  sleep: Sleep,
-): Promise<void> {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= TIMELINE_APPEND_ATTEMPTS; attempt++) {
-    try {
-      await recordCallEvent(runId, kind, detail, deps);
-      return;
-    } catch (error) {
-      lastError = error;
-      if (attempt < TIMELINE_APPEND_ATTEMPTS) await sleep(TIMELINE_APPEND_WAIT_MS);
-    }
-  }
-  throw lastError;
-}
-
 /** What the attempt boundary reported back about one failed attempt. */
 type AttemptOutcome = {
   attempts: number;
@@ -253,7 +217,7 @@ async function abandonRun(
   );
   if (!response.ok) throw new Error("call_runs abandon failed");
   if (await response.json() !== true) return;
-  await appendTimelineRow(run.id, "finalised", {
+  await recordCallEvent(run.id, "finalised", {
     calle_call_id: run.calle_call_id,
     state: run.state,
     outcome: "abandoned",
@@ -329,7 +293,7 @@ export async function finaliseRun(
   // Ingestion refuses a non-terminal payload, so the state is known here.
   const state = terminalStateFor(call.status);
   if (!state) throw new Error(`CALL-E reports ${call.status} for a finalised run`);
-  await appendTimelineRow(
+  await recordCallEvent(
     run.id,
     "finalised",
     finalisedDetail(call, state, ingested),
@@ -828,8 +792,10 @@ if (typeof testFn === "function") {
     const appends = seen.filter((request) =>
       request.url.endsWith("/call_events")
     );
-    if (appends.length !== TIMELINE_APPEND_ATTEMPTS) {
-      throw new Error(`the append must be retried ${TIMELINE_APPEND_ATTEMPTS} times, saw ${appends.length}`);
+    // One budget, owned by `recordCallEvent`. A second wrapper here would make
+    // this nine requests, and the loss record on the run row is what stays.
+    if (appends.length !== EVENT_APPEND_ATTEMPTS) {
+      throw new Error(`the append must be attempted ${EVENT_APPEND_ATTEMPTS} times, saw ${appends.length}`);
     }
     if (seen.some((request) => request.url.endsWith("/rpc/abandon_call_run"))) {
       throw new Error("a run whose ingest landed must never be abandoned");

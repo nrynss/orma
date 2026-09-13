@@ -265,8 +265,8 @@ This is how the pipeline is rehearsed and how the demo is tested without spendin
 requires:   T2.3
 fixture-ok: yes
 size:       S · mid
-owns:       supabase/functions/_shared/events.ts
-status:     not-started
+owns:       supabase/functions/_shared/events.ts, supabase/functions/materialise/index.ts, supabase/functions/_shared/calle.ts, supabase/functions/_shared/finalise.ts
+status:     done
 ```
 Write a `call_events` row at every transition: materialised, claimed, dispatched, polled, webhook received, re-fetched, ingested, finalised. Include enough detail to answer what happened without opening the logs.
 
