@@ -1,0 +1,1 @@
+get a grounding on the project and let us finish phase 5. Read agents.md and follow the process. If some tasks need more than what is mentioned, you can create new tasks and do the loop.
