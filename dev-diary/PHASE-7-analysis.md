@@ -76,8 +76,12 @@ shared suite proves the auth and generation path with an injected `fetch`.
 requires:   T7.2, T3.4
 fixture-ok: yes
 size:       M · mid
-owns:       supabase/functions/analysis/index.ts, supabase/functions/_shared/deliver-email.ts
-status:     not-started
+owns:       supabase/functions/analysis/index.ts,
+            supabase/functions/_shared/deliver-email.ts,
+            supabase/functions/_shared/deliver-email_tests.ts,
+            supabase/migrations/20260914000000_schedule_analysis.sql,
+            supabase/config.toml [functions.analysis] block
+status:     done
 ```
 Weekly, by `pg_cron`. Deliver over Telegram and, where enabled, email via Resend over HTTP. Ports 25 and 587 are blocked from Edge Functions, so SMTP is not an option.
 
