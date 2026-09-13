@@ -19,8 +19,8 @@ parallel: [P3, P4, P6]
 requires:   T1.1
 fixture-ok: yes
 size:       L · frontier
-owns:       supabase/migrations/*_facts.sql
-status:     not-started
+owns:       supabase/migrations/*_facts.sql, supabase/migrations/test-facts.sh
+status:     done
 ```
 SQL that produces the facts a report is written from, stored in `pattern_reports.facts`.
 
@@ -90,8 +90,8 @@ Do not edit `deliver-telegram.ts` unless a contract change is required.
 requires:   T2.7, T3.4
 fixture-ok: yes
 size:       S · mid
-owns:       supabase/functions/_shared/receipt.ts
-status:     not-started
+owns:       supabase/functions/_shared/receipt.ts, supabase/functions/_shared/receipt_tests.ts
+status:     done
 ```
 Immediately after ingestion: what the call captured, what it retired, and what was committed to.
 
