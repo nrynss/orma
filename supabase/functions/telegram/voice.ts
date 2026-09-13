@@ -110,16 +110,7 @@ export function recordedVoiceReply(text: string): string {
   return recordedCaptureReply(text);
 }
 
-export function vertexGenerateContentUrl(
-  project: string,
-  location: string,
-  model: string,
-): string {
-  const host = location === "global"
-    ? "https://aiplatform.googleapis.com"
-    : `https://${location}-aiplatform.googleapis.com`;
-  return `${host}/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`;
-}
+export { vertexGenerateContentUrl } from "../_shared/vertex.ts";
 
 export async function captureVoiceNote(args: {
   store: VoiceStore;

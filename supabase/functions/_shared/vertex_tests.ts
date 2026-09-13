@@ -216,6 +216,69 @@ if (typeof testFn === "function" && !import.meta.main) {
     }
   });
 
+  testFn("a non-OK token response fails before generateContent", async () => {
+    const credentialsJson = await testServiceAccountJson();
+    const calls: RecordedCall[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      calls.push({
+        url,
+        method: init?.method ?? "GET",
+        headers: new Headers(init?.headers),
+        body: typeof init?.body === "string" ? init.body : "",
+      });
+      if (init?.method === "POST" && url === "https://oauth2.googleapis.com/token") {
+        return new Response(JSON.stringify({ error: "invalid_grant" }), { status: 500 });
+      }
+      throw new Error(`unexpected ${url}`);
+    };
+    try {
+      await vertexGenerate(
+        { project: "nryn-personal", location: "us-central1", model: "gemini-3.8-flash", credentialsJson, fetch: fetchImpl },
+        {},
+      );
+      throw new Error("expected a non-OK token response to fail");
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== "google token exchange failed") {
+        throw new Error("must fail on a non-OK token response");
+      }
+    }
+    if (calls.length !== 1) throw new Error(`expected only the token request, saw ${calls.length}`);
+  });
+
+  testFn("a token 200 without access_token fails before generateContent", async () => {
+    const credentialsJson = await testServiceAccountJson();
+    const calls: RecordedCall[] = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      calls.push({
+        url,
+        method: init?.method ?? "GET",
+        headers: new Headers(init?.headers),
+        body: typeof init?.body === "string" ? init.body : "",
+      });
+      if (init?.method === "POST" && url === "https://oauth2.googleapis.com/token") {
+        return new Response(
+          JSON.stringify({ token_type: "Bearer", expires_in: 3599 }),
+          { headers: { "content-type": "application/json" } },
+        );
+      }
+      throw new Error(`unexpected ${url}`);
+    };
+    try {
+      await vertexGenerate(
+        { project: "nryn-personal", location: "us-central1", model: "gemini-3.8-flash", credentialsJson, fetch: fetchImpl },
+        {},
+      );
+      throw new Error("expected a token response without access_token to fail");
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== "google token exchange failed") {
+        throw new Error("must fail when the token response lacks access_token");
+      }
+    }
+    if (calls.length !== 1) throw new Error(`expected only the token request, saw ${calls.length}`);
+  });
+
   testFn("candidate text extraction joins parts and tolerates missing fields", async () => {
     const joined = extractCandidateText({
       candidates: [{ content: { parts: [{ text: "one " }, { text: "two" }, {}] } }],
