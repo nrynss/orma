@@ -26,6 +26,12 @@ interface Env {
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		const url = new URL(request.url);
+		// The judge-facing MCP URL stays orma-api.nryn.dev/mcp, so map the stable
+		// path onto the Supabase function path before the host rewrite. Every
+		// other path passes through untouched.
+		if (url.pathname === '/mcp' || url.pathname === '/mcp/') {
+			url.pathname = '/functions/v1/mcp';
+		}
 		url.hostname = env.SUPABASE_HOST;
 		url.protocol = 'https:';
 		url.port = '';

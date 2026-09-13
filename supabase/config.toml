@@ -18,3 +18,8 @@ verify_jwt = false
 # every request with ORMA_WEBHOOK_SECRET embedded in its webhook path.
 [functions.calle-webhook]
 verify_jwt = false
+
+# T4.2a owns this block. The handler answers a missing or expired token with a
+# clean 401 protocol error, so the gateway JWT check stays off.
+[functions.mcp]
+verify_jwt = false

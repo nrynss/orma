@@ -36,7 +36,7 @@ requires:   T4.1
 fixture-ok: yes
 size:       M · mid
 owns:       supabase/functions/mcp/tools/
-status:     claimed:orma-impl
+status:     done
 ```
 `add_item`, `list_items`, `retire_item`, `set_slot`, `get_last_call`, `get_patterns`.
 
@@ -50,10 +50,32 @@ status:     claimed:orma-impl
 
 ---
 
-### T4.3: Published configuration
+### T4.2a: Wire tools, proxy path and gateway auth
 ```yaml
 requires:   T4.2
 fixture-ok: yes
+size:       S · mid
+owns:       supabase/functions/mcp/index.ts, proxy/src/index.ts, supabase/config.toml, supabase/functions/mcp/tools/double.ts
+status:     done
+```
+Carries the T4.2 contract change plus the two T4.1 residuals. `index.ts` imports
+`registerOrmaTools` from `./tools/mod.ts`, passes the authenticated user into
+`createOrmaMcpServer` and drops the stub loop. The proxy maps `/mcp` to
+`/functions/v1/mcp`, so the published URL stays `orma-api.nryn.dev/mcp`.
+`supabase/config.toml` sets `[functions.mcp] verify_jwt = false`, because the
+handler turns a missing or expired token into a clean protocol error itself. It
+also carries four sanctioned lines in `tools/double.ts`, the fixture
+reconciliation for call-engine columns that landed after T4.2 froze.
+
+**Done when:** through `index.ts`, a clean MCP client initialises, lists the six
+tools and round-trips one tool under a fixture client, an anonymous request
+still fails as a protocol error, and the function test suite stays green.
+
+---
+
+### T4.3: Published configuration
+```yaml
+requires:   T4.2, T4.2a
 size:       XS · light
 owns:       docs/mcp.md
 status:     not-started

@@ -81,6 +81,10 @@ function run(
     dispatched_at: null,
     completed_at: scheduled_for,
     created_at: scheduled_for,
+    finalise_attempts: 0,
+    finalise_after: null,
+    finalise_error: null,
+    terminal_writer: "poll", // a live terminal move names its writer, here the poll tick
   }
 }
 

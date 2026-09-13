@@ -1,5 +1,5 @@
 /**
- * T4.1 MCP Streamable HTTP transport and JWT authorisation.
+ * T4.1 transport and JWT authorisation, T4.2a tool wiring.
  *
  * Runtime env, same names as `scripts/bootstrap-env.sh` (no defaults):
  * `ORMA_API_URL`, `SUPABASE_ANON_KEY`.
@@ -12,9 +12,9 @@
  * Authorisation is the caller's Supabase JWT (Authorization Bearer).
  * Missing or expired tokens are clean auth errors, never a 500.
  *
- * Tool names are registered here. Handlers are stubs until T4.2 owns
- * `supabase/functions/mcp/tools/`. `list_items` runs a scoped select so
- * cross-user isolation is pinable before T4.2.
+ * T4.2a wires the real tools. `registerOrmaTools` from `./tools/mod.ts`
+ * registers all six handlers under the caller's RLS. `TOOL_NAMES` keeps one
+ * source of truth in `./tools/mod.ts` and is re-exported here.
  *
  * Pin with:
  * `deno test --allow-net --allow-env --allow-read supabase/functions/mcp/index.ts`
@@ -22,21 +22,15 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { McpServer } from "npm:@modelcontextprotocol/sdk@1.30.0/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@1.30.0/server/webStandardStreamableHttp.js";
+import { registerOrmaTools, TOOL_NAMES } from "./tools/mod.ts";
+import { createOwnerClient, createStore } from "./tools/double.ts";
 
 export const MCP_PROTOCOL_VERSION = "2025-03-26";
 export const MCP_SERVER_NAME = "orma";
 export const MCP_SERVER_VERSION = "0.1.0";
 
-export const TOOL_NAMES = [
-  "add_item",
-  "list_items",
-  "retire_item",
-  "set_slot",
-  "get_last_call",
-  "get_patterns",
-] as const;
-
-export type ToolName = (typeof TOOL_NAMES)[number];
+export { TOOL_NAMES };
+export type { ToolName } from "./tools/mod.ts";
 
 export type AuthenticatedUser = {
   userId: string;
@@ -135,56 +129,15 @@ export async function authenticateBearer(
   return { userId: data.user.id };
 }
 
-function notImplementedResult(name: string) {
-  return {
-    content: [{ type: "text" as const, text: `not implemented: ${name}` }],
-    isError: true,
-  };
-}
-
-export async function listItemsForUser(
+export function createOrmaMcpServer(
   client: UserScopedClient,
-): Promise<Array<{ id: string; text: string; user_id: string }>> {
-  const { data, error } = await client
-    .from("items")
-    .select("id,text,user_id")
-    .eq("status", "open");
-  if (error) {
-    throw new Error(`list_items failed: ${error.message}`);
-  }
-  return (data ?? []) as Array<{ id: string; text: string; user_id: string }>;
-}
-
-export function createOrmaMcpServer(client: UserScopedClient): McpServer {
+  user: AuthenticatedUser,
+): McpServer {
   const server = new McpServer({
     name: MCP_SERVER_NAME,
     version: MCP_SERVER_VERSION,
   });
-
-  for (const name of TOOL_NAMES) {
-    if (name === "list_items") {
-      server.registerTool(
-        name,
-        {
-          description:
-            "List the caller's open items under row-level security.",
-        },
-        async () => {
-          const rows = await listItemsForUser(client);
-          return {
-            content: [{ type: "text", text: JSON.stringify(rows) }],
-          };
-        },
-      );
-      continue;
-    }
-    server.registerTool(
-      name,
-      { description: `Orma tool ${name}. Handler ships in T4.2.` },
-      async () => notImplementedResult(name),
-    );
-  }
-
+  registerOrmaTools(server, client, user);
   return server;
 }
 
@@ -247,7 +200,7 @@ export function createMcpHandler(
       ? deps.createUserClient(token, user)
       : createUserScopedClient(deps, token);
 
-    const server = createOrmaMcpServer(client);
+    const server = createOrmaMcpServer(client, user);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -513,5 +466,49 @@ if (typeof testFn === "function" && !import.meta.main) {
       }
     }
     if (!threw) throw new Error("createUserScopedClient must throw for supabase.co URL")
+  })
+  testFn("end-to-end: initialize, list six tools, list_items round-trips", async () => {
+    const store = createStore()
+    const deps = baseDeps({
+      createUserClient: (_t, user) => createOwnerClient(user.userId, store),
+    })
+    const init = await post(deps, tA, rpc("initialize", 11, {
+      protocolVersion: MCP_PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: "orma-test", version: "0.0.0" },
+    }))
+    if (init.status !== 200) throw new Error(`initialize expected 200, got ${init.status}`)
+    const initBody = await init.json() as {
+      result?: { protocolVersion?: string, serverInfo?: { name?: string } },
+    }
+    if (initBody.result?.serverInfo?.name !== MCP_SERVER_NAME) {
+      throw new Error("initialize must name the orma server")
+    }
+    if (initBody.result?.protocolVersion !== MCP_PROTOCOL_VERSION) {
+      throw new Error(`protocol version mismatch: ${initBody.result?.protocolVersion}`)
+    }
+
+    const listed = await post(deps, tA, rpc("tools/list", 12))
+    if (listed.status !== 200) throw new Error(`tools/list expected 200, got ${listed.status}`)
+    const listBody = await listed.json() as { result?: { tools?: Array<{ name: string }> } }
+    const names = (listBody.result?.tools ?? []).map((t) => t.name).sort()
+    if (names.length !== TOOL_NAMES.length) {
+      throw new Error(`expected six tools, got ${names.length}`)
+    }
+    if (names.join(",") !== [...TOOL_NAMES].sort().join(",")) {
+      throw new Error(`tool list mismatch: ${names}`)
+    }
+
+    const res = await post(deps, tA, rpc("tools/call", 13, {
+      name: "list_items", arguments: {},
+    }))
+    if (res.status !== 200) throw new Error(`tools/call expected 200, got ${res.status}`)
+    const body = await res.json() as { result?: { content?: Array<{ text?: string }> } }
+    const rows = JSON.parse(body.result?.content?.[0]?.text ?? "") as Array<{
+      id: string, text: string, user_id: string,
+    }>
+    if (rows.length !== 1 || rows[0].id !== "item-a1") throw new Error("fixture rows mismatch")
+    if (rows[0].text !== "dentist" || rows[0].user_id !== A) throw new Error("wrong fixture row")
+    if (rows.some((r) => r.user_id === B)) throw new Error("cross-user leak")
   })
 }
