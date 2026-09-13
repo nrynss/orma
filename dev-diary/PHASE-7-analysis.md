@@ -37,8 +37,8 @@ Every one of these is a query, not an inference. The report cannot claim a numbe
 requires:   T7.1
 fixture-ok: yes
 size:       M · frontier
-owns:       supabase/functions/analysis/prose.ts
-status:     not-started
+owns:       supabase/functions/analysis/prose.ts, supabase/functions/analysis/prose_tests.ts
+status:     done
 ```
 Gemini receives the facts object and writes the report. It gets no transcripts and no ability to count.
 
