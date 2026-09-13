@@ -78,7 +78,7 @@ still fails as a protocol error, and the function test suite stays green.
 requires:   T4.2, T4.2a
 size:       XS · light
 owns:       docs/mcp.md
-status:     not-started
+status:     done
 ```
 The snippet a judge pastes into a client, with the real URL, the auth header, and one worked example per tool.
 

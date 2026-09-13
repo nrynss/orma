@@ -11,9 +11,8 @@ Where a phase document and specification conflict, the specification wins. Recor
 
 Each document provides complete context for an engineer starting cold.
 
-**Current status:** P0, P1 and P3 are complete. Schema, policies, types, fixtures,
-validation and local seed data are frozen. P2 is in remediation, and its board row
-below is current.
+**Current status:** P0, P1, P2, P3 and P4 are complete. Schema, policies, types,
+fixtures, validation and local seed data are frozen.
 
 P0 is complete. What exists is listed in [PHASE-0-ground.md](PHASE-0-ground.md): the repository, the Supabase project with its extensions and secrets, the deployed app and front door, the bot, verified email, and a proven CALL-E path. Start at P1.
 
@@ -160,7 +159,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P1 | 7 / 7 | Complete. Contracts are frozen. |
 | P2 | 12 / 12 | **Complete.** Every task and the e2e remediation landed, and the deployment carries the phase. The operator still owes the Vault scheduler key. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
-| P4 | 0 / 3 | T4.1 can start. |
+| P4 | 4 / 4 | **Complete.** MCP live at `orma-api.nryn.dev/mcp`, six tools wired, docs published at `docs/mcp.md`. |
 | P5 | 0 / 4 | T5.1 can start. |
 | P6 | 0 / 6 | Not started. Blocked on T5.3. |
 | P7 | 0 / 4 | Not started. Soft-blocked on P2. T3.4 delivery is ready. |
@@ -982,3 +981,72 @@ present and answer `42501` for `anon`, and `tick`, `materialise` and
 The operator step is unchanged. Write `ORMA_MATERIALISE_SECRET_KEY` into the
 deployed database's Vault, holding a secret API key named `materialise`. The two
 cron jobs stay fail-closed until it exists.
+
+### 2026-09-13 · T4.2 and T4.2a landed, MCP is live
+
+T4.2 closed on its round 2 APPROVE with zero residue. T4.2a carried the contract
+change its reviewers raised: `index.ts` imports `registerOrmaTools`, passes the
+authenticated user into `createOrmaMcpServer` and drops the stub loop. The two
+T4.1 residuals closed in the same task. The proxy maps `/mcp` to
+`/functions/v1/mcp`, so the published URL is `orma-api.nryn.dev/mcp`, and
+`config.toml` turns the gateway JWT check off for the function. The handler
+answers a missing or expired token itself, with a JSON-RPC 401 and code
+`-32001`, so the gateway check being off opens nothing.
+
+**A drift the rebase introduced.** Main had regenerated `database.types.ts` with
+the call-engine finalise columns after T4.2 froze its fixture double, so the
+tools suite no longer type-checked on phase-4. Four sanctioned lines in
+`tools/double.ts` set `finalise_attempts 0`, `finalise_after null`,
+`finalise_error null` and `terminal_writer poll`. The value `poll` is the
+truthful writer for the fixture row, which is `dry_run false` and
+`billable true`. Round 1 measured it against the migrations and the poll
+writer.
+
+Round 1 returned REMEDIATE with one L, diary only, and the orchestrator closed
+it under the documentation shortcut. The T4.2a owns line and block text now name
+the fixture reconciliation.
+
+**Deployed and probed live.** The `mcp` function and the `orma-api` worker are
+deployed. Through `orma-api.nryn.dev/mcp`: anonymous POST answers 401 with
+code `-32001`, GET answers 405, an authenticated client initialises against
+`serverInfo orma`, `tools/list` returns exactly the six names, and
+`list_items` round-trips. The probe used a throwaway user, created and
+deleted, and left no rows.
+
+**What T4.3 must know.** The judge sends one header, `Authorization: Bearer`
+plus a Supabase access token. No apikey header is involved on this surface.
+The proxy maps `/mcp` and `/mcp/` and nothing deeper, so a client configures
+the bare URL with no extra segments.
+
+**One auth-key surprise.** GoTrue's admin endpoints reject the new-format
+`SUPABASE_SECRET_KEY` with 401 through the front door. The legacy
+`SUPABASE_SERVICE_ROLE_KEY` works. Any future probe or script that creates a
+user should reach for the service role key first.
+
+### 2026-09-13 · T4.3 landed, P4 complete
+
+`docs/mcp.md` publishes the judge-facing configuration. The URL, the one-header
+auth story, a pasteable client snippet, one worked example per tool with
+response shapes measured live, and the two failure shapes. Every documented
+shape is one the implementer or a reviewer reproduced against the deployed
+endpoint. The snippet was run the way a clean client runs it, with only the
+token inserted, and it connected.
+
+Two review rounds. Round 1 returned one H and three M. The H claimed the web
+app restore surface as shipped, the Ms covered a false sign-up claim, real
+probe identifiers in a judge-facing file, and a dirty tree. Round 2 returned
+zero residue on all five and one new M, a reword that made a restored item look
+permanently hidden. The orchestrator closed that one under the documentation
+shortcut. Both verdict files carry the full measurements.
+
+**Two flags for the next agents.** First, an auth user alone cannot use the
+write tools. Every table hangs off `public.profiles` and no trigger creates the
+row, so T5 sign-up must create it. Provisioned accounts already carry one.
+Second, Cloudflare answers error 1010 to the bare `Python-urllib` user agent on
+`orma-api.nryn.dev`. curl, node, undici, python-requests and Go clients all
+pass. If a judge scripts with urllib, the request dies at the edge. The WAF
+rule deserves a look before P8.
+
+**Probe hygiene.** Every probe account, item, slot and profile row was deleted
+after use, and each deletion was verified by count and by a 404 read. Nothing
+remains.
