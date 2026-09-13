@@ -9,6 +9,7 @@
 		LOGIN_CALLBACK_URL,
 		sessionTokensFromUnknown
 	} from '$lib/supabase'
+	import { lookupProfileExists, postAuthPath } from '../app/onboarding/profile-gate'
 
 	type TelegramWidgetUser = {
 		id: number
@@ -85,7 +86,16 @@
 			}
 			const { error: setError } = await getSupabase().auth.setSession(tokens)
 			if (setError) throw setError
-			await goto('/app/settings')
+			const { data: userData } = await getSupabase().auth.getUser()
+			const userId = userData.user?.id
+			if (!userId) throw new Error('Telegram sign-in returned no user')
+			const hasProfile = await lookupProfileExists({
+				apiUrl: getOrmaApiUrl(),
+				anonKey: getPublishableKey(),
+				accessToken: tokens.access_token,
+				userId
+			})
+			await goto(postAuthPath(hasProfile))
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Telegram sign-in failed'
 		} finally {

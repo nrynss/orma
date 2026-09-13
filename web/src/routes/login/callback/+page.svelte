@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation'
 	import { onMount } from 'svelte'
-	import { getSupabase } from '$lib/supabase'
+	import { getOrmaApiUrl, getPublishableKey, getSupabase } from '$lib/supabase'
+	import { lookupProfileExists, postAuthPath } from '../../app/onboarding/profile-gate'
 
 	let { data } = $props()
 	let message = $state('Signing you in.')
@@ -25,7 +26,17 @@
 				return
 			}
 			window.history.replaceState(null, '', window.location.pathname)
-			await goto('/app/settings', { replaceState: true })
+			const { data: userData } = await getSupabase().auth.getUser()
+			const userId = userData.user?.id
+			const hasProfile = userId
+				? await lookupProfileExists({
+						apiUrl: getOrmaApiUrl(),
+						anonKey: getPublishableKey(),
+						accessToken: accessToken,
+						userId
+					})
+				: false
+			await goto(postAuthPath(hasProfile), { replaceState: true })
 			return
 		}
 		if (!window.location.search.includes('code=') && !window.location.search.includes('token_hash=')) {

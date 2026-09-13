@@ -123,7 +123,7 @@ requires:   T5.3, T1.1
 fixture-ok: yes
 size:       M · frontier
 owns:       web/src/routes/app/onboarding/, web/src/hooks.server.ts, web/src/routes/login/, web/src/routes/+layout.server.ts
-status:     claimed:orma-impl-54
+status:     done
 ```
 A signed-in account with no profile must land here, not on Settings. That gate
 lives in `hooks.server.ts` (the `/login` redirect today) and the server layout.

@@ -11,8 +11,9 @@ Where a phase document and specification conflict, the specification wins. Recor
 
 Each document provides complete context for an engineer starting cold.
 
-**Current status:** P0, P1, P2, P3 and P4 are complete. Schema, policies, types,
-fixtures, validation and local seed data are frozen.
+**Current status:** P0, P1, P2, P3, P4 and P5 are complete. Schema, policies, types,
+fixtures, validation and local seed data are frozen. Auth and the web
+shell are live.
 
 P0 is complete. What exists is listed in [PHASE-0-ground.md](PHASE-0-ground.md): the repository, the Supabase project with its extensions and secrets, the deployed app and front door, the bot, verified email, and a proven CALL-E path. Start at P1.
 
@@ -160,8 +161,8 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P2 | 12 / 12 | **Complete.** Every task and the e2e remediation landed, and the deployment carries the phase. The operator still owes the Vault scheduler key. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 4 / 4 | **Complete.** MCP live at `orma-api.nryn.dev/mcp`, six tools wired, docs published at `docs/mcp.md`. |
-| P5 | 3 / 4 | T5.1, T5.2 and T5.3 landed. T5.4 claimed. |
-| P6 | 0 / 6 | Not started. Blocked on T5.3. |
+| P5 | 4 / 4 | **Complete.** Auth, Telegram bridge, web sessions, and onboarding are live. |
+| P6 | 0 / 6 | Not started. Unblocked. T5.3 and T5.4 are live. |
 | P7 | 0 / 4 | Not started. Soft-blocked on P2. T3.4 delivery is ready. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
 
@@ -1140,3 +1141,30 @@ mint fails before that row exists. Login currently sends a signed-in user to
 
 The landing footer still says sign-ups are closed. T5.3 does not own
 `+page.svelte`.
+
+### 2026-09-14 · T5.4 landed, P5 complete
+
+T5.4 is done. Onboarding writes a dispatchable profile in one pass: name,
+E.164 phone, `outbound_calls` consent as a row with the wording shown,
+timezone, and a first slot. Skip consent still writes the profile and slot,
+and inserts no consent row, so the dispatcher refuses.
+
+The number is self-declared. The screen says the first call confirms it.
+Submit still sets `phone_confirmed_at`, because the dispatcher will not place
+that first call without it. The spam-number expectation is on the last step.
+There is no number to save.
+
+A signed-in account with no profile is gated onto `/app/onboarding` from
+`/login`, `/app`, and Settings. A completed profile is not bounced back.
+Signed-out `/app` still goes to `/login`.
+
+Round 1 returned APPROVE with zero findings. Live agree path inserted
+profile, consent, and slot. Live skip path had zero `outbound_calls` rows.
+Malformed `+012345678` returned 400 `23514`. Probe rows were deleted.
+
+**What P6 must know.** `/app` still 404s for a completed profile. T6.1 owns
+that index. Settings still has no consent UI, so a skip user cannot agree
+later until T6.5. The landing footer still says sign-ups are closed. No P5
+task owns `web/src/routes/+page.svelte`.
+
+P6 can start. It required T5.3, which landed earlier today.

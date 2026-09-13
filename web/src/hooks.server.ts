@@ -1,5 +1,18 @@
 import { redirect, type Handle } from "@sveltejs/kit"
-import { createSupabaseServerClient, getAuthLocals } from "$lib/supabase"
+import {
+	createSupabaseServerClient,
+	getAuthLocals,
+	getOrmaApiUrl,
+	getPublishableKey
+} from "$lib/supabase"
+import {
+	hasProfileCached,
+	isOnboardingPath,
+	lookupProfileExists,
+	postAuthPath
+} from "./routes/app/onboarding/profile-gate"
+
+type GateAuth = ReturnType<typeof getAuthLocals> & { hasProfile?: boolean }
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const supabase = createSupabaseServerClient({
@@ -18,7 +31,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	})
 
-	const auth = getAuthLocals(event.locals)
+	const auth = getAuthLocals(event.locals) as GateAuth
 	auth.supabase = supabase
 
 	const { data: sessionData } = await supabase.auth.getSession()
@@ -40,13 +53,28 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const path = event.url.pathname
 	const signedIn = Boolean(session?.access_token && user?.id)
+	const hasProfile = signedIn
+		? await hasProfileCached(event.locals, () =>
+				lookupProfileExists({
+					apiUrl: getOrmaApiUrl(),
+					anonKey: getPublishableKey(),
+					accessToken: session!.access_token,
+					userId: user!.id
+				})
+			)
+		: false
+	auth.hasProfile = hasProfile
 
 	if (path.startsWith("/app") && !signedIn) {
 		redirect(303, "/login")
 	}
 
 	if (signedIn && path === "/login") {
-		redirect(303, "/app/settings")
+		redirect(303, postAuthPath(hasProfile))
+	}
+
+	if (signedIn && path.startsWith("/app") && !isOnboardingPath(path) && !hasProfile) {
+		redirect(303, "/app/onboarding")
 	}
 
 	return resolve(event, {
