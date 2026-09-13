@@ -1,0 +1,52 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2E6Q7SS7EETNDTGJ7JHE361",
+  "session_id": "01a09bdb-1b09-7a70-93b2-7781ac088ae2",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-13T20:18:14.937798288Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "supabase/functions/auth-telegram/index.ts",
+    "web/package.json",
+    "web/src/lib/supabase.ts",
+    "web/src/routes/app/settings/+page.svelte",
+    "web/src/routes/login/+page.svelte"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "9327d4dc4c95",
+  "checkpoint_transcript_start": 597,
+  "transcript_lines_at_start": 597,
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-13T20:18:14.819180329Z",
+    "agent_lines": 217,
+    "agent_removed": 57,
+    "human_added": 568,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 785,
+    "total_lines_changed": 843,
+    "agent_percentage": 32.50296559905101,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
