@@ -1,0 +1,248 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2CS0VTH3TWVDZZS231SR37P",
+  "session_id": "69bb0573-fbc1-464c-b7af-322ceda1c9d2",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-13T06:59:38.719005105Z",
+  "branch": "main",
+  "checkpoints_count": 15,
+  "save_step_count": 15,
+  "files_touched": [
+    "dev-diary/PHASE-2-call-engine.md",
+    "dev-diary/README.md",
+    "dev-diary/adversarial-review/t2.5-contract-change.md",
+    "dev-diary/adversarial-review/t2.5-remediation-round1.md",
+    "dev-diary/adversarial-review/t2.5-remediation-round2.md",
+    "dev-diary/adversarial-review/t2.5-round2.md",
+    "dev-diary/adversarial-review/t2.5-round3.md",
+    "dev-diary/adversarial-review/t2.5-round4.md",
+    "supabase/functions/_shared/poll.ts",
+    "supabase/functions/calle-webhook/index.ts",
+    "supabase/functions/tick/index.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5",
+  "turn_id": "239215d5b32b",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 1204,
+    "cache_creation_tokens": 179386,
+    "cache_read_tokens": 8380250,
+    "output_tokens": 68842,
+    "api_call_count": 54,
+    "subagent_tokens": {
+      "input_tokens": 3728,
+      "cache_creation_tokens": 934934,
+      "cache_read_tokens": 13820813,
+      "output_tokens": 263472,
+      "api_call_count": 124
+    }
+  },
+  "session_metrics": {
+    "turn_count": 15
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-13T06:59:38.468699519Z",
+    "agent_lines": 24,
+    "agent_removed": 0,
+    "human_added": 557,
+    "human_modified": 157,
+    "human_removed": 0,
+    "total_committed": 670,
+    "total_lines_changed": 738,
+    "agent_percentage": 3.2520325203252036,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2533,
+      "user_lines_removed": 30,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "dev-diary/PHASE-2-call-engine.md": 32,
+        "dev-diary/README.md": 134,
+        "dev-diary/adversarial-review/t2.5-contract-change.md": 13,
+        "dev-diary/adversarial-review/t2.5-round1.md": 81,
+        "dev-diary/adversarial-review/t2.7-contract-change.md": 10,
+        "dev-diary/adversarial-review/t2.7-round1.md": 98,
+        "dev-diary/adversarial-review/t2.8-contract-change.md": 22,
+        "dev-diary/feedback.md": 64,
+        "supabase/functions/_shared/calle.ts": 87,
+        "supabase/functions/_shared/dispatch-mode.ts": 391,
+        "supabase/functions/_shared/ingest.ts": 484,
+        "supabase/functions/_shared/poll.ts": 434,
+        "supabase/functions/calle-webhook/index.ts": 55,
+        "supabase/functions/tick/index.ts": 91,
+        "supabase/migrations/20260912180000_ingest.sql": 186,
+        "supabase/migrations/test-ingest.sh": 351
+      },
+      "user_removed_per_file": {
+        "dev-diary/PHASE-2-call-engine.md": 5,
+        "dev-diary/README.md": 1,
+        "dev-diary/adversarial-review/t2.8-contract-change.md": 3,
+        "supabase/functions/_shared/calle.ts": 2,
+        "supabase/functions/_shared/dispatch-mode.ts": 15,
+        "supabase/functions/calle-webhook/index.ts": 2,
+        "supabase/functions/tick/index.ts": 2
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 30,
+      "user_lines_removed": 2,
+      "agent_lines_added": 2549,
+      "agent_lines_removed": 31,
+      "user_added_per_file": {
+        "supabase/functions/_shared/poll.ts": 30
+      },
+      "user_removed_per_file": {
+        "supabase/functions/_shared/poll.ts": 2
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 109,
+      "user_lines_removed": 0,
+      "agent_lines_added": 2582,
+      "agent_lines_removed": 32,
+      "user_added_per_file": {
+        "dev-diary/adversarial-review/t2.5-remediation-round1.md": 44,
+        "supabase/functions/calle-webhook/index.ts": 31,
+        "supabase/functions/tick/index.ts": 34
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 663,
+      "user_lines_removed": 28,
+      "agent_lines_added": 2691,
+      "agent_lines_removed": 32,
+      "user_added_per_file": {
+        "dev-diary/adversarial-review/t2.5-round2.md": 74,
+        "supabase/functions/_shared/ingest.ts": 589
+      },
+      "user_removed_per_file": {
+        "supabase/functions/_shared/ingest.ts": 28
+      }
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 526,
+      "user_lines_removed": 61,
+      "agent_lines_added": 3326,
+      "agent_lines_removed": 32,
+      "user_added_per_file": {
+        "dev-diary/adversarial-review/t2.7-remediation-round1.md": 70,
+        "supabase/functions/_shared/ingest.ts": 9,
+        "supabase/functions/_shared/poll.ts": 72,
+        "supabase/functions/calle-webhook/index.ts": 98,
+        "supabase/functions/tick/index.ts": 88,
+        "supabase/migrations/test-ingest.sh": 189
+      },
+      "user_removed_per_file": {
+        "supabase/functions/_shared/ingest.ts": 6,
+        "supabase/functions/_shared/poll.ts": 23,
+        "supabase/functions/calle-webhook/index.ts": 8,
+        "supabase/functions/tick/index.ts": 18,
+        "supabase/migrations/test-ingest.sh": 6
+      }
+    },
+    {
+      "checkpoint_number": 6,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 3853,
+      "agent_lines_removed": 42
+    },
+    {
+      "checkpoint_number": 7,
+      "user_lines_added": 75,
+      "user_lines_removed": 28,
+      "agent_lines_added": 3853,
+      "agent_lines_removed": 42,
+      "user_added_per_file": {
+        "dev-diary/README.md": 75
+      },
+      "user_removed_per_file": {
+        "dev-diary/README.md": 28
+      }
+    },
+    {
+      "checkpoint_number": 8,
+      "user_lines_added": 85,
+      "user_lines_removed": 0,
+      "agent_lines_added": 3902,
+      "agent_lines_removed": 44,
+      "user_added_per_file": {
+        "dev-diary/adversarial-review/t2.5-round3.md": 85
+      }
+    },
+    {
+      "checkpoint_number": 9,
+      "user_lines_added": 107,
+      "user_lines_removed": 0,
+      "agent_lines_added": 4002,
+      "agent_lines_removed": 44,
+      "user_added_per_file": {
+        "dev-diary/adversarial-review/t2.7-round2.md": 107
+      }
+    },
+    {
+      "checkpoint_number": 10,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 4133,
+      "agent_lines_removed": 44
+    },
+    {
+      "checkpoint_number": 11,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 4133,
+      "agent_lines_removed": 44
+    },
+    {
+      "checkpoint_number": 12,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 4150,
+      "agent_lines_removed": 44
+    },
+    {
+      "checkpoint_number": 13,
+      "user_lines_added": 1,
+      "user_lines_removed": 0,
+      "agent_lines_added": 4150,
+      "agent_lines_removed": 44,
+      "user_added_per_file": {
+        "dev-diary/adversarial-review/t2.5-contract-change.md": 1
+      }
+    },
+    {
+      "checkpoint_number": 14,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 4199,
+      "agent_lines_removed": 44
+    },
+    {
+      "checkpoint_number": 15,
+      "user_lines_added": 79,
+      "user_lines_removed": 0,
+      "agent_lines_added": 4199,
+      "agent_lines_removed": 44,
+      "user_added_per_file": {
+        "dev-diary/adversarial-review/t2.5-round4.md": 79
+      }
+    },
+    {
+      "checkpoint_number": 16,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 4291,
+      "agent_lines_removed": 45
+    }
+  ]
+}

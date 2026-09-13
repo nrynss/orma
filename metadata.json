@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2CS0VTH3TWVDZZS231SR37P",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 15,
+  "files_touched": [
+    "dev-diary/PHASE-2-call-engine.md",
+    "dev-diary/README.md",
+    "dev-diary/adversarial-review/t2.5-contract-change.md",
+    "dev-diary/adversarial-review/t2.5-remediation-round1.md",
+    "dev-diary/adversarial-review/t2.5-remediation-round2.md",
+    "dev-diary/adversarial-review/t2.5-round2.md",
+    "dev-diary/adversarial-review/t2.5-round3.md",
+    "dev-diary/adversarial-review/t2.5-round4.md",
+    "supabase/functions/_shared/poll.ts",
+    "supabase/functions/calle-webhook/index.ts",
+    "supabase/functions/tick/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1204,
+    "cache_creation_tokens": 179386,
+    "cache_read_tokens": 8380250,
+    "output_tokens": 68842,
+    "api_call_count": 54,
+    "subagent_tokens": {
+      "input_tokens": 3728,
+      "cache_creation_tokens": 934934,
+      "cache_read_tokens": 13820813,
+      "output_tokens": 263472,
+      "api_call_count": 124
+    }
+  }
+}

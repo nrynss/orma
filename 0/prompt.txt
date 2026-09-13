@@ -1,0 +1,443 @@
+Phase 2 has been a mess. Review the files and tasks. Get a proper grounding. /tmp/orma-p2 has some scripts that you can use. After that decide what tasks to take up next and continue P2 to completion.
+
+---
+
+<task-notification>
+<task-id>b8y7fbs8w</task-id>
+<tool-use-id>toolu_01LGotqxawsJCeCRAVU4mwiw</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/69bb0573-fbc1-464c-b7af-322ceda1c9d2/tasks/b8y7fbs8w.output</output-file>
+<status>completed</status>
+<summary>Background command "Rebuild the scratch phase-2 stack" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+Let us make sure we dont run more than one task at a time once 2.5 and 2.7 settles. They can go in parallel.
+
+---
+
+<task-notification>
+<task-id>a848d8a6a0aecd0d3</task-id>
+<tool-use-id>toolu_01K2uMpPKuDg8jCG5KJSub9P</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/69bb0573-fbc1-464c-b7af-322ceda1c9d2/tasks/a848d8a6a0aecd0d3.output</output-file>
+<status>completed</status>
+<summary>Agent "T2.5 remediation round 1" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All three T2.5 round-1 findings are fixed. Each fix has a Deno test that fails when the fix is reverted, and live pins confirm H, M and L with SQL reads. Nothing was committed and no real CALL-E call was placed.
+
+**Files changed**
+- `supabase/functions/tick/index.ts`: each `deps.finalise(run)` now runs in its own try/catch, the same pattern as `pollStep`. I added the test "a run that cannot finalise costs neither the tick nor its siblings". The `unavailable("finalisation")` stub and the T2.8 dry-run edits are unchanged.
+- `supabase/functions/_shared/poll.ts`: the poll read now also selects `created_at`. The give-up window runs from `dispatched_at ?? created_at` instead of `poll_after`. I added a test for a run with `dispatched_at` null.
+- `supabase/functions/calle-webhook/index.ts`: `terminaliseFromRefetch` now returns `applied`, `already_resolved` or `not_terminal`. The `refetched` event detail records it as `outcome`. I added a test for both the won and lost PATCH.
+- `dev-diary/adversarial-review/t2.5-remediation-round1.md`: one row per finding with Finding, Remediation, Pin and Mutation covered. The verdict is unchanged, and a grep found no semicolons or em dashes.
+
+**Test counts**
+`deno check` passed on all three files.
+- `_shared/poll.ts`: `ok | 14 passed | 0 failed`
+- `tick/index.ts`: `ok | 44 passed | 0 failed`, which includes tests from imported modules
+- `calle-webhook/index.ts`: `ok | 28 passed | 0 failed`
+
+**Revert checks**
+I reverted each fix in a scratch copy under `/tmp/orma-p2/t25-revert-{H,M,L}`, not in the shared tree, so the T2.7 agent's files were never touched. Each filtered run reported `FAILED | 0 passed | 1 failed`:
+- **H:** "a finalise failure must not turn the tick red, saw 500"
+- **M:** "a run with no dispatched_at must still give up once its window has passed"
+- **L:** "a PATCH matching 1 rows must record outcome applied, saw {...state:"failed"}"
+
+This differs from your brief, which said to revert and restore in place. The working tree always held the fixed code.
+
+**Live pins**
+The driver is `/tmp/orma-p2/rem-t25-pins.ts`. It uses tick `depsFromEnv` from `tick/index.ts`. CALL-E is a stub, and the driver refuses any other outbound host. Before the pins, SQL showed 0 scheduled or claimed runs, 0 due polls and 0 terminal backlog.
+- **H:** I created a `completed` run with `completed_at` null and a due `awaiting_result` sibling. A real tick answered 200. SQL then showed:
+  - The sibling was `completed`, with `completed_at` null, `poll_after` null and one `polled` row carrying `completed`.
+  - The terminal run was unchanged, with 0 `polled` rows.
+- **M:** I created a run with `dispatched_at` null and a window that closed 3 minutes after creation. I ran 10 `pollRun` passes, one simulated minute apart. SQL showed:
+  - Three `polled` rows in order: `pending`, `pending`, then `failed` with `poll_timeout`. It gave up on the third pass and wrote nothing after that.
+  - The run itself read `state=failed`, `disposition=not_answered`, `failure_code=poll_timeout`, `completed_at` null.
+- **L:** The poll moved a run to `completed` first, then the real webhook delivered with a re-fetch of `failed` and answered 200. SQL showed:
+  - The run stayed `completed`.
+  - Its timeline read `polled(completed, terminal)`, then `webhook_received`, then `refetched(failed, already_resolved)`.
+  - The webhook_events row read `refetched`.
+- **Cleanup:** I deleted 1 webhook event and 4 runs, and their events went with them by cascade. SQL counts read 0 for every marker I used. Tables are back to the baseline of 1 run, 2 events and 0 webhook events, all belonging to someone else.
+
+**Anything I could not close**
+- **Stack restart:** someone restarted the scratch stack. The containers showed "Up 4 minutes" when I started the pins. That was not me, since I never ran `up.sh`. The rows from the earlier reviewer run are gone.
+- **psql port:** port 57022 refused host connections from my shell even though the container was healthy. I took every SQL reading with `docker exec supabase_db_stack psql` instead.
+- **Real CALL-E call:** the T2.5 done condition still needs one real call with a real key.
+- **T2.9 note:** the `refetched` row still carries the observed `state` next to `outcome`. When `outcome` is `already_resolved`, T2.9 should not treat that state as the final one.</result>
+<usage><subagent_tokens>130513</subagent_tokens><tool_uses>50</tool_uses><duration_ms>276804</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aa65b6e1cf672c164</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/69bb0573-fbc1-464c-b7af-322ceda1c9d2/tasks/aa65b6e1cf672c164.output</output-file>
+<status>completed</status>
+<summary>Agent "T2.5 review round 2" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: REMEDIATE.** Counts: C 0, H 1, M 0, L 2. The review is at `/home/nryn/work/orma/dev-diary/adversarial-review/t2.5-round2.md`, and it is the only file I wrote in the live tree.
+
+**Zero residue against round 1:** all three round-1 findings are fixed. I undid each fix in its own scratch copy, and each pin failed:
+- **H (finalise isolation):** the unit test failed with "saw 500", and a real tick answered 500. The frozen copy answers 200.
+- **M (window slid on `poll_after`):** the unit test failed, and SQL read the row still waiting with a `pending` poll event. The frozen copy fails it with `poll_timeout`.
+- **L (missing `outcome`):** the unit test failed, and SQL read a `refetched` row with no `outcome`.
+
+**Findings:**
+- **H, `_shared/poll.ts:184-206` (the unit test at `:410` requires this behaviour):** once the 15-minute window has passed, the poll marks the run failed without asking CALL-E. That happens even when CALL-E already reports `completed`. In pin A, a completed call ended as `failed` / `not_answered` / `poll_timeout` with zero re-fetches. The late webhook then lost the race and could not correct it.
+- **L, `calle-webhook/index.ts:269-283`:** after a partial failure, CALL-E redelivers and the webhook finds the run already moved by its own first attempt. It records `outcome: already_resolved`, which the code defines as "the poll already moved the run". No poll ran, so no timeline row names the writer that actually set the state. Pin B: one forced 503 on the timeline insert, a 500 then a 200 answer, and the run `completed` with no `polled` row.
+- **L, `tick/index.ts:193-197`:** the tick reports `finalised` and `polled` as the number of runs it selected, not the number that succeeded. Before round 1's isolation fix, a throwing finaliser returned 500 and this count never reached the caller. Now a tick where every finalise threw answered 200 with `{"claimed":0,"polled":1,"finalised":2}`, while SQL showed `completed_at` still null on both runs.
+
+**Requirement check:**
+- **Held:**
+  - One pass per tick.
+  - Poll and finalise isolation.
+  - Exactly one winner in 6 real races, 3 in each order, confirmed by SQL.
+  - The `created_at` fallback.
+  - The webhook body type never set `state`.
+- **Broken:** the timeout ignores the re-fetch (H) and the retry's wrong label (first L).
+
+**Checks:** `deno check` passed on all three files. `deno test --allow-env --allow-read --allow-net` gave:
+
+| File | Passed | Failed |
+| --- | --- | --- |
+| `_shared/poll.ts` | 14 | 0 |
+| `tick/index.ts` | 44 | 0 |
+| `calle-webhook/index.ts` | 28 | 0 |
+
+**Live pins:** the driver is `/tmp/orma-p2/rev2-t25-pins.ts`. It imports from the frozen copy `/tmp/orma-review-t25-r2`, or from an undone copy via `ROOT`. It uses a stub CALL-E only and refused to tick while another agent's rows were pending or waiting to be finalised. Every claim is a psql read scoped to my rows. I deleted my 19 `call_runs` rows and 13 `webhook_events` rows, and SQL then counted 0 runs, 0 events and 0 webhook events. The other agent's one `completed` run was left alone.
+
+**Residual risk, recorded in the file:**
+- The live timing proof still needs a real CALL-E key.
+- Two overlapping ticks could poll the same run twice.
+- The `created_at` fallback measures from when the run was created, not dispatched.
+- A timed-out run keeps `poll_after` set, which is harmless.
+- The webhook's terminal write leaves out the failure and confidence details that the poll writes.
+- `refetched` still carries `state` beside `outcome`.</result>
+<usage><subagent_tokens>136404</subagent_tokens><tool_uses>24</tool_uses><duration_ms>317413</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ae1ad0f4cc05024ec</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/69bb0573-fbc1-464c-b7af-322ceda1c9d2/tasks/ae1ad0f4cc05024ec.output</output-file>
+<status>completed</status>
+<summary>Agent "T2.7 remediation round 1" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I fixed all four round-1 findings. Every acceptance run passes, and each fix has a check that fails when I revert it. The verdict is unchanged, and I committed nothing.
+
+## Files changed
+- `/home/nryn/work/orma/supabase/functions/_shared/ingest.ts`: adds the extra result checks after parsing, the lost-event backfill and readable RPC errors. It gains 7 Deno tests.
+- `/home/nryn/work/orma/supabase/migrations/test-ingest.sh`: adds the port probe and four new cases.
+- `/home/nryn/work/orma/dev-diary/adversarial-review/t2.7-remediation-round1.md`: new, one row per finding, plus the rules, the fixture verdict and the leftover risks.
+- The migration and `_shared/result.ts` are untouched.
+
+## Rules added (H)
+Anything that breaks rules 1 to 6 becomes `valid=false`, `answered_no_result`, with the transcript still written. The stored reason names the field, never the value.
+1. Captured `text` must not be blank.
+2. Captured `text` and `slot_change_time` must not contain U+0000 or a broken surrogate character, which jsonb refuses.
+3. Every `evidence_offset_seconds` must fit a PostgreSQL integer.
+4. Retired and commitment `item_id`s must be standard-form UUIDs.
+5. `commitments[].due` must be an ISO 8601 date or timestamp with a real calendar day, valid clock fields, a zone offset of at most 15:59 and a year from 0001.
+6. Every retired or committed item must belong to the user. A REST read of `items` checks this before the RPC.
+7. `raw.completed_at` is only forwarded if it passes rule 5. Otherwise it goes as null and the RPC uses `now()`. This rule does not change `valid`.
+
+The tables have no other check or unique constraints, and the parser already limits `mood` to its fixed values.
+
+**M:** on an `already_ingested` retry, ingest.ts looks for the run's `ingested` event. If none exists, it writes one marked `backfilled: true`, with counts taken from the stored rows.
+
+**L (errors):** the thrown message now carries the HTTP status and PostgREST's code, message, details and hint. Keys are redacted and phone-length digit runs are masked.
+
+**L (ports):** the script checks every port it will map before starting and moves up in steps of ten if one is taken.
+
+## Test output
+- `deno check`: exit 0.
+- `deno test ... ingest.ts`: `ok | 12 passed | 0 failed`. The `calle.ts` and `dispatch-mode.ts` suites, which import ingest.ts, give `ok | 38 passed | 0 failed`.
+- `bash test-ingest.sh`: exit 0 in about 27 seconds, while the shared stack held ports 57022, 57030 and 57031. It printed:
+  - `T2.7 a busy port shifted the port band.`
+  - the five original case lines
+  - `T2.7 every boundary value ingest.ts accepts committed in PostgreSQL.`
+  - `T2.7 all 18 values ingest.ts rejects raise in PostgreSQL.`
+  - `T2.7 unmodified completed fixture rows: items=1 mentions=44 commitments=0 open_item=open`
+  - `T2.7 ingestion acceptance passed.`
+
+## Revert checks
+All five fixes were reverted one at a time, the check failed each time, and the file was restored identical.
+
+| Fix reverted | Check that failed |
+|---|---|
+| Result rules removed | `a free-text due reached the RPC as a valid result` (needed `--no-check`, since the mutation itself is a type error) |
+| Ownership read removed | `a retirement of an item the user does not own reached the RPC as a valid result` |
+| `completed_at` guard removed | `an unparseable completed_at must fall back to null` |
+| Backfill removed | `the retry must write exactly one ingested row, found 0` |
+| Opaque error restored | `the thrown cause lost HTTP 400` |
+| Port probe removed | script exits 1 with `a busy port 57712 did not shift the port band` |
+
+## Live check on the shared stack
+I ran the real `ingestTerminalRun` over PostgREST with one throwaway user and four runs created as `completed`. I never called `tick`. Results, read in SQL:
+- **Free-text due:** `answered_no_result`, 1 transcript, `valid=false` with the due reason, 0 commitments.
+- **Item the user doesn't own:** same outcome, and the user's own item stayed `open`.
+- **Lost event:** with the first `call_events` write failing, there were 0 `ingested` rows. After two retries there was exactly 1, marked `backfilled`.
+- **Missing run:** threw `call result ingestion failed: HTTP 400 P0001 call run &lt;uuid&gt; does not exist`.
+
+After deleting the user, every related table counted 0.
+
+## Fixture discrepancy
+The review's account is wrong about the committed fixture. Its three mentions (44, 62, 80), one retirement and one commitment come from the test payload, not the fixture. Both the Deno test and case one of the script add a retirement at 62 and a commitment at 80. Measured in SQL, the unmodified fixture gives:
+- **Shared stack:** `completed | answered_extracted | unknown | transcripts 1 | valid true | mentions 1 | offsets 44 | commitments 0`.
+- **test-ingest.sh case eight:** `items=1 mentions=44 commitments=0 open_item=open`.
+
+## Could not close
+- A U+0000 or broken surrogate in the transcript turns or the raw payload still makes the RPC fail. That data isn't the result, so the `valid=false` path can't absorb it.
+- Two retries racing at the same moment could each write a backfilled `ingested` row. No unique constraint on `call_events` stops it.
+- If an item is deleted between the ownership read and the RPC, that ingest fails. The next retry then marks the result invalid, so the run recovers.
+- I dropped a pre-check that run and user ids are UUIDs, because `calle.ts` tests pass `run-1` through the real function. A non-UUID id still fails at the RPC, but the error now names the cause.
+- A short race remains between the port check and `supabase start`.</result>
+<usage><subagent_tokens>196695</subagent_tokens><tool_uses>48</tool_uses><duration_ms>947529</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ae3757fe94bdc6f0d</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/69bb0573-fbc1-464c-b7af-322ceda1c9d2/tasks/ae3757fe94bdc6f0d.output</output-file>
+<status>completed</status>
+<summary>Agent "T2.5 remediation round 2" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I fixed all three round-2 findings for T2.5. Each fix has a test that fails when the fix is reverted, and each is pinned live against the scratch stack. No real call was placed. Nothing is committed, and the verdict is unchanged.
+
+## Files changed
+- **`supabase/functions/_shared/poll.ts`** (H): an overdue run now asks CALL-E first. If CALL-E reports a terminal status, the run takes it. The old test near line 410 and its `dispatched_at` null sibling now expect the re-fetch. Two new tests.
+- **`supabase/functions/calle-webhook/index.ts`** (first L): a redelivery whose own earlier attempt moved the run now records `applied`. One new test covers four cases.
+- **`supabase/functions/tick/index.ts`** (second L): `polled` and `finalised` now count only steps that did not throw and did not return false. `pollStep` returns true or false. Two new tests. The T2.8 dry-run edits and the `unavailable("finalisation")` stub are untouched.
+- **`dev-diary/adversarial-review/t2.5-remediation-round2.md`**: one row per finding, plus design choices, observed counts, revert results, live pins and cleanup.
+
+## Design choices
+- **H, re-fetch fails past the window:** the run gives up with `poll_timeout`. The run's failure message carries the re-fetch error, and the `polled` row carries `outcome: refetch_failed`. Retrying forever would make the window unbounded again, which round 1 closed. The cost: a CALL-E outage longer than the window still records a completed call as failed, but the message names the cause.
+- **First L, redelivery:** reordering the writes does not help, because a failure after the update still leaves a redelivery that matches zero rows. A 409 on the `webhook_events` insert marks a redelivery. Only then does the receiver read the run and its `polled` rows. It records `applied` when both of these hold:
+  - the run holds the re-fetched terminal state
+  - no `polled` row names a terminal state
+
+  First deliveries make no extra reads. That also avoids a race where the poll has updated the run but not yet written its `polled` row.
+
+## Tests
+`deno check` passed on all three files.
+
+| File | Result |
+|---|---|
+| `poll.ts` | `ok \| 16 passed \| 0 failed` |
+| `tick/index.ts` | `ok \| 52 passed \| 0 failed` (includes tests from imported modules) |
+| `calle-webhook/index.ts` | `ok \| 31 passed \| 0 failed` (includes the poll tests) |
+
+## Revert checks
+Each ran in its own copy under `/tmp/orma-p2/t25-r2-revert-{H,L1,L2}`, and each gave `FAILED | 0 passed | 1 failed`:
+- **H:** the patch body showed `failed`, `not_answered`, `poll_timeout` for a call CALL-E reported completed.
+- **First L:** "redelivery, no poll row: expected outcome applied", which instead recorded `already_resolved`.
+- **Second L:** "saw 200 {"claimed":0,"polled":3,"finalised":2}".
+
+## Live pins (SQL, scoped to `rem2-t25-%`)
+The driver is `/tmp/orma-p2/rem2-t25-pins.ts`.
+- **A (H):** the window had closed and the stub said completed. SQL read `completed`, no disposition, no failure, and one `polled` row with `terminal`. The late webhook then recorded `already_resolved`, which is now true.
+- **A2 (regression):** an overdue run still `in_progress` read `failed`, `not_answered`, `poll_timeout`.
+- **A3 (H edge):** an overdue run whose re-fetch returned HTTP 503 read `poll_timeout`. Its message began "CALL-E re-fetch failed past the give-up window", and its `polled` row carried `refetch_failed`.
+- **B (first L):** the first delivery answered 500 and the redelivery 200. SQL read the run at `completed`, then `webhook_received` and `refetched` with `applied`, and no `polled` row.
+- **B2 (regression):** the poll moved the run between deliveries. The redelivery recorded `already_resolved`.
+- **T (second L):** no other agent's runs were due or pending. The real tick answered 200 with `{"claimed":0,"polled":1,"finalised":0}`. The sibling read `completed`, and both runs kept `completed_at` null.
+- **R (race regression):** three rounds per ordering. Poll-first runs read `completed` with `already_resolved`. Webhook-first runs read `failed` with `applied` and no `polled` row.
+
+**Cleanup:** I deleted 13 `call_runs` and 9 `webhook_events` rows, and their `call_events` cascaded. A SQL count then read 0 runs, 0 events and 0 webhook events for `rem2`. Only the seeded run remains.
+
+## Not closed
+- The live T2.5 done condition still needs a real CALL-E key.
+- If a poll updates the run to a terminal state but fails to write its `polled` row, a later redelivery records `applied`. No row names the poll in that case either.
+- A CALL-E outage longer than the window still fails a call that completed (the choice above).</result>
+<usage><subagent_tokens>143566</subagent_tokens><tool_uses>39</tool_uses><duration_ms>354826</duration_ms></usage>
+</task-notification>
+
+---
+
+Make sure the current documentation is upto date.
+
+---
+
+Stop after this round of review. You do not have enough juice to power through the full phase.
+
+---
+
+<task-notification>
+<task-id>aa47cf05bfdd14776</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/69bb0573-fbc1-464c-b7af-322ceda1c9d2/tasks/aa47cf05bfdd14776.output</output-file>
+<status>completed</status>
+<summary>Agent "T2.5 review round 3" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: REMEDIATE.** Counts: C 0, H 0, M 0, L 3.
+
+I wrote the review to `/home/nryn/work/orma/dev-diary/adversarial-review/t2.5-round3.md` and nothing else in the live tree. It follows the house style: no semicolons, no em dashes, no sentence over 30 words. I placed no real call, fixed nothing and committed nothing.
+
+**Zero residue:** rounds 1 and 2 left none. All six findings are fixed. I reverted each fix in its own copy under `/tmp/orma-p2/rev3-revert/`, and each unit pin failed with the expected message. Four of the six also failed live. The other two touch the tick, and those revert ticks never ran, because the safety check refused to tick. The other agent's runs (`t27r2-6`, `t27r2-7`) had become due for finalisation mid-session. Their unit pins stand.
+
+**Findings:**
+1. **L, another event's win is recorded as "applied".** The redelivery check in `calle-webhook/index.ts` (line 232 and lines 236-262) assumes a missing terminal `polled` row means this event wrote the run. A different webhook event for the same call passes that check too. Live, two events for one run each left a `refetched` row saying `applied`.
+2. **L, the poll's win is recorded as "applied".** The same check relies on the poll's `polled` row, which the poll writes after its update. If that insert fails, the redelivery records `applied` and no row names the poll. This is the remediator's open item, and it happened live. A plain race does the same with no failure at all. In 3 of 3 rounds, one run showed both `applied` and `polled terminal`.
+3. **L, `poll_timeout` survives a later successful ingest.** Past the window, the poll writes `calle_failure` as `poll_timeout`. Ingestion (`20260912180000_ingest.sql` lines 153-156) never clears it. Live, the finaliser flow as T2.7a specifies it left a run `completed`, `answered_no_result` and finalised, still carrying `poll_timeout`. The SQL side belongs to T2.7, so the fix may need a contract change.
+
+**On the design choices you asked me to judge:**
+- **Giving up on a failed re-fetch past the window:** not a defect against the spec. The premise that nothing can correct it later is wrong for the finaliser. Ingestion takes `state` and `disposition` from the re-fetched call, and T2.7a retries a failing re-fetch. So the state corrects itself once CALL-E recovers. The webhook still cannot correct it. The remediation also understates the trigger. One failed re-fetch on the first overdue pass is enough, not an outage longer than the window.
+- **Success counting in tick:** acceptable.
+- **Races:** exactly one run-state writer won in all 12 live rounds, 6 of them with an overdue run.
+
+**Requirement check:**
+- **Bounded window, one pass per tick, isolation, one winner:** all hold.
+- **State only from the re-fetch:** holds, except a give-up after a failed re-fetch, which ingestion later overwrites.
+- **Truthful timeline rows:** fails, per findings 1 and 2.
+
+**Checks:** `deno check` passed on all three files. `deno test --allow-env --allow-read --allow-net` reported:
+- `poll.ts`: 16 passed, 0 failed
+- `tick/index.ts`: 52 passed, 0 failed
+- `calle-webhook/index.ts`: 31 passed, 0 failed
+
+**Live pins:** the driver is `/tmp/orma-p2/rev3-t25-pins.ts`, importing from the frozen copy `/tmp/orma-review-t25-r3` with a stub CALL-E only. It created 32 `call_runs` and 22 `webhook_events`, all deleted. An SQL read then counted 0 runs, events, transcripts, results and webhook events for my markers. The two foreign runs are untouched.
+
+**Residual risk:** the live timing proof still needs a real CALL-E key. Finding 1 assumes CALL-E can send two terminal events for one call, which nobody has observed. Overlapping ticks can poll one run twice, which I did not pin.</result>
+<usage><subagent_tokens>172261</subagent_tokens><tool_uses>28</tool_uses><duration_ms>485693</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a139a9d4ac77c4056</task-id>
+<tool-use-id>toolu_018Sfh7pp8BnknSSn14nETUW</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/69bb0573-fbc1-464c-b7af-322ceda1c9d2/tasks/a139a9d4ac77c4056.output</output-file>
+<status>completed</status>
+<summary>Agent "T2.7 review round 2" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: REMEDIATE.** Counts: C 0, H 1, M 3, L 2.
+
+I wrote the review to `/home/nryn/work/orma/dev-diary/adversarial-review/t2.7-round2.md` and nothing else in the live tree. I committed nothing and fixed nothing. I never called tick or placed a call. Every throwaway row is deleted, and SQL returns 0 across all ten tables.
+
+**Acceptance commands, run from the frozen copy:**
+- `deno check` exited 0.
+- `deno test` printed `ok | 12 passed | 0 failed (31ms)`.
+- `test-ingest.sh` exited 0 in 27.65 s and printed all ten T2.7 lines.
+
+**Findings:**
+1. **H.** One bad field throws away the whole extraction. The Goal schema tells the model to write `due` "in their own words". So `due="tomorrow after work"` turned the call into `answered_no_result` with 0 mentions, and the captured `Continental` was lost. Three other inputs lost it the same way: a due with nine fraction digits, other RFC 3339 forms PostgreSQL accepts, and one foreign item id.
+2. **M.** Some inputs still break ingestion on every retry, so the run never finalises. The raw payload carries its own copy of `structured_result`. A U+0000 in a captured text therefore still fails the database call with `22P05`, and so did the retry. A transcript turn with empty text also throws. SQL showed both runs with no transcript, no result and no event. The remediator listed the raw case as unfixable. It can be fixed by cleaning `raw` and the turns before sending, so I recorded it as a finding.
+3. **M.** The backfill writes a second `ingested` row when two ingests overlap. Live, two ingests 400 ms apart, with the first one's event write delayed, left 1 item and 2 `ingested` rows. One row was marked `backfilled`. The fix is to write the event inside the database transaction.
+4. **M.** Case five does not prove the run lock. I removed `for update` from the migration and the whole script still exited 0, printing "concurrent ingest waited on the run lock".
+5. **L.** The error scrubbing lets phone numbers through. Five of six test formats came back unmasked, including a date followed by a number and slash, underscore or non-breaking-space separators. Only the one format the test covers was masked.
+6. **L.** Case eight's output line mislabels what it measured. `items=` is a count of mentions, and `mentions=` is a list of offsets. The same query on a run with 3 mentions printed `1 mentions=44,62,80`. `open_item=open` checks an item that no case ever touches.
+
+**Zero residue: not zero.** I reverted each round-1 fix in its own scratch copy, and every one made its check fail. That covers the parser check, the ownership check, the backfill, the named error and the port probe. The M and both L findings from round 1 are fully fixed. The H still survives for U+0000 and lone surrogates in a captured text, which is finding 2.
+
+**Done condition, checked in SQL:** it holds.
+- The unmodified completed fixture gave 1 item, 1 mention at offset 44 and 1 transcript of 27 turns.
+- The version with a retirement and a commitment gave 3 mentions, the retirement and the commitment, with no slots written.
+- The invalid fixture left a transcript and `answered_no_result`, with no partial state.
+- A retirement without an offset is refused.
+- Re-ingesting twice changed nothing.
+
+**Other attacks that found nothing:**
+- The ownership read cannot be bypassed, because the database call checks ownership again.
+- I found no `due` value the regex accepts and PostgreSQL refuses.
+- Key redaction held in every probe.
+- The port probe covers every mapped port, and reverting it fails the script.
+
+**Residual risk:**
+- The `already_ingested` reply echoes the retry's payload rather than the stored result.
+- A foreign item id and a made-up one produce the same error text.
+- A short race window remains between the port probe and `supabase start`.
+- I did not probe the request size limit for large transcripts.</result>
+<usage><subagent_tokens>170723</subagent_tokens><tool_uses>37</tool_uses><duration_ms>565940</duration_ms></usage>
+</task-notification>
+
+---
+
+What do you think for T2.5? Are Ls enough to fix and move on or needs a review-remediate cycle?
+
+---
+
+Move L3 to T2.7. Mark it in the review document as well. Then send a remediation agent for T2.5. Do the narrow review after.
+
+---
+
+2.5 contract change would mean that another implementation?
+
+---
+
+<task-notification>
+<task-id>ab4089384a7639be9</task-id>
+<tool-use-id>toolu_011bMTHFMUa2bLtG2y8ZFQqh</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/69bb0573-fbc1-464c-b7af-322ceda1c9d2/tasks/ab4089384a7639be9.output</output-file>
+<status>completed</status>
+<summary>Agent "T2.5 remediation round 3" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I stopped without implementing anything. The only correct fix needs a schema change, so I added a contract change row instead. I changed no code, ran no tests or revert checks, and created no database rows.
+
+**Why no fix works without a schema change.** Findings 1 and 2 share a root: nothing records who moved the run at the moment of the guarded write. Two ways to record it exist today, and neither works:
+
+- **On the run itself.** `call_runs` has no free column for an event id. Every jsonb column belongs to another task's contract. Two webhook events for one call write identical values, so no existing value can tell them apart.
+- **In a separate write.** A row on `webhook_events` or `call_events` is a second REST request. PostgREST gives no transaction across two requests, and no trigger or RPC can bridge them without a migration.
+
+The separate write fails in a real ordering, not just in theory:
+- The webhook's update lands, then its invocation is killed before the record is written. The 5-minute lease reclaim (`REFRESH_LEASE_MS`) retries it as a redelivery, which finds a terminal run and no record.
+- A poll whose update landed but whose `polled` insert failed leaves exactly the same picture.
+
+The redelivery cannot tell these two cases apart, so `applied` and `already_resolved` would each be false in one of them.
+
+**Proposed design, in the contract change row.**
+- **Column:** add a nullable `call_runs.terminal_writer text`. Every guarded pending-to-terminal update sets it in the same UPDATE as `state`, so the record is atomic.
+- **Values:** the webhook writes `webhook:&lt;event_id&gt;`. The poll writes `poll` on its terminal, give-up and missing-call-id writes.
+- **Receiver:** when the update matches no rows, it reads the column. It records `applied` only when the value matches its own tag exactly, and `already_resolved` otherwise, including null. `earlierAttemptApplied` and the `redelivered` flag go away.
+
+**Why that design holds in every ordering.** The writer's tag and the state land in one statement, so they can't disagree.
+- A killed invocation or a failed timeline insert leaves the tag correct.
+- A second event for the same call finds the first event's full id, so it cannot claim the write (finding 1).
+- A poll that won names itself on the run, whatever happened to its `polled` row (finding 2).
+- Dispatch's own terminal writes never pass the pending guard. They leave the column null, which correctly reads as "someone else".
+
+**Files changed:** only `/home/nryn/work/orma/dev-diary/adversarial-review/t2.5-contract-change.md`, with one row appended (Where, What, Pin, Mutation). It has no semicolons or em dashes, and no sentence runs over 30 words.
+
+**Not closed:**
+- **Findings 1 and 2 stay open.** They need your decision on the migration and who owns it. T2.5 owns no migration, and the brief forbids me touching one.
+- **No remediation file.** I did not write `t2.5-remediation-round3.md`, because nothing was remediated. When it is written, it needs the row recording finding 3 as moved to T2.7 by the orchestrator note.
+- **Nothing to report on tests.** No test counts, revert checks or live pins exist, and `/tmp/orma-p2/rem3-t25-pins.ts` does not exist. The scratch stack at `$ORMA_API_URL` was up (HTTP 200), and I created no rows, so nothing needed cleanup.
+- **Visibility question.** The owner-read RLS policy on `call_runs` would show the event id to the run's user. It is a de-duplication key, not a secret, but whoever owns the migration should confirm that.
+- **A small gap remains.** A poll whose `polled` insert fails would still leave no timeline row for its transition. The column fixes who gets credit, not the missing row.</result>
+<usage><subagent_tokens>137798</subagent_tokens><tool_uses>21</tool_uses><duration_ms>182723</duration_ms></usage>
+</task-notification>
+
+---
+
+What are the things that can run in parallel after this review lands?
+
+---
+
+<task-notification>
+<task-id>aeae48e58f0fa0a16</task-id>
+<tool-use-id>toolu_01SvsHGeDwYT39hRGGGuSC4N</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/69bb0573-fbc1-464c-b7af-322ceda1c9d2/tasks/aeae48e58f0fa0a16.output</output-file>
+<status>completed</status>
+<summary>Agent "T2.5 narrow review round 4" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Round 4 returns **REMEDIATE** with C 0, H 0, M 0, L 1. The only finding is a stale line in the task board, not a code defect. You can close it yourself in the landing commit.
+
+**The finding (L).** T2.5's `owns` line at `dev-diary/PHASE-2-call-engine.md:117` lists only `poll.ts`. T2.5 also changed `tick/index.ts` (224 lines) and `calle-webhook/index.ts` (190 lines), as the first contract-change row allows. The board was never updated. If T2.5 lands as written, the board hides two of the three files T2.5 changed. The fix is to add both paths to that line. This meets all four conditions in `AGENTS.md` for you to close a documentation finding directly.
+
+**Diff result.** All three files match round 3's frozen copy at `/tmp/orma-review-t25-r3`. `diff -u` printed nothing and the SHA-256 hashes are the same. I ran no live pins, no stub CALL-E and no call, and I never touched `up.sh`.
+
+**Test counts.** `deno check` passed on all three files. `deno test` reported `ok | 99 passed | 0 failed`: 31 webhook tests, 16 poll tests and 52 tick tests.
+
+**Transfer judgement.** Both transfers are sound. T2.5a's `owns` line and done condition cover findings 1 and 2, including pins F1a, F1b and F1c. T2.7 owns `ingest.sql`, and finding 3 sits in `t2.7-round2.md`, which is still REMEDIATE. Apart from the stale `owns` line, nothing is left untracked.
+
+**Zero residue.** T2.5 has none against rounds 1, 2 or 3. That counts the three transfers as tracked elsewhere and relies on round 3's revert checks, since the code is unchanged.
+
+**Residual risk** in the file includes the still-open live timing proof, which needs a real CALL-E key. It also flags that the uncommitted `tick/index.ts` diff mixes T2.5's poll wiring with T2.8's dry-run edits. The landing commit has to split or combine them on purpose.
+
+I wrote only `/home/nryn/work/orma/dev-diary/adversarial-review/t2.5-round4.md`, and nothing is committed.</result>
+<usage><subagent_tokens>85555</subagent_tokens><tool_uses>12</tool_uses><duration_ms>130722</duration_ms></usage>
+</task-notification>
