@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>bnh1o0wuj</task-id>
+<tool-use-id>toolu_01LKSYZYCzKjsosqrYQtMsye</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/69bb0573-fbc1-464c-b7af-322ceda1c9d2/tasks/bnh1o0wuj.output</output-file>
+<status>failed</status>
+<summary>Background command "Run bounded /rest/v1 proxy on 57031" failed with exit code 124</summary>
+</task-notification>
