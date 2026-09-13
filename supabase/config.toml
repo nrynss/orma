@@ -23,3 +23,8 @@ verify_jwt = false
 # clean 401 protocol error, so the gateway JWT check stays off.
 [functions.mcp]
 verify_jwt = false
+
+# T7.3 owns this block. The weekly analysis cron uses the named materialise
+# secret API key, which @supabase/server validates in the handler.
+[functions.analysis]
+verify_jwt = false
