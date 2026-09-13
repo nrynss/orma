@@ -6,8 +6,11 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 scratch_root="$(mktemp -d /tmp/orma-t7-1.XXXXXX)"
 container_name="supabase_db_$(basename "$scratch_root")"
 
+# Stop the stack without keeping a backup volume and remove the scratch root.
+# Safe to repeat, so the exit trap may run it again after the residue guard.
 cleanup() {
-  supabase stop --workdir "$scratch_root" >/dev/null 2>&1 || true
+  supabase stop --workdir "$scratch_root" --no-backup >/dev/null 2>&1 || true
+  rm -rf "$scratch_root"
 }
 
 trap cleanup EXIT
@@ -63,19 +66,22 @@ fi
 docker exec -i "$container_name" psql -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL'
 begin;
 
--- One week of history for the main profile. Times carry an explicit +05:30
--- offset so mention and retirement dates are checked through Asia/Kolkata.
+-- One week of history for the main profile. In-window timestamps sit at
+-- 01:00+05:30, so the Asia/Kolkata calendar date and the UTC date disagree by
+-- one day and only the profile-timezone conversion keeps them in the window.
 insert into auth.users (id, aud, role, email)
 values
   ('00000000-0000-0000-0000-000000000771', 'authenticated', 'authenticated', 't7-1-main@example.test'),
   ('00000000-0000-0000-0000-000000000772', 'authenticated', 'authenticated', 't7-1-short@example.test'),
-  ('00000000-0000-0000-0000-000000000773', 'authenticated', 'authenticated', 't7-1-empty@example.test');
+  ('00000000-0000-0000-0000-000000000773', 'authenticated', 'authenticated', 't7-1-empty@example.test'),
+  ('00000000-0000-0000-0000-000000000774', 'authenticated', 'authenticated', 't7-1-boundary@example.test');
 
 insert into public.profiles (id, display_name, phone_e164, timezone)
 values
   ('00000000-0000-0000-0000-000000000771', 'Pattern user', '+14155550771', 'Asia/Kolkata'),
   ('00000000-0000-0000-0000-000000000772', 'Short user', '+14155550772', 'Asia/Kolkata'),
-  ('00000000-0000-0000-0000-000000000773', 'Empty user', '+14155550773', 'Asia/Kolkata');
+  ('00000000-0000-0000-0000-000000000773', 'Empty user', '+14155550773', 'Asia/Kolkata'),
+  ('00000000-0000-0000-0000-000000000774', 'Boundary user', '+14155550774', 'Asia/Kolkata');
 
 insert into public.slots (id, user_id, local_time, part_of_day)
 values
@@ -85,13 +91,19 @@ values
 insert into public.items (id, user_id, text, status, since_date, source, created_at)
 values
   ('33333333-3333-3333-3333-000000000771', '00000000-0000-0000-0000-000000000771', 'dentist', 'open', '2026-08-09', 'web', '2026-08-09 06:00+05:30'),
-  ('33333333-3333-3333-3333-000000000772', '00000000-0000-0000-0000-000000000771', 'email Amma', 'open', null, 'web', '2026-08-20 06:00+05:30'),
+  ('33333333-3333-3333-3333-000000000772', '00000000-0000-0000-0000-000000000771', 'email Amma', 'open', null, 'web', '2026-08-20 01:00+05:30'),
   ('33333333-3333-3333-3333-000000000773', '00000000-0000-0000-0000-000000000771', 'physio', 'retired', '2026-08-01', 'web', '2026-08-01 06:00+05:30'),
   ('33333333-3333-3333-3333-000000000774', '00000000-0000-0000-0000-000000000771', 'refuel scooter', 'retired', null, 'web', '2026-08-02 06:00+05:30'),
-  ('33333333-3333-3333-3333-000000000775', '00000000-0000-0000-0000-000000000771', 'tax return', 'open', '2026-09-10', 'web', '2026-09-01 06:00+05:30');
+  ('33333333-3333-3333-3333-000000000775', '00000000-0000-0000-0000-000000000771', 'tax return', 'open', '2026-09-10', 'web', '2026-09-01 06:00+05:30'),
+  ('33333333-3333-3333-3333-000000000776', '00000000-0000-0000-0000-000000000771', 'water plants', 'open', '2026-08-28', 'web', '2026-08-28 06:00+05:30'),
+  ('33333333-3333-3333-3333-000000000777', '00000000-0000-0000-0000-000000000771', 'book flight', 'open', '2026-09-02', 'web', '2026-09-02 06:00+05:30'),
+  ('33333333-3333-3333-3333-000000000778', '00000000-0000-0000-0000-000000000771', 'replace bulb', 'open', '2026-09-06', 'web', '2026-09-06 06:00+05:30');
 
+-- The retirement sits at 01:00+05:30 on 2026-09-01. Its Asia/Kolkata date is
+-- 2026-09-01, the first day of the window. Its UTC date is 2026-08-31, one day
+-- before the window, so only the profile-timezone cast keeps it in the report.
 update public.items
-set retired_at = '2026-09-05 06:00+05:30', retired_reason = 'done'
+set retired_at = '2026-09-01 01:00+05:30', retired_reason = 'done'
 where id = '33333333-3333-3333-3333-000000000773';
 
 -- This retirement lands outside the window, so it must stay out of the report.
@@ -130,16 +142,31 @@ values
   ('44444444-4444-4444-4444-000000000022', '00000000-0000-0000-0000-000000000772', null, '2026-09-02', 'morning', '2026-09-02 02:30+00', 'completed', 'answered_no_result', 'low', 'orma:t7-1:s02'),
   ('44444444-4444-4444-4444-000000000023', '00000000-0000-0000-0000-000000000772', null, '2026-09-02', 'morning', '2026-09-02 12:30+00', 'completed', 'answered_extracted', 'ok',  'orma:t7-1:s03');
 
+-- The boundary profile covers exactly three distinct local days with a repeat
+-- among four completed runs. sufficient_history must turn true at exactly
+-- three observed days, so any stricter comparison fails this block.
+insert into public.call_runs (
+  id, user_id, slot_id, local_date, part_of_day, scheduled_for, state,
+  disposition, mood, idempotency_key
+)
+values
+  ('44444444-4444-4444-4444-000000000031', '00000000-0000-0000-0000-000000000774', null, '2026-09-01', 'morning', '2026-09-01 02:30+00', 'completed', 'answered_extracted', 'ok', 'orma:t7-1:b01'),
+  ('44444444-4444-4444-4444-000000000032', '00000000-0000-0000-0000-000000000774', null, '2026-09-02', 'morning', '2026-09-02 02:30+00', 'completed', 'answered_extracted', 'ok', 'orma:t7-1:b02'),
+  ('44444444-4444-4444-4444-000000000033', '00000000-0000-0000-0000-000000000774', null, '2026-09-03', 'morning', '2026-09-03 02:30+00', 'completed', 'answered_extracted', 'ok', 'orma:t7-1:b03'),
+  ('44444444-4444-4444-4444-000000000034', '00000000-0000-0000-0000-000000000774', null, '2026-09-03', 'morning', '2026-09-03 12:30+00', 'completed', 'answered_extracted', 'ok', 'orma:t7-1:b04');
+
 -- Mentions. dentist has four inside the window plus one on each edge day.
--- email Amma has two inside. physio has three inside. Every edge mention sits
--- exactly one local day outside, so an inclusive filter cannot pass by luck.
+-- The four inside sit at 01:00+05:30, so each UTC date lands one day earlier
+-- and a dropped profile-timezone cast lifts one out of the window. email Amma
+-- has two inside. physio has three inside. Every edge mention sits exactly one
+-- local day outside, so an inclusive filter cannot pass by luck.
 insert into public.item_mentions (item_id, call_run_id, created_at)
 values
   ('33333333-3333-3333-3333-000000000771', '44444444-4444-4444-4444-000000000013', '2026-08-31 06:00+05:30'),
-  ('33333333-3333-3333-3333-000000000771', '44444444-4444-4444-4444-000000000001', '2026-09-01 06:00+05:30'),
-  ('33333333-3333-3333-3333-000000000771', '44444444-4444-4444-4444-000000000004', '2026-09-03 06:00+05:30'),
-  ('33333333-3333-3333-3333-000000000771', '44444444-4444-4444-4444-000000000007', '2026-09-05 06:00+05:30'),
-  ('33333333-3333-3333-3333-000000000771', '44444444-4444-4444-4444-000000000011', '2026-09-07 06:00+05:30'),
+  ('33333333-3333-3333-3333-000000000771', '44444444-4444-4444-4444-000000000001', '2026-09-01 01:00+05:30'),
+  ('33333333-3333-3333-3333-000000000771', '44444444-4444-4444-4444-000000000004', '2026-09-03 01:00+05:30'),
+  ('33333333-3333-3333-3333-000000000771', '44444444-4444-4444-4444-000000000007', '2026-09-05 01:00+05:30'),
+  ('33333333-3333-3333-3333-000000000771', '44444444-4444-4444-4444-000000000011', '2026-09-07 01:00+05:30'),
   ('33333333-3333-3333-3333-000000000771', null, '2026-09-08 06:00+05:30'),
   ('33333333-3333-3333-3333-000000000772', '44444444-4444-4444-4444-000000000003', '2026-09-02 06:00+05:30'),
   ('33333333-3333-3333-3333-000000000772', '44444444-4444-4444-4444-000000000010', '2026-09-06 06:00+05:30'),
@@ -181,7 +208,7 @@ begin
     raise exception 'seven observed days must be sufficient history';
   end if;
 
-  if facts -> 'retirements' <> '{"avg_days_open": 35.0, "items": [{"days_open": 35, "item_id": "33333333-3333-3333-3333-000000000773", "text": "physio"}], "retired_count": 1}'::jsonb then
+  if facts -> 'retirements' <> '{"avg_days_open": 31.0, "items": [{"days_open": 31, "item_id": "33333333-3333-3333-3333-000000000773", "text": "physio"}], "retired_count": 1}'::jsonb then
     raise exception 'retirements must cover only this window and measure local days open: %', facts -> 'retirements';
   end if;
 
@@ -196,13 +223,22 @@ begin
   if facts -> 'ages' <> '[
     {"item_id":"33333333-3333-3333-3333-000000000771","text":"dentist","age_days":29},
     {"item_id":"33333333-3333-3333-3333-000000000772","text":"email Amma","age_days":18},
+    {"item_id":"33333333-3333-3333-3333-000000000776","text":"water plants","age_days":10},
+    {"item_id":"33333333-3333-3333-3333-000000000777","text":"book flight","age_days":5},
+    {"item_id":"33333333-3333-3333-3333-000000000778","text":"replace bulb","age_days":1},
     {"item_id":"33333333-3333-3333-3333-000000000775","text":"tax return","age_days":0}
   ]'::jsonb then
     raise exception 'ages must use since_date, then local created date, and clamp the future to zero: %', facts -> 'ages';
   end if;
 
-  if facts -> 'longest_surviving' <> facts -> 'ages' then
-    raise exception 'longest_surviving must be the age order under five items: %', facts -> 'longest_surviving';
+  if facts -> 'longest_surviving' <> '[
+    {"item_id":"33333333-3333-3333-3333-000000000771","text":"dentist","age_days":29},
+    {"item_id":"33333333-3333-3333-3333-000000000772","text":"email Amma","age_days":18},
+    {"item_id":"33333333-3333-3333-3333-000000000776","text":"water plants","age_days":10},
+    {"item_id":"33333333-3333-3333-3333-000000000777","text":"book flight","age_days":5},
+    {"item_id":"33333333-3333-3333-3333-000000000778","text":"replace bulb","age_days":1}
+  ]'::jsonb then
+    raise exception 'longest_surviving must cap at five items and drop the youngest: %', facts -> 'longest_surviving';
   end if;
 
   if facts -> 'answer_rate_by_slot' <> '[
@@ -252,6 +288,27 @@ do $$
 declare facts jsonb;
 begin
   facts := public.compute_pattern_facts(
+    '00000000-0000-0000-0000-000000000774',
+    '2026-09-01',
+    '2026-09-07'
+  );
+
+  if facts ->> 'observed_days' <> '3' then
+    raise exception 'the boundary profile must observe exactly three distinct days: %', facts ->> 'observed_days';
+  end if;
+  if (facts ->> 'sufficient_history') <> 'true' then
+    raise exception 'three observed days must already be sufficient history';
+  end if;
+  if facts ->> 'completed_runs' <> '4' or facts ->> 'answered_runs' <> '4' then
+    raise exception 'the boundary profile run counts changed: % %', facts ->> 'completed_runs', facts ->> 'answered_runs';
+  end if;
+end;
+$$;
+
+do $$
+declare facts jsonb;
+begin
+  facts := public.compute_pattern_facts(
     '00000000-0000-0000-0000-000000000773',
     '2026-09-01',
     '2026-09-07'
@@ -292,5 +349,19 @@ $$;
 
 rollback;
 SQL
+
+# Prove the run left no harness residue behind. The exit trap may repeat the
+# cleanup safely after this guard.
+cleanup
+
+if docker volume inspect "$container_name" >/dev/null 2>&1; then
+  echo "T7.1 cleanup left the database volume $container_name behind." >&2
+  exit 1
+fi
+
+if [ -d "$scratch_root" ]; then
+  echo "T7.1 cleanup left the scratch root $scratch_root behind." >&2
+  exit 1
+fi
 
 echo "T7.1 facts acceptance passed."
