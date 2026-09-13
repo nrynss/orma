@@ -430,6 +430,7 @@ if (typeof testFn === "function" && !import.meta.main) {
         CALLE_API_KEY: "calle-key",
         ORMA_WEBHOOK_SECRET: "webhook-secret",
         ORMA_DRY_RUN: "false",
+        TELEGRAM_BOT_TOKEN: "fixture-bot-token",
       };
       const result = await tick(depsFromEnv((key) => env[key], fetchStub));
       if (result.claimed !== 1) throw new Error("configured tick did not claim the due run");
@@ -479,6 +480,7 @@ if (typeof testFn === "function" && !import.meta.main) {
         CALLE_API_BASE: "https://api.call-e.test",
         CALLE_API_KEY: "calle-key",
         ORMA_WEBHOOK_SECRET: "webhook-secret",
+        TELEGRAM_BOT_TOKEN: "fixture-bot-token",
       };
       await tick(depsFromEnv((key) => env[key], fetchStub));
       if (requests.some((request) => request.url.endsWith("/v1/calls"))) {
@@ -588,6 +590,31 @@ if (typeof testFn === "function" && !import.meta.main) {
         if (url.pathname.endsWith("/call_events")) {
           return new Response(null, { status: 201 });
         }
+        if (url.pathname.endsWith("/rest/v1/profiles")) {
+          return Response.json([{
+            id: "user-1",
+            telegram_chat_id: 424242,
+            telegram_receipts: true,
+          }]);
+        }
+        if (url.pathname.endsWith("/rest/v1/deliveries") && request.method === "POST") {
+          return Response.json([{
+            id: "delivery-1",
+            user_id: "user-1",
+            channel: "telegram",
+            kind: "post_call",
+            call_run_id: "run-healthy",
+            payload: {},
+            sent_at: null,
+            error: null,
+          }]);
+        }
+        if (url.pathname.endsWith("/rest/v1/deliveries") && request.method === "PATCH") {
+          return new Response(null, { status: 200 });
+        }
+        if (url.host === "api.telegram.org") {
+          return Response.json({ ok: true });
+        }
         throw new Error(`unexpected request ${request.method} ${request.url}`);
       };
       const env: Record<string, string> = {
@@ -596,6 +623,7 @@ if (typeof testFn === "function" && !import.meta.main) {
         CALLE_API_BASE: "https://api.call-e.test",
         CALLE_API_KEY: "calle-key",
         ORMA_WEBHOOK_SECRET: "webhook-secret",
+        TELEGRAM_BOT_TOKEN: "fixture-bot-token",
       };
       const body = await tick(depsFromEnv((key) => env[key], fetchStub));
 
@@ -652,6 +680,29 @@ if (typeof testFn === "function" && !import.meta.main) {
       );
       if (writes.length !== 0) {
         throw new Error("the finaliser must leave every run write to ingestion");
+      }
+      const sends = requests.filter((request) =>
+        request.url.includes("api.telegram.org")
+      );
+      if (sends.length !== 1) {
+        throw new Error(
+          `the finalised sibling must send one receipt, saw ${sends.length}`,
+        );
+      }
+      const post = requests.find((request) =>
+        request.method === "POST" && request.url.endsWith("/rest/v1/deliveries")
+      );
+      const postBody = await post!.json() as {
+        kind: string;
+        call_run_id: string;
+      };
+      if (
+        postBody.kind !== "post_call" ||
+        postBody.call_run_id !== "run-healthy"
+      ) {
+        throw new Error(
+          `the receipt row lost its kind or run: ${JSON.stringify(postBody)}`,
+        );
       }
     },
   );

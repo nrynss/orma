@@ -45,6 +45,12 @@ export type CalleDeps = {
   calleApiBase: string;
   calleApiKey: string;
   webhookUrl: string;
+  /**
+   * The Telegram bot token the finaliser threads into the post-call receipt.
+   * `depsFromEnv` requires it, so production always carries one. A caller
+   * that omits it keeps the pre-T7.5 behaviour of sending no receipt.
+   */
+  telegramBotToken?: string;
   fetch: typeof fetch;
   now: () => Date;
   /** Read only for the dry-mode decision, which fails closed when unset. */
@@ -140,6 +146,7 @@ export function depsFromEnv(
     calleApiBase: requireNamedEnv("CALLE_API_BASE", getEnv),
     calleApiKey: requireNamedEnv("CALLE_API_KEY", getEnv),
     webhookUrl: `${apiUrl.replace(/\/+$/, "")}/functions/v1/calle-webhook/${webhookSecret}`,
+    telegramBotToken: requireNamedEnv("TELEGRAM_BOT_TOKEN", getEnv),
     fetch: fetchImpl,
     now: () => new Date(),
     getEnv,
@@ -745,6 +752,7 @@ if (typeof testFn === "function") {
       SUPABASE_SERVICE_ROLE_KEY: "service-key",
       CALLE_API_BASE: "https://api.call-e.test",
       CALLE_API_KEY: "calle-key",
+      TELEGRAM_BOT_TOKEN: "fixture-bot-token",
     };
     const deps = depsFromEnv((key) => values[key]);
     if (deps.webhookUrl !== "https://orma-api.nryn.dev/functions/v1/calle-webhook/webhook-secret") {

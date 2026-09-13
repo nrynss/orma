@@ -31,12 +31,21 @@
  * lose that row for good. `recordCallEvent` owns the append retry, from one
  * budget, and a lost append is named on the run row.
  *
+ * After the `finalised` row lands, and only when this pass did the
+ * ingestion, the module sends the T7.4 post-call receipt over Telegram. A
+ * failure on that path is logged with the run id and never un-finalises the
+ * run. A replay returns before the receipt path.
+ *
  * A dry run never reaches this module. `dispatch-mode.ts` replays its recorded
  * fixture into ingestion inside the dispatch step, and ingestion completes the
  * run there.
  */
 
-import type { CalleDeps } from "./calle.ts";
+import {
+  depsFromEnv as calleDepsFromEnv,
+  type CalleDeps,
+} from "./calle.ts";
+import type { DeliverTelegramDeps } from "./deliver-telegram.ts";
 import { EVENT_APPEND_ATTEMPTS, recordCallEvent } from "./events.ts";
 import type { CallTaskFixture } from "./fixtures.ts";
 import {
@@ -46,6 +55,7 @@ import {
   type TerminalCallSource,
 } from "./ingest.ts";
 import { fetchCall, terminalStateFor, type TerminalState } from "./poll.ts";
+import { deliverIngestionReceipt } from "./receipt.ts";
 
 /**
  * One terminal run, as the tick selects it. `calle_call_id` is null only for a
@@ -92,6 +102,38 @@ function ingestDeps(deps: CalleDeps): IngestDeps {
     serviceRoleKey: deps.serviceRoleKey,
     fetch: deps.fetch,
   };
+}
+
+/** The receipt reads profiles, items and deliveries over the same REST
+ * transport, and speaks Telegram with the threaded bot token. */
+function receiptDeps(deps: CalleDeps, botToken: string): DeliverTelegramDeps {
+  return {
+    apiUrl: deps.apiUrl,
+    serviceRoleKey: deps.serviceRoleKey,
+    botToken,
+    fetch: deps.fetch,
+  };
+}
+
+/**
+ * Reads one item's text through PostgREST. No row, or a blank text,
+ * resolves to null, which drops the id from the receipt. A read that fails
+ * throws, so the whole receipt fails as one unit and the caller logs it.
+ */
+async function resolveItemText(
+  deps: CalleDeps,
+  itemId: string,
+): Promise<string | null> {
+  const url = `${apiBase(deps.apiUrl)}/rest/v1/items?id=eq.${
+    encodeURIComponent(itemId)
+  }&select=text`;
+  const response = await deps.fetch(url, {
+    headers: serviceHeaders(deps.serviceRoleKey),
+  });
+  if (!response.ok) throw new Error("items receipt read failed");
+  const rows = await response.json() as Array<{ text?: string | null }>;
+  const text = rows[0]?.text;
+  return typeof text === "string" && text !== "" ? text : null;
 }
 
 /**
@@ -283,6 +325,37 @@ async function attemptFailed(
 }
 
 /**
+ * Sends the T7.4 post-call receipt once the finalised row stands. The
+ * receipt is bookkeeping beside the call, so any failure is logged with the
+ * run id, never a key, and swallowed, and the run stays finalised. A caller
+ * that threads no bot token keeps the pre-T7.5 behaviour of sending none.
+ */
+async function sendPostCallReceipt(
+  run: FinaliseRun,
+  call: CallTaskFixture,
+  deps: CalleDeps,
+): Promise<void> {
+  const botToken = deps.telegramBotToken;
+  if (!botToken) return;
+  try {
+    await deliverIngestionReceipt(
+      {
+        userId: run.user_id,
+        callRunId: run.id,
+        structured: call.structured_result,
+        resolveRetiredText: (itemId) => resolveItemText(deps, itemId),
+      },
+      receiptDeps(deps, botToken),
+    );
+  } catch (error) {
+    console.error(
+      `post-call receipt failed for run ${run.id}`,
+      error instanceof Error ? error.message : "unknown error",
+    );
+  }
+}
+
+/**
  * Finalises one terminal run. Nothing is written before the ingest lands, so a
  * failed re-fetch leaves the run queued with no partial state anywhere. This is
  * the pass without the attempt bound, and `finaliseStep` is what the tick runs.
@@ -314,6 +387,10 @@ export async function finaliseRun(
     deps,
     sleep,
   );
+  // One receipt per successful finalise, and a replay returned above, so a
+  // run is never receipted twice. A failure here must not un-finalise the
+  // run and must never repeat ingestion.
+  await sendPostCallReceipt(run, call, deps);
   return ingested;
 }
 
@@ -364,7 +441,7 @@ if (typeof testFn === "function") {
 
   /** Every stub throws on a path it does not expect, so no request passes
    * unnoticed and no run row can be written behind the ingestion seam. */
-  const depsFor = (fetchImpl: typeof fetch): CalleDeps => ({
+  const depsFor = (fetchImpl: typeof fetch, botToken?: string): CalleDeps => ({
     apiUrl: API,
     serviceRoleKey: "service-key",
     calleApiBase: CALLE,
@@ -372,6 +449,7 @@ if (typeof testFn === "function") {
     webhookUrl: `${API}/functions/v1/calle-webhook/secret`,
     fetch: fetchImpl,
     now: () => new Date("2026-09-12T00:00:00.000Z"),
+    ...(botToken ? { telegramBotToken: botToken } : {}),
   });
 
   const payload = (overrides: Record<string, unknown> = {}): unknown => ({
@@ -414,7 +492,23 @@ if (typeof testFn === "function") {
     ...overrides,
   });
 
-  const driver = (call: unknown, ingest: unknown = summary()) => {
+  const BOT_TOKEN = "fixture-bot-token";
+  const TELEGRAM_HOST = "api.telegram.org";
+
+  /** Options a receipt test threads. A test that threads no bot token never
+   * reaches any of the receipt branches below. */
+  type ReceiptOptions = {
+    botToken?: string;
+    items?: Record<string, string | null>;
+    profilesStatus?: number;
+    telegramStatus?: number;
+  };
+
+  const driver = (
+    call: unknown,
+    ingest: unknown = summary(),
+    receipt: ReceiptOptions = {},
+  ) => {
     const seen: Request[] = [];
     const fetchImpl: typeof fetch = async (input, init) => {
       const request = new Request(input, init);
@@ -427,9 +521,45 @@ if (typeof testFn === "function") {
       if (url.pathname === "/rest/v1/call_events") {
         return new Response(null, { status: 201 });
       }
+      if (url.pathname === "/rest/v1/items") {
+        const id = (url.searchParams.get("id") ?? "").replace(/^eq\./, "");
+        const text = receipt.items?.[id];
+        return Response.json(text === undefined ? [] : [{ text }]);
+      }
+      if (url.pathname === "/rest/v1/profiles") {
+        if (receipt.profilesStatus) {
+          return new Response(null, { status: receipt.profilesStatus });
+        }
+        return Response.json([{
+          id: RUN.user_id,
+          telegram_chat_id: 424242,
+          telegram_receipts: true,
+        }]);
+      }
+      if (url.pathname === "/rest/v1/deliveries" && request.method === "POST") {
+        return Response.json([{
+          id: "delivery-1",
+          user_id: RUN.user_id,
+          channel: "telegram",
+          kind: "post_call",
+          call_run_id: RUN.id,
+          payload: {},
+          sent_at: null,
+          error: null,
+        }]);
+      }
+      if (url.pathname === "/rest/v1/deliveries" && request.method === "PATCH") {
+        return new Response(null, { status: 200 });
+      }
+      if (url.host === TELEGRAM_HOST) {
+        if (receipt.telegramStatus) {
+          return new Response(null, { status: receipt.telegramStatus });
+        }
+        return Response.json({ ok: true });
+      }
       throw new Error(`unexpected request ${request.method} ${request.url}`);
     };
-    return { seen, deps: depsFor(fetchImpl) };
+    return { seen, deps: depsFor(fetchImpl, receipt.botToken) };
   };
 
   /**
@@ -868,6 +998,284 @@ if (typeof testFn === "function") {
     }
     if (seen.some((request) => request.url.endsWith("/rpc/abandon_call_run"))) {
       throw new Error("a run whose ingest landed must never be abandoned");
+    }
+  });
+
+  testFn(
+    "a successful finalise sends one post_call receipt naming resolved texts",
+    async () => {
+      const { seen, deps } = driver(
+        payload({
+          structured_result: {
+            captured_items: [{
+              text: "Renew the passport",
+              evidence_offset_seconds: 12,
+            }],
+            retired_items: [{
+              item_id: "item-1",
+              evidence_offset_seconds: 30,
+            }],
+            commitments: [{
+              item_id: "item-2",
+              due: "Friday",
+              evidence_offset_seconds: 45,
+            }],
+          },
+        }),
+        summary({
+          counts: { items: 1, mentions: 1, retirements: 1, commitments: 1 },
+        }),
+        {
+          botToken: BOT_TOKEN,
+          items: { "item-1": "Old passport", "item-2": "Book the appointment" },
+        },
+      );
+      const ingested = await finaliseRun(RUN, deps);
+      if (ingested.alreadyIngested) {
+        throw new Error("the fixture must be a fresh ingest");
+      }
+
+      const itemReads = seen.filter((request) =>
+        new URL(request.url).pathname === "/rest/v1/items"
+      );
+      const reads = itemReads.map((request) => {
+        const url = new URL(request.url);
+        return {
+          id: (url.searchParams.get("id") ?? "").replace(/^eq\./, ""),
+          select: url.searchParams.get("select"),
+          authorization: request.headers.get("authorization"),
+        };
+      }).sort((a, b) => a.id.localeCompare(b.id));
+      if (reads.map((read) => read.id).join(",") !== "item-1,item-2") {
+        throw new Error(
+          `the receipt resolved the wrong ids: ${JSON.stringify(reads)}`,
+        );
+      }
+      if (reads.some((read) => read.select !== "text")) {
+        throw new Error("the items read must select only the text");
+      }
+      if (reads.some((read) => read.authorization !== "Bearer service-key")) {
+        throw new Error("the items read must carry the service role");
+      }
+
+      const sends = seen.filter((request) =>
+        new URL(request.url).host === TELEGRAM_HOST
+      );
+      if (sends.length !== 1) {
+        throw new Error(`one receipt must reach Telegram, saw ${sends.length}`);
+      }
+      const send = await sends[0].json() as { chat_id: number; text: string };
+      if (send.chat_id !== 424242) {
+        throw new Error("the receipt went to the wrong chat");
+      }
+      for (
+        const named of [
+          "Renew the passport",
+          "Old passport",
+          "Book the appointment",
+        ]
+      ) {
+        if (!send.text.includes(named)) {
+          throw new Error(
+            `the receipt lost ${JSON.stringify(named)}: ${JSON.stringify(send.text)}`,
+          );
+        }
+      }
+
+      const posts = seen.filter((request) =>
+        request.method === "POST" &&
+        new URL(request.url).pathname === "/rest/v1/deliveries"
+      );
+      if (posts.length !== 1) {
+        throw new Error(`one post_call row must be written, saw ${posts.length}`);
+      }
+      const row = await posts[0].json() as {
+        user_id: string;
+        kind: string;
+        call_run_id: string;
+      };
+      if (
+        row.kind !== "post_call" || row.call_run_id !== RUN.id ||
+        row.user_id !== RUN.user_id
+      ) {
+        throw new Error(
+          `the deliveries row lost its identity: ${JSON.stringify(row)}`,
+        );
+      }
+      if (seen.indexOf(posts[0]) > seen.indexOf(sends[0])) {
+        throw new Error("the deliveries row must precede the send");
+      }
+      const patch = seen.find((request) =>
+        request.method === "PATCH" && request.url.includes("/rest/v1/deliveries")
+      );
+      if (!patch) throw new Error("the sent receipt must be marked sent");
+    },
+  );
+
+  testFn("an unresolved item id is dropped rather than printed", async () => {
+    const { seen, deps } = driver(
+      payload({
+        structured_result: {
+          captured_items: [],
+          retired_items: [{
+            item_id: "item-gone",
+            evidence_offset_seconds: 30,
+          }],
+        },
+      }),
+      summary({
+        counts: { items: 0, mentions: 0, retirements: 1, commitments: 0 },
+      }),
+      { botToken: BOT_TOKEN, items: {} },
+    );
+    await finaliseRun(RUN, deps);
+    const sends = seen.filter((request) =>
+      new URL(request.url).host === TELEGRAM_HOST
+    );
+    if (sends.length !== 1) throw new Error("the receipt must still go out");
+    const send = await sends[0].json() as { text: string };
+    if (send.text.includes("item-gone")) {
+      throw new Error("the receipt printed an id it could not resolve");
+    }
+    if (!send.text.includes("Retired: none")) {
+      throw new Error(
+        `the unresolved id must leave no name: ${JSON.stringify(send.text)}`,
+      );
+    }
+  });
+
+  testFn(
+    "a telegram receipt failure leaves the ingest result and timeline unchanged",
+    async () => {
+      const { seen, deps } = driver(payload(), summary(), {
+        botToken: BOT_TOKEN,
+        telegramStatus: 500,
+      });
+      const ingested = await finaliseRun(RUN, deps);
+      if (
+        ingested.disposition !== "answered_extracted" ||
+        ingested.counts.items !== 1
+      ) {
+        throw new Error("a failed receipt must not change the ingest result");
+      }
+      const event = seen.find((request) =>
+        request.url.endsWith("/call_events")
+      );
+      const row = await event!.json() as { kind: string };
+      if (row.kind !== "finalised") {
+        throw new Error("a failed receipt must not remove the finalised row");
+      }
+      const patch = seen.find((request) =>
+        request.method === "PATCH" && request.url.includes("/rest/v1/deliveries")
+      );
+      const patchBody = await patch!.json() as { error: string };
+      if (patchBody.error !== "telegram sendMessage failed") {
+        throw new Error(
+          `the failed receipt lost its error text: ${JSON.stringify(patchBody)}`,
+        );
+      }
+    },
+  );
+
+  testFn(
+    "a receipt that throws before any row still leaves the run finalised",
+    async () => {
+      const { seen, deps } = driver(payload(), summary(), {
+        botToken: BOT_TOKEN,
+        profilesStatus: 503,
+      });
+      const ingested = await finaliseRun(RUN, deps);
+      if (ingested.disposition !== "answered_extracted") {
+        throw new Error("a failed receipt must not change the ingest result");
+      }
+      if (
+        seen.some((request) =>
+          new URL(request.url).pathname === "/rest/v1/deliveries"
+        )
+      ) {
+        throw new Error("a failed profile read must write no deliveries row");
+      }
+      const event = seen.find((request) =>
+        request.url.endsWith("/call_events")
+      );
+      const row = await event!.json() as { kind: string };
+      if (row.kind !== "finalised") {
+        throw new Error("the finalised row must stand");
+      }
+    },
+  );
+
+  testFn(
+    "a replay sends no receipt and writes no second post_call row",
+    async () => {
+      const { seen, deps } = driver(
+        payload(),
+        summary({
+          already_ingested: true,
+          counts: { items: 0, mentions: 0, retirements: 0, commitments: 0 },
+        }),
+        { botToken: BOT_TOKEN, items: { "item-1": "Old passport" } },
+      );
+      const ingested = await finaliseRun(RUN, deps);
+      if (!ingested.alreadyIngested) {
+        throw new Error("the replay marker was not handed back");
+      }
+      const receiptTraffic = seen.filter((request) => {
+        const path = new URL(request.url).pathname;
+        return (
+          path === "/rest/v1/items" ||
+          path === "/rest/v1/profiles" ||
+          path === "/rest/v1/deliveries" ||
+          new URL(request.url).host === TELEGRAM_HOST
+        );
+      });
+      if (receiptTraffic.length !== 0) {
+        throw new Error(
+          `a replay sent receipt traffic: ${
+            JSON.stringify(receiptTraffic.map((request) => request.url))
+          }`,
+        );
+      }
+    },
+  );
+
+  testFn(
+    "no threaded bot token preserves the old receipt-free finalise",
+    async () => {
+      const { seen, deps } = driver(payload(), summary());
+      await finaliseRun(RUN, deps);
+      // The re-fetch, the ingest and the timeline append, and nothing else.
+      if (seen.length !== 3) {
+        throw new Error(
+          `a finalise without a token must make no receipt calls, saw ${seen.length}`,
+        );
+      }
+    },
+  );
+
+  testFn("calleDepsFromEnv requires the telegram bot token by name", () => {
+    const values: Record<string, string> = {
+      ORMA_API_URL: API,
+      ORMA_WEBHOOK_SECRET: "webhook-secret",
+      SUPABASE_SERVICE_ROLE_KEY: "service-key",
+      CALLE_API_BASE: CALLE,
+      CALLE_API_KEY: "calle-key",
+    };
+    try {
+      calleDepsFromEnv((key) => values[key]);
+      throw new Error("depsFromEnv must require TELEGRAM_BOT_TOKEN");
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        error.message !== "missing TELEGRAM_BOT_TOKEN"
+      ) {
+        throw error;
+      }
+    }
+    values.TELEGRAM_BOT_TOKEN = BOT_TOKEN;
+    const deps = calleDepsFromEnv((key) => values[key]);
+    if (deps.telegramBotToken !== BOT_TOKEN) {
+      throw new Error("the bot token must be threaded into the deps");
     }
   });
 }
