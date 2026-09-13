@@ -25,6 +25,9 @@ const TERMINAL_EVENT_TYPES = new Set([
   "call.result_validation_failed",
 ]);
 
+/** The tag this receiver stamps on the run, so attribution names the event. */
+const EVENT_TAG_PREFIX = "webhook:";
+
 const PENDING = "pending";
 const REFRESHING = "refreshing";
 const REFETCHED = "refetched";
@@ -151,16 +154,15 @@ export function depsFromEnv(
   };
 }
 
-/** Returns true when the event id was already recorded, which marks a redelivery. */
-async function insertPendingEvent(deps: WebhookDeps, eventId: string): Promise<boolean> {
+/** Records the event id. A conflict means CALL-E redelivered a known event. */
+async function insertPendingEvent(deps: WebhookDeps, eventId: string): Promise<void> {
   const response = await deps.fetch(restUrl(deps.apiUrl, "webhook_events"), {
     method: "POST",
     headers: serviceHeaders(deps.serviceRoleKey, "return=minimal"),
     body: JSON.stringify({ event_id: eventId, type: PENDING }),
   });
-  if (response.status === 409) return true;
+  if (response.status === 409) return;
   if (!response.ok) throw new Error("webhook event record failed");
-  return false;
 }
 
 async function claimPendingEvent(deps: WebhookDeps, eventId: string, now = Date.now()): Promise<boolean> {
@@ -202,14 +204,15 @@ async function fetchAuthoritativeCall(deps: WebhookDeps, callId: string): Promis
  * Moves the run to the state the re-fetch reports, and only while the run is
  * still pending. The webhook and the poll both write here, so the conditional
  * PATCH is what makes exactly one of them win. The body never supplies a
- * state, only the authoritative GET does.
+ * state, only the authoritative GET does. The write also stamps this event's
+ * tag on `terminal_writer`, in the same statement as the state.
  */
 type RefetchOutcome = "applied" | "already_resolved" | "not_terminal";
 
 async function terminaliseFromRefetch(
   deps: WebhookDeps,
   call: AuthoritativeCall,
-  redelivered: boolean,
+  eventTag: string,
 ): Promise<RefetchOutcome> {
   const state = terminalStateFor(call.status as CallStatus);
   if (!state) return "not_terminal";
@@ -220,45 +223,32 @@ async function terminaliseFromRefetch(
   const response = await deps.fetch(restUrl(deps.apiUrl, "call_runs", query.toString()), {
     method: "PATCH",
     headers: serviceHeaders(deps.serviceRoleKey, "return=representation"),
-    body: JSON.stringify({ state, poll_after: null }),
+    body: JSON.stringify({ state, poll_after: null, terminal_writer: eventTag }),
   });
   if (!response.ok) throw new Error("call run terminalisation failed");
   const rows = await response.json() as unknown[];
   if (Array.isArray(rows) && rows.length === 1) return "applied";
-  // Zero matched rows has two writers. The poll may have moved the run, and
-  // then the re-fetched status is a superseded observation. Or an earlier
-  // attempt at this same event moved it and then failed on a timeline insert.
-  // A first delivery cannot be the second case, so only a redelivery looks.
-  if (redelivered && await earlierAttemptApplied(deps, call.metadata.call_run_id, state)) return "applied";
-  return "already_resolved";
+  // Zero matched rows means another guarded write moved the run first. The
+  // stored tag names that writer, so a redelivery of this event's own write
+  // reads it back, and a second event or a poll reads a different tag.
+  return await readTerminalWriter(deps, call.metadata.call_run_id) === eventTag
+    ? "applied"
+    : "already_resolved";
 }
 
 /**
- * An earlier attempt at this event wrote the run when the run holds exactly the
- * re-fetched terminal state and no poll row claims a terminal state. Every
- * poll write to a terminal state records a `polled` row naming that state.
+ * Reads the tag the guarded write stored. The column is written in the same
+ * statement as `state`, so it names the one writer that moved the run. A null
+ * means no tagged writer claimed the move, so this event did not.
  */
-async function earlierAttemptApplied(deps: WebhookDeps, runId: string, state: string): Promise<boolean> {
-  const runQuery = new URLSearchParams({ select: "state", id: `eq.${runId}`, limit: "1" });
-  const runResponse = await deps.fetch(restUrl(deps.apiUrl, "call_runs", runQuery.toString()), {
+async function readTerminalWriter(deps: WebhookDeps, runId: string): Promise<string | null> {
+  const query = new URLSearchParams({ select: "terminal_writer", id: `eq.${runId}`, limit: "1" });
+  const response = await deps.fetch(restUrl(deps.apiUrl, "call_runs", query.toString()), {
     headers: serviceHeaders(deps.serviceRoleKey),
   });
-  if (!runResponse.ok) throw new Error("call run attribution read failed");
-  const runs = await runResponse.json() as { state?: string }[];
-  if (!Array.isArray(runs) || runs[0]?.state !== state) return false;
-  const eventQuery = new URLSearchParams({
-    select: "id",
-    call_run_id: `eq.${runId}`,
-    kind: "eq.polled",
-    "detail->>state": "in.(completed,failed,canceled)",
-    limit: "1",
-  });
-  const eventResponse = await deps.fetch(restUrl(deps.apiUrl, "call_events", eventQuery.toString()), {
-    headers: serviceHeaders(deps.serviceRoleKey),
-  });
-  if (!eventResponse.ok) throw new Error("call run attribution read failed");
-  const polled = await eventResponse.json() as unknown[];
-  return Array.isArray(polled) && polled.length === 0;
+  if (!response.ok) throw new Error("call run attribution read failed");
+  const runs = await response.json() as { terminal_writer?: string | null }[];
+  return Array.isArray(runs) ? runs[0]?.terminal_writer ?? null : null;
 }
 
 async function hasMatchingOrmaRun(deps: WebhookDeps, call: AuthoritativeCall): Promise<boolean> {
@@ -294,7 +284,7 @@ export function createWebhookHandler(deps: WebhookDeps): (request: Request) => P
       }
       const envelope = parseWebhookEnvelope(body, headerEventId);
       if (!envelope) return new Response(null, { status: 400 });
-      const redelivered = await insertPendingEvent(deps, envelope.id);
+      await insertPendingEvent(deps, envelope.id);
       if (!await claimPendingEvent(deps, envelope.id)) return new Response(null, { status: 200 });
       try {
         const call = await fetchAuthoritativeCall(deps, envelope.data.id);
@@ -305,7 +295,7 @@ export function createWebhookHandler(deps: WebhookDeps): (request: Request) => P
         // Persist the transition before the timeline claims it, so a failed
         // write never leaves an entry asserting a state that never landed.
         // The event row is released to pending below, so this is retried.
-        const outcome = await terminaliseFromRefetch(deps, call, redelivered);
+        const outcome = await terminaliseFromRefetch(deps, call, `${EVENT_TAG_PREFIX}${envelope.id}`);
         const eventDeps = { apiUrl: deps.apiUrl, serviceRoleKey: deps.serviceRoleKey, fetch: deps.fetch };
         await recordCallEvent(
           call.metadata.call_run_id,
@@ -530,26 +520,40 @@ if (typeof testFn === "function" && !import.meta.main) {
     if (patch.body.poll_after !== null) {
       throw new Error("a terminal run must stop being polled");
     }
+    if (patch.body.terminal_writer !== "webhook:evt_terminal") {
+      throw new Error(`the move must name the event that made it, saw ${JSON.stringify(patch.body.terminal_writer)}`);
+    }
   });
 
-  testFn("the refetched row marks whether the webhook's write won or the poll had already resolved the run", async () => {
-    for (const [patchRows, expected] of [[1, "applied"], [0, "already_resolved"]] as const) {
+  testFn("the refetched row marks whether the webhook's write won or the run was already resolved", async () => {
+    for (const [patchRows, storedTag, expected] of [
+      [1, null, "applied"],
+      [0, "webhook:evt_other", "already_resolved"],
+      [0, "poll", "already_resolved"],
+      [0, null, "already_resolved"],
+    ] as const) {
       const callEvents: { kind: string; detail: Record<string, unknown> }[] = [];
+      const attributionReads: URL[] = [];
       const handler = createWebhookHandler(baseDeps(async (input, init) => {
         const current = new Request(input, init);
-        if (current.url.endsWith("/webhook_events") && current.method === "POST") return new Response(null, { status: 201 });
-        if (current.url.includes("/webhook_events?") && current.method === "PATCH") return Response.json([{ event_id: "evt_terminal" }]);
-        if (current.url.endsWith("/call_events") && current.method === "POST") {
+        const url = new URL(current.url);
+        if (url.pathname.endsWith("/webhook_events") && current.method === "POST") return new Response(null, { status: 201 });
+        if (url.pathname.endsWith("/webhook_events") && current.method === "PATCH") return Response.json([{ event_id: "evt_terminal" }]);
+        if (url.pathname.endsWith("/call_events") && current.method === "POST") {
           callEvents.push(JSON.parse(await current.text()));
           return new Response(null, { status: 201 });
         }
-        if (current.url.endsWith("/v1/calls/call_terminal")) {
+        if (url.pathname.endsWith("/v1/calls/call_terminal")) {
           return Response.json({ id: "call_terminal", status: "failed", metadata: { call_run_id: "11111111-1111-4111-8111-111111111111" } });
         }
-        if (current.url.includes("/call_runs?") && current.method === "GET") {
+        if (url.pathname.endsWith("/call_runs") && current.method === "GET") {
+          if (url.searchParams.get("select") === "terminal_writer") {
+            attributionReads.push(url);
+            return Response.json([{ terminal_writer: storedTag }]);
+          }
           return Response.json([{ id: "11111111-1111-4111-8111-111111111111" }]);
         }
-        if (current.url.includes("/call_runs?") && current.method === "PATCH") {
+        if (url.pathname.endsWith("/call_runs") && current.method === "PATCH") {
           return Response.json(patchRows === 1 ? [{ id: "11111111-1111-4111-8111-111111111111" }] : []);
         }
         throw new Error(`unexpected request ${current.method} ${current.url}`);
@@ -558,42 +562,50 @@ if (typeof testFn === "function" && !import.meta.main) {
       if (response.status !== 200) throw new Error("the receiver must acknowledge either way");
       const refetchedRow = callEvents.find((row) => row.kind === "refetched");
       if (refetchedRow?.detail.outcome !== expected) {
-        throw new Error(`a PATCH matching ${patchRows} rows must record outcome ${expected}, saw ${JSON.stringify(refetchedRow?.detail)}`);
+        throw new Error(`a PATCH matching ${patchRows} rows with tag ${storedTag} must record outcome ${expected}, saw ${JSON.stringify(refetchedRow?.detail)}`);
+      }
+      if (patchRows === 0 && attributionReads.length !== 1) {
+        throw new Error("a lost write must read terminal_writer once");
+      }
+      if (patchRows === 1 && attributionReads.length !== 0) {
+        throw new Error("a won write must not read attribution");
+      }
+      for (const read of attributionReads) {
+        if (read.searchParams.get("id") !== "eq.11111111-1111-4111-8111-111111111111") {
+          throw new Error(`attribution must read this run, saw ${read.search}`);
+        }
       }
     }
   });
 
-  testFn("a redelivery whose own earlier attempt moved the run records applied, not a poll that never ran", async () => {
+  testFn("a lost guarded write is attributed to the stored tag, never to a missing poll row", async () => {
     const RUN_ID = "11111111-1111-4111-8111-111111111111";
     const cases = [
-      { name: "redelivery, no poll row", insertStatus: 409, runState: "completed", polledRows: [], expected: "applied" },
-      { name: "redelivery, poll moved it", insertStatus: 409, runState: "completed", polledRows: [{ id: 7 }], expected: "already_resolved" },
-      { name: "redelivery, run holds another state", insertStatus: 409, runState: "failed", polledRows: [], expected: "already_resolved" },
-      { name: "first delivery", insertStatus: 201, runState: "completed", polledRows: [], expected: "already_resolved" },
+      { name: "redelivery of this event's own write", storedTag: "webhook:evt_terminal", expected: "applied" },
+      { name: "redelivery after a second event moved the run", storedTag: "webhook:evt_other", expected: "already_resolved" },
+      { name: "redelivery after the poll moved the run", storedTag: "poll", expected: "already_resolved" },
+      { name: "redelivery of an untagged move", storedTag: null, expected: "already_resolved" },
     ];
     for (const scenario of cases) {
       const callEvents: { kind: string; detail: Record<string, unknown> }[] = [];
-      const polledQueries: URL[] = [];
+      const attributionReads: URL[] = [];
       const handler = createWebhookHandler(baseDeps(async (input, init) => {
         const current = new Request(input, init);
         const url = new URL(current.url);
-        if (url.pathname.endsWith("/webhook_events") && current.method === "POST") {
-          return new Response(null, { status: scenario.insertStatus });
-        }
+        if (url.pathname.endsWith("/webhook_events") && current.method === "POST") return new Response(null, { status: 409 });
         if (url.pathname.endsWith("/webhook_events") && current.method === "PATCH") return Response.json([{ event_id: "evt_terminal" }]);
         if (url.pathname.endsWith("/call_events") && current.method === "POST") {
           callEvents.push(JSON.parse(await current.text()));
           return new Response(null, { status: 201 });
         }
-        if (url.pathname.endsWith("/call_events") && current.method === "GET") {
-          polledQueries.push(url);
-          return Response.json(scenario.polledRows);
-        }
-        if (current.url.endsWith("/v1/calls/call_terminal")) {
+        if (url.pathname.endsWith("/v1/calls/call_terminal")) {
           return Response.json({ id: "call_terminal", status: "completed", metadata: { call_run_id: RUN_ID } });
         }
         if (url.pathname.endsWith("/call_runs") && current.method === "GET") {
-          if (url.searchParams.get("select") === "state") return Response.json([{ state: scenario.runState }]);
+          if (url.searchParams.get("select") === "terminal_writer") {
+            attributionReads.push(url);
+            return Response.json([{ terminal_writer: scenario.storedTag }]);
+          }
           return Response.json([{ id: RUN_ID }]);
         }
         // The guard matches nothing, because the run already left the pending states.
@@ -606,10 +618,11 @@ if (typeof testFn === "function" && !import.meta.main) {
       if (refetchedRow?.detail.outcome !== scenario.expected) {
         throw new Error(`${scenario.name}: expected outcome ${scenario.expected}, saw ${JSON.stringify(refetchedRow?.detail)}`);
       }
-      for (const query of polledQueries) {
-        if (query.searchParams.get("kind") !== "eq.polled" || query.searchParams.get("call_run_id") !== `eq.${RUN_ID}`) {
-          throw new Error(`${scenario.name}: attribution must read this run's polled rows, saw ${query.search}`);
-        }
+      if (attributionReads.length !== 1) {
+        throw new Error(`${scenario.name}: a lost write must read terminal_writer once, saw ${attributionReads.length}`);
+      }
+      if (attributionReads[0].searchParams.get("id") !== `eq.${RUN_ID}`) {
+        throw new Error(`${scenario.name}: attribution must read this run, saw ${attributionReads[0].search}`);
       }
     }
   });

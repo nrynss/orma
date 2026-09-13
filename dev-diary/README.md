@@ -158,7 +158,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
 | P1 | 7 / 7 | Complete. Contracts are frozen. |
-| P2 | 6 / 11 | T2.1 through T2.6 landed. T2.5's three round 3 findings moved to T2.7 and T2.5a. T2.7 round 2 returned REMEDIATE, C0 H1 M3 L3 with the transferred L, awaiting remediation round 2. T2.8 is built and waits for both to land. T2.7a (split from T2.7), T2.5a (split from T2.5) and T2.9 are not started. |
+| P2 | 7 / 11 | T2.1 through T2.6 and T2.5a landed. T2.7 remediation round 2 is complete and awaits review round 3. T2.8 is built and waits for T2.7 to land. T2.7a and T2.9 are not started. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 0 / 3 | T4.1 can start. |
 | P5 | 0 / 4 | T5.1 can start. |
@@ -729,3 +729,35 @@ read.
 Nothing here is blocked on CALL-E. The only CALL-E dependent items in this
 phase are T2.5's live timing proof and T2.6's live delivery. Neither gates
 T2.7, T2.7a or T2.9.
+
+### 2026-09-13 · T2.5a landed, terminal writer attribution
+
+T2.5a is done. It adds a nullable `call_runs.terminal_writer` column and stamps
+it in the same statement as every guarded pending-to-terminal write. The webhook
+stamps `webhook:<event_id>`. The poll stamps `poll` on its terminal, give-up and
+missing-call-id writes. A reschedule never stamps it.
+
+The webhook no longer infers its own success. On a zero-match PATCH it reads the
+stored value. It records `applied` only for its own tag, and `already_resolved`
+for anything else, null included. `earlierAttemptApplied` and the `redelivered`
+flag are gone, so no code infers a writer from a missing `polled` row.
+
+Round 1 review: APPROVE, C0 H0 M0 L0 (`t2.5a-round1.md`). The reviewer drove the
+real webhook handler and `pollRun` with a stub CALL-E transport, and read
+`call_runs` and `call_events` in SQL. Pins F1a, F1b and F1c pass. It reverted six
+implementation choices and every pin failed. Residue against `t2.5-round3.md`
+findings 1 and 2 is zero.
+
+The owner-read decision: `terminal_writer` stays readable by the run owner under
+`call_runs_owner_read`. That policy is row-level, so carving out one column would
+need column privileges that the next added column reopens silently. The value is
+a CALL-E event id, which is a de-duplication key and not a credential. The record
+is `t2.5a-contract-change.md`.
+
+The poll's timeline row can still be missing when its insert fails. That is the
+accepted design. The writer is on the run, so the webhook's redelivery stays
+truthful without that row.
+
+Both `database.types.ts` copies were regenerated from the scratch stack and stay
+byte-identical. They also carry `p_skipped`, the new argument of
+`ingest_call_result` from T2.7's remediation, which lands next.

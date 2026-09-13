@@ -135,7 +135,7 @@ requires:   T2.5
 fixture-ok: yes
 size:       S · frontier
 owns:       supabase/migrations/20260913120000_terminal_writer.sql, supabase/functions/_shared/database.types.ts, web/src/lib/database.types.ts, supabase/functions/calle-webhook/index.ts, supabase/functions/_shared/poll.ts
-status:     not-started
+status:     done
 ```
 Split from T2.5 on 2026-09-13. T2.5 round 3 found that the webhook guesses who
 moved a run from a missing `polled` row. A second event for the same call, or a

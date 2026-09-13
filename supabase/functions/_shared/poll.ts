@@ -10,6 +10,7 @@
  * Whichever of the webhook and the poll arrives first wins. Every write here
  * is a conditional PATCH that only matches a still-pending run, so the second
  * arrival changes nothing and records nothing.
+ * A terminal write stamps `terminal_writer` with `poll` in the same statement.
  *
  * This module sets a terminal `state` and deliberately leaves `completed_at`
  * null. The tick's finaliser owns `completed_at` and the ingestion that
@@ -50,6 +51,12 @@ type RunRow = {
 };
 
 const PENDING_STATES = "in.(dispatched,awaiting_result)";
+
+/**
+ * Stamped on every terminal write, in the same statement as `state`. A writer
+ * that matched no row reads it to tell this poll's move from its own.
+ */
+const TERMINAL_WRITER = "poll";
 
 function restUrl(base: string, path: string, query = ""): string {
   return `${base.replace(/\/+$/, "")}/rest/v1/${path}${query ? `?${query}` : ""}`;
@@ -167,6 +174,7 @@ export async function pollRun(run: PollableRun, deps: CalleDeps): Promise<void> 
   if (!current.calle_call_id) {
     const won = await patchPendingRun(deps, run.id, {
       state: "failed",
+      terminal_writer: TERMINAL_WRITER,
       disposition: "not_answered",
       calle_failure: failure("poll_unavailable", "run has no CALL-E call id to poll"),
     });
@@ -193,6 +201,7 @@ export async function pollRun(run: PollableRun, deps: CalleDeps): Promise<void> 
   const giveUp = async (message: string, outcome: string): Promise<void> => {
     const won = await patchPendingRun(deps, run.id, {
       state: "failed",
+      terminal_writer: TERMINAL_WRITER,
       disposition: "not_answered",
       calle_failure: failure("poll_timeout", message),
     });
@@ -238,6 +247,7 @@ export async function pollRun(run: PollableRun, deps: CalleDeps): Promise<void> 
   const failureCode = call.failure_code;
   const patch: Record<string, unknown> = {
     state: terminal,
+    terminal_writer: TERMINAL_WRITER,
     calle_confidence: call.completion_confidence,
     calle_failure: failureCode ? failure(failureCode, call.failure_message ?? "") : null,
     poll_after: null,
@@ -320,9 +330,12 @@ if (typeof testFn === "function") {
     });
     await pollRun({ id: RUN, state: "awaiting_result", poll_after: null }, depsFor(fetchImpl));
     const patch = seen.find((entry) => entry.method === "PATCH");
-    const body = patch?.body as { poll_after?: string; state?: string };
+    const body = patch?.body as { poll_after?: string; state?: string; terminal_writer?: string };
     if (!patch) throw new Error("a pending poll must persist the next poll time");
     if (body.state !== undefined) throw new Error("a pending poll must not write a terminal state");
+    if (body.terminal_writer !== undefined) {
+      throw new Error("a reschedule must not name a terminal writer");
+    }
     if (body.poll_after !== new Date(NOW.getTime() + POLL_INTERVAL_MS).toISOString()) {
       throw new Error("the next pass must be ten seconds out");
     }
@@ -345,6 +358,9 @@ if (typeof testFn === "function") {
     if (body.state !== "completed") throw new Error("a completed call must move the run to completed");
     if ("completed_at" in body) {
       throw new Error("the poll must not set completed_at, because the finaliser owns it");
+    }
+    if (body.terminal_writer !== "poll") {
+      throw new Error("the terminal write must name the poll as the writer");
     }
     if (!patch?.url.includes("state=in.%28dispatched%2Cawaiting_result%29")) {
       throw new Error("the terminal write must only match a still-pending run");
@@ -414,8 +430,11 @@ if (typeof testFn === "function") {
     const { seen, events, fetchImpl } = driver({ run: stale });
     await pollRun({ id: RUN, state: "awaiting_result", poll_after: null }, depsFor(fetchImpl));
     const patch = seen.find((entry) => entry.method === "PATCH");
-    const body = patch?.body as { state?: string; calle_failure?: { failure_code?: string } };
+    const body = patch?.body as { state?: string; calle_failure?: { failure_code?: string }; terminal_writer?: string };
     if (body.state !== "failed") throw new Error("a lost call must not poll forever");
+    if (body.terminal_writer !== "poll") {
+      throw new Error("the give-up write must name the poll as the writer");
+    }
     if (body.calle_failure?.failure_code !== "poll_timeout") {
       throw new Error("giving up must name the reason on the run");
     }
@@ -497,6 +516,10 @@ if (typeof testFn === "function") {
       run: { id: RUN, state: "awaiting_result", calle_call_id: null },
     });
     await pollRun({ id: RUN, state: "awaiting_result", poll_after: null }, depsFor(fetchImpl));
+    const patch = seen.find((entry) => entry.method === "PATCH");
+    if ((patch?.body as { terminal_writer?: string } | null)?.terminal_writer !== "poll") {
+      throw new Error("the missing-call-id write must name the poll as the writer");
+    }
     if (seen.some((entry) => entry.url.includes("api.call-e.test"))) {
       throw new Error("a run without a provider id cannot be polled");
     }

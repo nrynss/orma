@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -93,6 +88,7 @@ export type Database = {
           scheduled_for: string
           slot_id: string | null
           state: string
+          terminal_writer: string | null
           user_id: string
         }
         Insert: {
@@ -116,6 +112,7 @@ export type Database = {
           scheduled_for: string
           slot_id?: string | null
           state?: string
+          terminal_writer?: string | null
           user_id: string
         }
         Update: {
@@ -139,6 +136,7 @@ export type Database = {
           scheduled_for?: string
           slot_id?: string | null
           state?: string
+          terminal_writer?: string | null
           user_id?: string
         }
         Relationships: [
@@ -616,7 +614,60 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      assemble_briefing: {
+        Args: { p_now?: string; p_slot_local_time: string; p_user_id: string }
+        Returns: Json
+      }
+      claim_due_call_runs: {
+        Args: { p_limit?: number }
+        Returns: {
+          billable: boolean
+          briefing: Json | null
+          calle_call_id: string | null
+          calle_confidence: Json | null
+          calle_failure: Json | null
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          dispatched_at: string | null
+          disposition: string | null
+          dry_run: boolean
+          id: string
+          idempotency_key: string
+          local_date: string
+          mood: string | null
+          part_of_day: string
+          poll_after: string | null
+          scheduled_for: string
+          slot_id: string | null
+          state: string
+          terminal_writer: string | null
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_runs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      ingest_call_result: {
+        Args: {
+          p_call_run_id: string
+          p_completed_at: string
+          p_disposition: string
+          p_mood: string
+          p_raw: Json
+          p_result_error: string
+          p_result_valid: boolean
+          p_skipped?: Json
+          p_state: string
+          p_structured: Json
+          p_transcript_turns: Json
+          p_user_id: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
@@ -752,3 +803,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
