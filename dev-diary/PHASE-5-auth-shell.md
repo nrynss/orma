@@ -24,9 +24,12 @@ requires:   []
 fixture-ok: yes
 size:       S · mid
 owns:       supabase/config.toml (auth block)
-status:     not-started
+status:     done
 ```
-Enable email magic link. Configure Resend as the sender over its HTTP API, because Supabase's built-in mailer is rate limited to a handful of messages an hour and Edge Functions block outbound ports 25 and 587.
+Enable email magic link. Configure Resend as the sender through Supabase custom
+SMTP, which speaks Resend's SMTP interface from Supabase's own servers. The
+built-in mailer is rate limited to a handful of messages an hour, and the
+outbound port block binds Edge Functions only, not the auth service.
 
 Do not edit `[functions.telegram]`. T3.1 owns that block and sets `verify_jwt = false`.
 

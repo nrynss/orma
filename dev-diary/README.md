@@ -1050,3 +1050,37 @@ rule deserves a look before P8.
 **Probe hygiene.** Every probe account, item, slot and profile row was deleted
 after use, and each deletion was verified by count and by a 404 read. Nothing
 remains.
+
+### 2026-09-13 · T5.1 landed, email auth live
+
+T5.1 is done. Email magic link is on, with Resend as the sender through
+Supabase custom SMTP speaking `smtp.resend.com`. The key and the sender address
+are env references, so the repo file plus `.env` reproduces production, and
+`supabase config diff` reads clean. The site URL and the redirect list pin to
+`orma.nryn.dev`, proven live by following an admin-minted magic link to the
+app. Signup is on for judges.
+
+Round 1 returned one H, one M and two L. The H: thirty emails an hour is a
+rolling-hour cap, and the review rounds alone tripped it, which would strand
+judge sign-ins. It now reads ninety an hour, under Resend's hundred-a-day free
+ceiling. The M: four live settings were undeclared, so a rebuild would have
+flipped confirmation behaviour and OTP length. They are pinned now. Round 2
+returned APPROVE with zero findings and zero residue.
+
+The task prose said Resend's HTTP API, and the transport GoTrue actually
+speaks is SMTP. The prose was corrected under the documentation shortcut.
+
+**Accepted drift, recorded.** Six live settings sit outside every owns line:
+`db.pooler.default_pool_size`, `db.pooler.max_client_conn`,
+`storage.analytics.enabled`, `storage.analytics.max_namespaces`,
+`storage.image_transformation.enabled` and `auth.sms.twilio.enabled`. A
+rebuild from the repo cannot restore them. They predate this task. Giving them
+an owner is a separate contract decision.
+
+**Operator notes.** Run `supabase config push` with the `.env` values
+exported, or the SMTP sender address shows a phantom diff from an unresolved
+env reference. The admin API rejects the new-format `SUPABASE_SECRET_KEY`, so
+scripts should use `SUPABASE_SERVICE_ROLE_KEY`. The email rate limiter rolls
+by the hour, not by the clock. Review rounds added about forty emails to one
+rolling hour, all addressed to undeliverable probe inboxes, and every probe
+user was deleted and verified gone.
