@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2CS0ZN99JTXYN8XYR3W2B9J",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 15,
+  "files_touched": [
+    "dev-diary/adversarial-review/t2.7-remediation-round1.md",
+    "dev-diary/adversarial-review/t2.7-round2.md",
+    "dev-diary/adversarial-review/t2.8-contract-change.md",
+    "dev-diary/feedback.md",
+    "supabase/functions/_shared/calle.ts",
+    "supabase/functions/_shared/dispatch-mode.ts",
+    "supabase/functions/_shared/ingest.ts",
+    "supabase/functions/tick/index.ts",
+    "supabase/migrations/test-ingest.sh"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1204,
+    "cache_creation_tokens": 179386,
+    "cache_read_tokens": 8380250,
+    "output_tokens": 68842,
+    "api_call_count": 54
+  }
+}
