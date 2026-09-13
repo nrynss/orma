@@ -276,4 +276,31 @@ if (typeof testFn === "function" && !import.meta.main) {
       throw new Error("failed send must leave a row and attempt telegram");
     }
   });
+
+  testFn("post-call message names commitments only when present", () => {
+    const withCommitments = formatPostCallMessage({
+      capturedTexts: ["renew the passport"],
+      retiredTexts: [],
+      committedTexts: ["send Amma the photos"],
+    });
+    if (!withCommitments.includes("send Amma the photos")) {
+      throw new Error("must name the commitment");
+    }
+    if (containsCallToAction(withCommitments)) throw new Error("a commitment line must not ask");
+    const withoutCommitments = formatPostCallMessage({
+      capturedTexts: ["renew the passport"],
+      retiredTexts: [],
+    });
+    if (withoutCommitments.includes("Committed")) {
+      throw new Error("a receipt with no commitment must omit the commitment section");
+    }
+    const emptyCommitments = formatPostCallMessage({
+      capturedTexts: ["renew the passport"],
+      retiredTexts: [],
+      committedTexts: [],
+    });
+    if (emptyCommitments.includes("Committed")) {
+      throw new Error("an empty commitment list must omit the commitment section");
+    }
+  });
 }

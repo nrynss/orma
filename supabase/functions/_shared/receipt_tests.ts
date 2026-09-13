@@ -172,4 +172,70 @@ if (typeof testFn === "function" && !import.meta.main) {
     }
     if (containsCallToAction(text)) throw new Error("resolved retirement must not ask");
   });
+
+  testFn("a completed fixture names captures, retirements and commitments", async () => {
+    const committedId = "20000000-0000-4000-8000-000000000042";
+    const fixtures = await loadCallFixtures();
+    const structured = {
+      ...(fixtures.completed.structured_result as Record<string, unknown>),
+      retired_items: [{ item_id: "item-dentist", evidence_offset_seconds: 62 }],
+      commitments: [{ item_id: committedId, due: "2026-09-14", evidence_offset_seconds: 80 }],
+    };
+    const texts: Record<string, string> = {
+      "item-dentist": "book the dentist",
+      [committedId]: "send Amma the photos",
+    };
+    const state: MockState = {
+      profile: { id: userId, telegram_chat_id: 424242, telegram_receipts: true },
+      deliveries: [],
+      telegramTexts: [],
+    };
+    const result = await deliverIngestionReceipt(
+      {
+        userId,
+        callRunId,
+        structured,
+        resolveRetiredText: async (id) => texts[id] ?? null,
+      },
+      depsFor(state),
+    );
+    if (result.status !== "sent") throw new Error(`expected sent, got ${result.status}`);
+    const text = state.telegramTexts[0] ?? "";
+    if (!text.includes("Continental")) throw new Error("receipt must name the capture");
+    if (!text.includes("book the dentist")) throw new Error("receipt must name the retirement");
+    if (!text.includes("send Amma the photos")) throw new Error("receipt must name the commitment");
+    if (text.includes(committedId)) throw new Error("receipt must not print a raw item id");
+    if (containsCallToAction(text)) throw new Error("a commitment must not turn a receipt into a prompt");
+  });
+
+  testFn("an invalid result still sends a receipt that reveals no failure", async () => {
+    const rawId = "30000000-0000-4000-8000-000000000077";
+    const state: MockState = {
+      profile: { id: userId, telegram_chat_id: 424242, telegram_receipts: true },
+      deliveries: [],
+      telegramTexts: [],
+    };
+    const result = await deliverIngestionReceipt(
+      {
+        userId,
+        callRunId,
+        structured: {
+          captured_items: "not a list",
+          retired_items: [{ item_id: rawId }],
+          commitments: [{ item_id: rawId, evidence_offset_seconds: "late" }],
+        },
+        resolveRetiredText: async () => null,
+      },
+      depsFor(state),
+    );
+    if (result.status !== "sent") throw new Error(`expected sent, got ${result.status}`);
+    const text = state.telegramTexts[0] ?? "";
+    for (const word of ["fail", "error", "invalid", "validation", "extract", "repair"]) {
+      if (text.toLowerCase().includes(word)) {
+        throw new Error(`an invalid result must not reveal ${word}`);
+      }
+    }
+    if (text.includes(rawId)) throw new Error("an invalid result must not print a raw item id");
+    if (containsCallToAction(text)) throw new Error("an invalid result must not ask");
+  });
 }

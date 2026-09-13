@@ -70,6 +70,8 @@ export type PostCallReceiptInput = {
   capturedTexts: string[];
   /** Exact retirement texts the caller resolved from item ids. */
   retiredTexts: string[];
+  /** Exact commitment item texts the caller resolved. Named when present. */
+  committedTexts?: string[];
 };
 
 export type PatternReceiptInput = {
@@ -109,16 +111,25 @@ function formatNamedList(label: string, texts: string[]): string {
 }
 
 /**
- * Build the post-call receipt body from named capture and retirement texts.
- * Names what happened. Asks for nothing.
+ * Build the post-call receipt body from named capture, retirement and
+ * commitment texts. Names what happened. Asks for nothing. The commitment
+ * section appears only when the caller resolved at least one commitment.
  */
 export function formatPostCallMessage(input: {
   capturedTexts: string[];
   retiredTexts: string[];
+  committedTexts?: string[];
 }): string {
-  const captured = formatNamedList("Captured", input.capturedTexts);
-  const retired = formatNamedList("Retired", input.retiredTexts);
-  return `Call summary\n${captured}\n${retired}`;
+  const lines = [
+    "Call summary",
+    formatNamedList("Captured", input.capturedTexts),
+    formatNamedList("Retired", input.retiredTexts),
+  ];
+  const committedTexts = input.committedTexts ?? [];
+  if (committedTexts.length > 0) {
+    lines.push(formatNamedList("Committed", committedTexts));
+  }
+  return lines.join("\n");
 }
 
 /**
@@ -359,6 +370,7 @@ export async function deliverPostCallTelegram(
   const text = formatPostCallMessage({
     capturedTexts: input.capturedTexts,
     retiredTexts: input.retiredTexts,
+    committedTexts: input.committedTexts,
   });
   return deliverTelegramReceipt({
     deps,
@@ -370,6 +382,7 @@ export async function deliverPostCallTelegram(
       text,
       captured_texts: input.capturedTexts,
       retired_texts: input.retiredTexts,
+      committed_texts: input.committedTexts ?? [],
     },
     enforceNoCta: true,
   });
