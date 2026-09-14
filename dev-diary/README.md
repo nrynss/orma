@@ -162,7 +162,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 4 / 4 | **Complete.** MCP live at `orma-api.nryn.dev/mcp`, six tools wired, docs published at `docs/mcp.md`. |
 | P5 | 4 / 4 | **P5 e2e clean.** Auth, Telegram bridge, web sessions, and onboarding are live. |
-| P6 | 6 / 8 | **In progress.** T6.1, T6.2, T6.5, T6.6, T6.7 and T6.8 landed. T6.3 and T6.4 are in remediation. |
+| P6 | 8 / 8 | **Complete.** All pages landed: Today, Items, History, Patterns, Settings, Timeline, owner actions and landing. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
 
@@ -1300,3 +1300,26 @@ The root page stays server rendered with the thesis, the beat, and the two secti
 closed sign-ups line is gone and three links carry the way into `/login`. One synthetic call
 demo plays through the visitor browser speech engine, labelled as synthetic with no real person
 and no production evidence. No audio asset was added. Round 1 approved with zero findings.
+
+### 2026-09-14 · T6.3 landed, History
+
+History lists the owner's calls newest first with summary tags, disposition, mood and full
+transcripts. Per-run counts reuse the Today summary helper so both pages agree. Evidence
+offsets link into the transcript moment, runs without results still show their transcripts,
+and the `run` and `t` query params carry Today deep links. Round 1 found an unfetched items
+select. Remediation removed it. Round 2 approved with zero findings and zero residue.
+
+### 2026-09-14 · T6.4 landed, Patterns
+
+Patterns renders the latest report with its prose and every facts field beside it, plus a mood
+trend drawn from the period call rows and an honest not-yet state for thin history. The
+harness gained a fixture report and three mood runs for the seed account. Round 1 found the
+fixture edit had dropped the live-run briefing update. Remediation restored it byte identical.
+Round 2 approved with zero findings and zero residue.
+
+### 2026-09-14 · P6 complete, web app
+
+All eight tasks landed through the four-role loop. T6.6 and T6.8 approved in round 1 with
+zero findings. T6.3 and T6.4 remediated one finding each and approved in round 2 with zero
+residue. The web app is still undeployed, same as after T6.1, and commits stay unpushed.
+P8 is unblocked on the web side.
