@@ -1,68 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte'
 	import { Button } from '$lib/ui'
-
-	const lines = [
-		{ who: 'Orma', text: "You've mentioned the dentist three times. It's been 34 days." },
-		{ who: 'You', text: 'Kill it.' },
-		{ who: 'Orma', text: "Done. It's gone." }
-	]
-
-	let supported = $state(false)
-	let playing = $state(false)
-	let active = $state(-1)
-
-	function reset() {
-		playing = false
-		active = -1
-	}
-
-	function speakLine(index: number) {
-		const utterance = new SpeechSynthesisUtterance(lines[index].text)
-		if (lines[index].who === 'You') {
-			utterance.pitch = 1.5
-		}
-		utterance.onend = () => {
-			if (playing && index + 1 < lines.length) {
-				active = index + 1
-				speakLine(index + 1)
-			} else {
-				reset()
-			}
-		}
-		utterance.onerror = () => {
-			reset()
-		}
-		window.speechSynthesis.speak(utterance)
-	}
-
-	function play() {
-		if (!supported || playing) {
-			return
-		}
-		window.speechSynthesis.cancel()
-		playing = true
-		active = 0
-		speakLine(0)
-	}
-
-	function stop() {
-		if (!supported) {
-			return
-		}
-		window.speechSynthesis.cancel()
-		reset()
-	}
-
-	onMount(() => {
-		supported = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window
-	})
-
-	onDestroy(() => {
-		if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-			window.speechSynthesis.cancel()
-		}
-	})
 </script>
 <svelte:head>
 	<title>Orma · it remembers what you keep not doing</title>
@@ -121,31 +58,6 @@
 				<p>Being allowed to drop something honestly keeps the rest of the list truthful.</p>
 			</div>
 		</div>
-	</section>
-
-	<section class="demo" aria-label="Demo">
-		<div class="demo-head">
-			<h2>Demo</h2>
-			<p class="demo-note">No real person. No real call.</p>
-		</div>
-		<ol>
-			{#each lines as line, i}
-				<li class:active={active === i}><span class="who">{line.who}</span>{line.text}</li>
-			{/each}
-		</ol>
-		{#if supported}
-			<p class="controls">
-				<Button onclick={play} disabled={playing}>Play</Button>
-				<Button onclick={stop} variant="secondary" disabled={!playing}>Stop</Button>
-			</p>
-		{:else}
-			<p class="controls">
-				<Button disabled>Play</Button>
-			</p>
-			<p class="demo-note">
-				This browser does not offer speech synthesis.
-			</p>
-		{/if}
 	</section>
 
 	<section class="surfaces">
@@ -301,7 +213,6 @@
 
 	/* Sections. */
 	.how,
-	.demo,
 	.surfaces,
 	.trust,
 	.cta {
@@ -354,51 +265,6 @@
 		border-radius: var(--radius-pill);
 		font-size: var(--font-size-sm);
 		font-weight: var(--weight-semibold);
-	}
-
-	/* The playable demo. */
-	.demo {
-		max-width: 44rem;
-		padding-top: var(--space-16);
-	}
-	.demo-head {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-		margin-bottom: var(--space-6);
-	}
-	.demo-head h2 {
-		margin: 0;
-	}
-	.demo-note {
-		margin: 0;
-		color: var(--text-muted);
-		font-size: var(--font-size-sm);
-	}
-	.demo ol {
-		margin: 0;
-		padding: 0;
-		list-style: none;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-	}
-	.demo li {
-		margin: 0;
-		padding: var(--space-3) var(--space-4);
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
-		transition: background-color var(--motion-fast) ease-out;
-	}
-	.demo li.active {
-		background: var(--brand-soft);
-		border-color: color-mix(in srgb, var(--brand) 70%, transparent);
-	}
-	.controls {
-		display: flex;
-		gap: var(--space-3);
-		margin: var(--space-6) 0 0;
 	}
 
 	.cards {
