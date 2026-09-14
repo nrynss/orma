@@ -76,7 +76,7 @@ Note Telegram's Bot API under third-party integrations, and link the MCP configu
 
 ### T8.4: Demo video ★
 ```yaml
-requires:   T8.1, T6.6, T6.8
+requires:   T8.1, T6.6, T6.8, soft P9
 fixture-ok: yes
 size:       L · frontier
 owns:       (operational)
