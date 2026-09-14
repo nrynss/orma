@@ -153,3 +153,7 @@ Check status now. Is P6 done properly?
 ---
 
 It is safe to edit Phase 8 documents. Check what we need to do. why do we need to change feedback survey?
+
+---
+
+We have to remove 8.2 completely. It is not something we need
