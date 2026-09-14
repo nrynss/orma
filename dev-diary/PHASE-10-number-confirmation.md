@@ -30,7 +30,7 @@ requires:   T1.2, T5.4
 fixture-ok: yes
 size:       S · frontier
 owns:       supabase/migrations/<timestamp>_phone_confirmation_guard.sql, web/src/routes/app/onboarding/submit.ts, web/src/routes/app/onboarding/check.ts, web/src/lib/database.types.ts, supabase/functions/_shared/database.types.ts
-status:     not-started
+status:     done
 ```
 Make `phone_confirmed_at` writable only by the service role and the T10.2 functions.
 

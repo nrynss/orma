@@ -14,7 +14,6 @@ export type OnboardingClient = {
   userId: string
   anonKey: string
   fetch?: typeof fetch
-  now?: Date
 }
 
 function apiBase(apiUrl: string): string {
@@ -126,7 +125,6 @@ async function upsertProfile(
       body: JSON.stringify({
         display_name: row.display_name,
         phone_e164: row.phone_e164,
-        phone_confirmed_at: row.phone_confirmed_at,
         timezone: row.timezone,
       }),
     },
@@ -138,18 +136,15 @@ async function upsertProfile(
 export async function submitOnboarding(
   client: OnboardingClient,
   input: OnboardingInput,
-): Promise<{ phoneConfirmedAt: string; consented: boolean }> {
+): Promise<{ consented: boolean }> {
   const prepared = prepareOnboarding(input, client.userId)
   const base = apiBase(client.apiUrl)
   requireAnonKey(client.anonKey)
   const fetchImpl = client.fetch ?? fetch
-  const phoneConfirmedAt = (client.now ?? new Date()).toISOString()
-
   await upsertProfile(client, base, {
     id: client.userId,
     display_name: prepared.displayName,
     phone_e164: prepared.phoneE164,
-    phone_confirmed_at: phoneConfirmedAt,
     timezone: prepared.timeZone,
   })
 
@@ -195,5 +190,5 @@ export async function submitOnboarding(
     await inserted.text()
   }
 
-  return { phoneConfirmedAt, consented: prepared.consentRows.length > 0 }
+  return { consented: prepared.consentRows.length > 0 }
 }

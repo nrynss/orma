@@ -174,7 +174,6 @@ const client = {
   userId: USER_ID,
   anonKey: ANON,
   fetch: fetchDouble,
-  now: new Date("2026-09-14T00:00:00.000Z"),
 }
 
 captured.length = 0
@@ -208,8 +207,8 @@ if (!captured.some((req) => req.method === "POST" && req.url.includes("/profiles
 }
 const profileBody = captured.find((req) => req.method === "POST" && req.url.includes("/profiles"))
   ?.body
-if (!profileBody || !profileBody.includes('"phone_confirmed_at":"2026-09-14T00:00:00.000Z"')) {
-  fail("skip: profile POST omitted phone_confirmed_at")
+if (!profileBody || profileBody.includes('"phone_confirmed_at"')) {
+  fail("skip: profile POST included phone_confirmed_at")
 }
 if (!captured.some((req) => req.method === "POST" && req.url.includes("/slots"))) {
   fail("skip: missing POST to slots")
