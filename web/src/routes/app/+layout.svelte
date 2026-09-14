@@ -1,9 +1,9 @@
 <script lang="ts">
-	import '$lib/ui/tokens.css'
 	import { goto, invalidate } from '$app/navigation'
 	import { page } from '$app/state'
+	import { AccountMenu, TabBar, Wordmark } from '$lib/shell'
 	import { getSupabase } from '$lib/supabase'
-	import { AppNav } from '$lib/ui'
+	import { AppNav, Button } from '$lib/ui'
 	import { isOnboardingPath } from './onboarding/profile-gate'
 
 	let { data, children } = $props()
@@ -35,127 +35,145 @@
 	}
 </script>
 
-<svelte:head>
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link
-		rel="stylesheet"
-		href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&family=Source+Code+Pro:wght@400;500&display=swap"
-	/>
-</svelte:head>
-
+<!-- Onboarding keeps the minimal header the design shows. -->
 {#if onboarding}
-	<div class="o-app simple">
-		<header class="o-row simple-head">
-			<a class="wordmark" href="/">Orma</a>
+	<div class="o-plain">
+		<header class="o-plain-head">
+			<a class="o-plain-brand" href="/">
+				<Wordmark height="1.75rem" />
+			</a>
 			{#if data.session}
-				<button type="button" class="o-link-button small" onclick={signOut}>Sign out</button>
+				<Button variant="ghost" onclick={signOut}>Sign out</Button>
 			{/if}
 		</header>
 		{@render children()}
 	</div>
 {:else}
-	<div class="o-app shell">
-		<aside class="side">
-			<div class="o-row brand">
-				<div class="o-stack">
-					<a class="wordmark" href="/app">Orma</a>
-					<p class="o-gloss tagline">ഓർമ്മ · it remembers</p>
-				</div>
-				<div class="o-row who-top">
-					<span class="o-muted name">{displayName}</span>
-					<button type="button" class="o-link-button small" onclick={signOut}>Sign out</button>
-				</div>
+	<div class="o-shell">
+		<aside class="o-side">
+			<div class="o-side-brand">
+				<a class="o-side-mark" href="/app">
+					<Wordmark height="2rem" />
+				</a>
+				<p class="o-side-gloss">ഓർമ്മ · it remembers</p>
 			</div>
-			<AppNav path={page.url.pathname} />
-			<div class="o-stack who">
-				<span class="name-side">{displayName}</span>
-				<button type="button" class="o-link-button small" onclick={signOut}>Sign out</button>
+			<div class="o-side-nav">
+				<AppNav path={page.url.pathname} />
+			</div>
+			<div class="o-side-account">
+				<AccountMenu name={displayName} onsignout={signOut} />
 			</div>
 		</aside>
-		<div class="content">
+		<div class="o-content">
 			{@render children()}
 		</div>
+		<TabBar path={page.url.pathname} />
 	</div>
 {/if}
 
 <style>
-	.wordmark {
-		font-size: 1.35rem;
-		font-weight: 600;
-		letter-spacing: -0.01em;
-		text-decoration: none;
-	}
-	.o-app .wordmark {
-		color: var(--o-ink);
-	}
-	.small {
-		font-size: 0.85rem;
-	}
-	.simple-head {
-		justify-content: space-between;
-		max-width: 24rem;
-		margin: 0 auto;
-		padding: 2rem 1.5rem 0;
-	}
-	.side {
+	/*
+	 * The phone frame. A sticky header over the content, and the tab bar
+	 * pinned to the bottom edge. The content carries the clearance the tab
+	 * bar needs, and the pages carry their own gutters.
+	 */
+	.o-shell {
+		--tabbar-height: 3.5rem;
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
-		padding: 1.25rem 1.5rem 0;
+		min-height: 100dvh;
 	}
-	.brand {
+	.o-side {
+		position: sticky;
+		top: 0;
+		z-index: 3;
+		display: flex;
+		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
+		gap: var(--space-4);
+		padding: var(--space-2) var(--space-4);
+		background: var(--surface);
+		border-bottom: 1px solid var(--border);
 	}
-	.tagline {
+	.o-side-brand {
+		display: flex;
+		align-items: center;
+	}
+	.o-side-mark {
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--tap-target);
+		border-radius: var(--radius-sm);
+	}
+	/* The phone keeps the wordmark alone. The design shows the gloss on the desk. */
+	.o-side-gloss,
+	.o-side-nav {
 		display: none;
 	}
-	.who-top {
-		gap: 0.75rem;
+	.o-content {
+		flex: 1;
+		min-width: 0;
+		padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom) + var(--space-6));
 	}
-	.name {
-		font-size: 0.85rem;
-	}
-	.who {
-		display: none;
-	}
+
+	/* From the sidebar width the header becomes a column and the tabs go with it. */
 	@media (min-width: 900px) {
-		.shell {
+		.o-shell {
 			display: grid;
 			grid-template-columns: 248px minmax(0, 1fr);
 		}
-		.side {
-			border-right: 1px solid var(--o-hair);
-			padding: 2.5rem 1.25rem;
-			gap: 2rem;
-			min-height: 100vh;
+		.o-side {
 			position: sticky;
-			top: 0;
 			align-self: start;
+			height: 100dvh;
+			flex-direction: column;
+			align-items: stretch;
+			justify-content: flex-start;
+			gap: var(--space-8);
+			padding: var(--space-10) var(--space-5);
+			border-bottom: 0;
+			border-right: 1px solid var(--border);
 		}
-		.brand {
-			padding: 0 0.75rem;
-		}
-		.wordmark {
-			font-size: 1.6rem;
-			letter-spacing: -0.02em;
-		}
-		.tagline {
-			display: block;
-			font-size: 0.85rem;
-		}
-		.who-top {
-			display: none;
-		}
-		.who {
-			display: flex;
-			margin-top: auto;
-			padding: 0 0.75rem;
+		.o-side-brand {
+			flex-direction: column;
 			align-items: flex-start;
+			gap: var(--space-1);
+			padding: 0 var(--space-3);
 		}
-		.name-side {
-			font-size: 0.9rem;
+		.o-side-gloss {
+			display: block;
+			color: var(--text-muted);
+			font-size: var(--font-size-sm);
 		}
+		.o-side-nav {
+			display: block;
+		}
+		.o-side-account {
+			margin-top: auto;
+			padding: 0 var(--space-3) var(--space-2);
+		}
+		.o-content {
+			padding-bottom: 0;
+		}
+	}
+
+	/* Onboarding keeps a narrow centred header above its own narrow column. */
+	.o-plain {
+		min-height: 100dvh;
+	}
+	.o-plain-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-4);
+		max-width: 24rem;
+		margin: 0 auto;
+		padding: var(--space-8) var(--space-6) 0;
+	}
+	.o-plain-brand {
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--tap-target);
+		border-radius: var(--radius-sm);
 	}
 </style>

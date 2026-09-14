@@ -57,8 +57,10 @@ A gallery at `/dev/ui` renders every component and token in both themes. It is r
 requires:   T9.1
 fixture-ok: yes
 size:       S · mid
-owns:       web/src/routes/+layout.svelte, web/src/routes/app/+layout.svelte
-status:     not-started
+owns:       web/src/routes/+layout.svelte, web/src/routes/app/+layout.svelte,
+            web/src/lib/shell/, web/src/lib/assets/orma-wordmark-light.svg,
+            web/src/lib/assets/orma-wordmark-dark.svg, web/src/app.html (viewport meta only)
+status:     done
 ```
 The frame every page sits in.
 

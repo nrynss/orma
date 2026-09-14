@@ -1,11 +1,19 @@
 <script lang="ts">
+	import '$lib/ui/tokens.css'
 	import { goto, invalidate } from '$app/navigation'
 	import { page } from '$app/state'
 	import { onMount } from 'svelte'
 	import favicon from '$lib/assets/favicon.svg'
+	import { Wordmark } from '$lib/shell'
 	import { getSupabase } from '$lib/supabase'
+	import { Button } from '$lib/ui'
 
 	let { data, children } = $props()
+
+	const inApp = $derived(
+		page.url.pathname === '/app' || page.url.pathname.startsWith('/app/')
+	)
+	const onLogin = $derived(page.url.pathname.startsWith('/login'))
 
 	onMount(() => {
 		const supabase = getSupabase()
@@ -28,54 +36,66 @@
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-<!-- Inside /app the app layout carries the navigation, so the shell bar stays out. -->
-{#if !(page.url.pathname === '/app' || page.url.pathname.startsWith('/app/'))}
-<nav class="shell-bar">
-	<a href="/">Orma</a>
-	<span class="shell-actions">
-		{#if data.session}
-			<a href="/app">Today</a>
-			<button type="button" onclick={signOut}>Sign out</button>
-		{:else if !page.url.pathname.startsWith('/login')}
-			<a href="/login">Sign in</a>
+<!-- Inside /app the app layout carries the navigation, so this bar stays out. -->
+{#if !inApp}
+	<header class="o-public-bar">
+		<a class="o-public-brand" href="/">
+			<Wordmark height="2rem" />
+		</a>
+		{#if data.session || !onLogin}
+			<nav class="o-public-nav" aria-label="Product">
+				{#if data.session}
+					<a class="o-public-link" href="/app">Today</a>
+					<Button variant="ghost" onclick={signOut}>Sign out</Button>
+				{:else}
+					<Button href="/login">Sign in</Button>
+				{/if}
+			</nav>
 		{/if}
-	</span>
-</nav>
+	</header>
 {/if}
 
 {@render children()}
 
 <style>
-	.shell-bar {
+	.o-public-bar {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.75rem 1.5rem;
-		font: 16px/1.6 ui-serif, Georgia, 'Times New Roman', serif;
-		color: light-dark(#22201c, #e8e4dc);
+		gap: var(--space-4);
+		padding: var(--space-2) var(--space-4);
+		background: var(--surface);
+		border-bottom: 1px solid var(--border);
 	}
-	.shell-bar a {
-		color: inherit;
-		text-decoration: none;
+	.o-public-brand {
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--tap-target);
+		border-radius: var(--radius-sm);
 	}
-	.shell-bar a:hover {
-		color: light-dark(#7a5283, #cfa7d8);
-	}
-	.shell-actions {
+	.o-public-nav {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
+		gap: var(--space-2);
 	}
-	.shell-actions button {
-		font: inherit;
-		padding: 0;
-		border: 0;
-		background: transparent;
-		color: inherit;
-		cursor: pointer;
+	.o-public-link {
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--tap-target);
+		padding: 0 var(--space-2);
+		border-radius: var(--radius-sm);
+		color: var(--text);
+		font-size: var(--font-size-base);
+		font-weight: var(--weight-medium);
+		text-decoration: none;
 	}
-	.shell-actions button:hover {
-		color: light-dark(#7a5283, #cfa7d8);
+	.o-public-link:hover {
+		background: color-mix(in srgb, var(--text) 6%, transparent);
+	}
+
+	@media (min-width: 900px) {
+		.o-public-bar {
+			padding: var(--space-3) var(--space-8);
+		}
 	}
 </style>

@@ -166,7 +166,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P6 | 8 / 8 | **P6 e2e clean and live.** History, Patterns, Timeline, landing and the fixed owner actions are deployed. Migration applied, types regenerated. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
 | P8 | 0 / 7 | Not started. T8.4 softly waits on P9, because the demo video films the P9 screens. |
-| P9 | 1 / 9 | **In progress.** T9.1 landed the product design system and the dev gallery. T9.2 is next, then T9.3 to T9.8 in parallel. |
+| P9 | 2 / 9 | **In progress.** T9.1 and T9.2 landed. T9.3 to T9.8 run in parallel next, then T9.9 closes the phase. |
 
 ---
 
@@ -1371,3 +1371,28 @@ closed all four and round 2 approved with zero residue.
 
 Pages still name the retired `--o-*` names until their own task lands. The phase deploys only
 whole. The root layout does not import the sheet yet, which T9.2 owns.
+
+### 2026-09-14 · T9.2 landed, the shell and navigation
+
+The frame every page sits in. The root layout imports the tokens once, so public pages carry
+the system too. The operator's wordmark sits in the public header, the phone header and the
+sidebar, with the artwork untouched and the light and dark files chosen by the same
+mechanism the tokens use. The phone gets a sticky header, an account menu and a fixed bottom
+tab bar with an icon and a label per tab. From 900 pixels up a sidebar carries the nav. The
+web font links are gone.
+
+Round 1 returned REMEDIATE with M1 and L1. At 320 the current tab's label clipped, because
+the semibold weight widened Timeline past its cell. The account panel ignored an outside
+click. Remediation dropped the weight cue for a 3px brand rule and gated a document
+pointerdown listener on the open state. The operator asked for a small round, so round 2
+verified the two findings, the residue, and a compact regression sweep, and approved with
+zero findings.
+
+Measured on the way through. Every shell target is 44 to 56 pixels, against 25.6 on the old
+shell bar. No label clips at 320, 360 or 412. One navigation renders at 899 and 900. The
+shell survives a tab move. The viewport meta now carries `viewport-fit=cover`, so the tab
+bar clears the home indicator instead of sitting on it.
+
+Carried forward. The dev-server stack is contended by another session, so T9.2 verification
+ran on isolated harness copies. Patterns scrolls sideways at 320 from its fixed 342 pixel
+trend chart, which belongs to T9.7.
