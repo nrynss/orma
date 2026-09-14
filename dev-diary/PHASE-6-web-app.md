@@ -62,7 +62,7 @@ requires:   T6.1
 fixture-ok: yes
 size:       M · mid
 owns:       web/src/routes/app/history/
-status:     claimed:T63Impl
+status:     done
 ```
 Calls in reverse order with summary, disposition, mood and the full transcript as turns with offsets.
 
