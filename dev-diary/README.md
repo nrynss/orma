@@ -162,7 +162,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 4 / 4 | **Complete.** MCP live at `orma-api.nryn.dev/mcp`, six tools wired, docs published at `docs/mcp.md`. |
 | P5 | 4 / 4 | **P5 e2e clean.** Auth, Telegram bridge, web sessions, and onboarding are live. |
-| P6 | 0 / 6 | Not started. Unblocked. T5.3 and T5.4 are live. |
+| P6 | 0 / 8 | **In progress.** T6.1 claimed with the app shell and local harness. T6.7 (owner actions) and T6.8 (landing) added at the claim. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
 
