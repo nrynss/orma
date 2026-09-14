@@ -102,7 +102,7 @@ requires:   T1.1
 fixture-ok: yes
 size:       S · mid
 owns:       .github/workflows/keepalive.yml, scripts/restore-check.sh
-status:     not-started
+status:     done
 ```
 With no daily calls, nothing else keeps the project active through judging. A paused project stops `pg_cron` and takes the demo URL down before a judge opens it.
 

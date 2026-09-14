@@ -1,0 +1,75 @@
+name: Keepalive and backup
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: keepalive-and-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive-and-backup:
+    runs-on: ubuntu-latest
+    env:
+      ORMA_API_URL: ${{ vars.ORMA_API_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+      BACKUP_REPO: ${{ vars.BACKUP_REPO }}
+      BACKUP_REPO_TOKEN: ${{ secrets.BACKUP_REPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Keep Supabase active
+        run: |
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --header "apikey: ${SUPABASE_PUBLISHABLE_KEY}" \
+            "${ORMA_API_URL}/rest/v1/profiles?select=id&limit=1")"
+          if [ "$status" != '200' ]; then
+            printf 'Keepalive returned HTTP %s\n' "$status" >&2
+            exit 1
+          fi
+
+      - name: Dump the public schema with PostgreSQL 17
+        run: >-
+          docker run --rm
+          --volume "${RUNNER_TEMP}:/backup"
+          postgres:17
+          pg_dump --dbname="${SUPABASE_POOLER_URL}"
+          --format=custom --schema=public --no-owner --no-privileges
+          --file=/backup/orma.dump
+
+      - name: Verify the dump can restore locally
+        run: ./scripts/restore-check.sh "${RUNNER_TEMP}/orma.dump"
+
+      - name: Store the snapshot and retain fourteen
+        run: |
+          set -euo pipefail
+          backup_dir="$(mktemp -d)"
+          cleanup() {
+            rm -rf "$backup_dir"
+          }
+          trap cleanup EXIT
+
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${BACKUP_REPO_TOKEN}" \
+            clone --depth=1 "https://github.com/${BACKUP_REPO}.git" "$backup_dir"
+          mkdir -p "$backup_dir/dumps"
+          snapshot="orma-$(date -u +%Y%m%dT%H%M%SZ).dump"
+          cp "${RUNNER_TEMP}/orma.dump" "$backup_dir/dumps/$snapshot"
+
+          find "$backup_dir/dumps" -maxdepth 1 -type f -name '*.dump' -printf '%T@ %p\n' \
+            | sort -nr \
+            | awk 'NR > 14 { print $2 }' \
+            | xargs --no-run-if-empty rm -f
+
+          git -C "$backup_dir" config user.name 'Orma backup workflow'
+          git -C "$backup_dir" config user.email 'orma-backup@users.noreply.github.com'
+          git -C "$backup_dir" add dumps
+          git -C "$backup_dir" commit --quiet --message "Store $snapshot"
+          git -C "$backup_dir" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${BACKUP_REPO_TOKEN}" \
+            push origin HEAD:main
