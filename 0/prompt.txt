@@ -1,0 +1,258 @@
+Separate from this task: three old local Supabase stacks from two days ago are still running (orma-t1-6-review ×2 and orma-seed-reset). The agents were told not to touch them. You may want to stop them to free memory.
+
+stop them
+
+---
+
+<task-notification>
+<task-id>ab068ea7420be3c20</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/c1950000-44d4-459a-a37e-f4411f2ae47a/tasks/ab068ea7420be3c20.output</output-file>
+<status>completed</status>
+<summary>Agent "Review T6.1 round 1" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: REMEDIATE.** Counts are C 0, H 1, M 3, L 1.
+
+The review is at `/home/nryn/work/orma/dev-diary/adversarial-review/t6.1-round1.md`.
+
+Findings:
+- **F1 (H):** the last-call summary marks an item "Retired" if it was mentioned on the call and retired at any later time. I retired "Renew the passport" in SQL a day after the seed call, the way a web retire would. Today then showed "RETIRED Renew the passport 0:02", though the call only mentioned it.
+- **F2 (M):** Today promises a call to an account with no live `outbound_calls` consent. The first-run account with consent revoked still read "Your first call Today, 08:00". The dispatcher refuses that run (`calle.ts:347-350`), and the page never reads `consents`.
+- **F3 (M):** the Today check misses six of the mutants I ran:
+  - a canceled run picked as last call
+  - a commitment mention counted twice
+  - Today and Tomorrow labels worked out in UTC
+  - `now` read in UTC for item age
+  - `addedLabel` in UTC
+  - a single pass in the DST conversion
+
+  Each still printed "today check passed".
+- **F4 (M):** the harness does not keep Settings local. `telegram-link.ts:16` hardcodes `https://orma-api.nryn.dev`, so Settings sends a local JWT to production and shows "profiles telegram read failed". The handoff doesn't mention this. The fix is outside the owns line, so it needs a contract change or a recorded limit.
+- **F5 (L):** the live state departs from `TodayLive.dc.html`. The page lists "Open · N" sorted by mentions instead of "On today's call" in briefing order. The first step also reads "Picked up by the scheduler" instead of "Picked up".
+
+What held up under my own measurements:
+- `npm run check` and `npm run build` both pass.
+- The seed, first-run and live accounts show the same counts and ages as my SQL.
+- Next run is picked and dated in the profile's zone. It skips canceled runs, and the labels rolled correctly when New York passed midnight.
+- A second user sees none of the first user's rows.
+- Every redirect is correct: signed out, `/login`, the magic-link callback, and a no-profile account to onboarding.
+- A failed read shows an error message, not blank panels.
+- Polling stops when you leave the page and when the run ends.
+- There is one nav on each `/app` page, and no secret key is in the bundle.
+- The harness refuses port collisions, prints no keys, and `down` leaves no containers, volumes, networks or workdir.
+
+Cleanup: `docker ps` shows no harness containers left. The dev server is stopped and the browser tab is closed. No mutant is in the repo, and the review file is my only write.</result>
+<usage><subagent_tokens>203938</subagent_tokens><tool_uses>63</tool_uses><duration_ms>797807</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a327edd7c42079446</task-id>
+<tool-use-id>toolu_012bFc1QztTc5QUstApo84Gg</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/c1950000-44d4-459a-a37e-f4411f2ae47a/tasks/a327edd7c42079446.output</output-file>
+<status>completed</status>
+<summary>Agent "Remediate T6.1 round 1" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All five findings are fixed, and each one's scenario now passes against the local harness. `npm run check` passes (0 errors, 0 warnings) and `npm run build` exits 0. Nothing is committed, and the verdict and phase doc are untouched. The row-per-finding file is `/home/nryn/work/orma/dev-diary/adversarial-review/t6.1-remediation-round1.md`.
+
+**F1 (H), "Retired" on the last call.** A Retired line now needs two things written by that call's ingest. One is an entry in that run's `results.structured.retired_items`. The other is a mention on the run at the same item and offset. A later retire on the web, by MCP or on Telegram writes neither, so it can't trip it. On the harness I retired "Renew the passport" the way a web retire does, and Today showed no Retired line. I then recorded a real call retirement for "Call Amma" at offset 4, and Today showed `RETIRED Call Amma 0:04`. Both match my SQL. Putting the old `retired_at` rule back makes the check fail.
+
+**F2 (M), promising a call that won't happen.** A new `callBlock` copies the dispatcher's refusal checks in `calle.ts`, in the same order:
+- a confirmed phone number,
+- a live `outbound_calls` consent,
+- for a booked run, a slot that still exists.
+
+A blocked account now sees the reason and an Open Settings link instead of a time. With firstrun's consent revoked, Today showed `Calls are off` and no time, while the seed account still showed `Tomorrow, 08:00`. Eleven check cases cover it.
+
+**F3 (M), weak Today check.** I added a case for each of the six surviving mutants. I ran every mutant on a scratchpad copy, and each one now fails the check with a clear mismatch. The unchanged copy and the repo both pass, and no mutant is left in the repo.
+
+**F4 (M), Settings calling production.** Settings passes the exported `ORMA_API_URL` constant itself, so I changed that constant to read `getOrmaApiUrl()`. The node header check can't resolve `$lib`, so only there does the production URL stay, behind its fake fetch. Doing this needed a top-level `await import`. The header check still passes. On the harness, Settings made two `127.0.0.1:58321/rest/v1/profiles` requests and none to `orma-api.nryn.dev`.
+
+**F5 (L), live screen vs. the design.** The live state now shows "On today's call" in the order stored in `call_runs.briefing`, with counts and ages from rows. It uses the design's sentence, and the first step reads "Picked up". With no briefing yet, it falls back to "Open · N" and says the order is still to come. The check covers both paths. The harness now gives the live run a real briefing. On the page, a briefing with the tax form first overrode the mention sort, and a null briefing showed the fallback.
+
+**Teardown.** `down` left 0 harness containers, 0 volumes and no workdir. The 13 containers from other stacks stayed up, and the dev server is stopped.
+
+Things you should know:
+- **Not tested in the Worker runtime:** the top-level await from F4 passes the build, but I didn't run the deployed Worker locally.
+- **Browser pins:** direct navigation was refused, so I read the pages through the preview pane with the handoff's console sign-in. I also ran a separate node script that makes the same RLS reads, and it agreed.
+- **Local key export:** that script exported the harness's local anon key into a tool shell. It's the fixed local demo key, not a production secret.
+- **Behaviour change:** an item retired on a call and restored later still shows as Retired on that call.
+
+Changed files:
+- `/home/nryn/work/orma/web/src/lib/today/model.ts`
+- `/home/nryn/work/orma/web/src/lib/today/load.ts`
+- `/home/nryn/work/orma/web/src/lib/today/check.ts`
+- `/home/nryn/work/orma/web/src/routes/app/+page.svelte`
+- `/home/nryn/work/orma/web/src/lib/telegram-link.ts` (API URL only)
+- `/home/nryn/work/orma/scripts/p6-local-stack.sh`
+- `/home/nryn/work/orma/dev-diary/adversarial-review/t6.1-handoff.md`
+- `/home/nryn/work/orma/dev-diary/adversarial-review/t6.1-remediation-round1.md` (new)</result>
+<usage><subagent_tokens>179775</subagent_tokens><tool_uses>48</tool_uses><duration_ms>751878</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a0563f2ca4a217c89</task-id>
+<tool-use-id>toolu_01XbbK3VaqRvjPAuVrwvV2up</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/c1950000-44d4-459a-a37e-f4411f2ae47a/tasks/a0563f2ca4a217c89.output</output-file>
+<status>completed</status>
+<summary>Agent "Review T6.1 round 2" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: APPROVE.** Counts are C 0, H 0, M 0, L 0. I wrote the review to `/home/nryn/work/orma/dev-diary/adversarial-review/t6.1-round2.md` and did not commit it. `git status` lists only that file.
+
+**Residue: zero against round 1.** For each of F1 to F5, I re-ran the round 1 scenario and it now passes. I then reverted each fix and saw it fail again, either in the check on a scratch copy or on the page through a temporary edit I undid.
+
+**What I measured**
+- **F1:** a web-style retire after the call no longer shows as Retired on that call. A retirement the call itself recorded does show, `RETIRED Call Amma 0:04`, and it still shows after the item is restored. The mention count equals the 3 rows in SQL. With the fix reverted, the false `RETIRED Renew the passport 0:02` came back.
+- **F2:** `callBlock` checks the same four refusals as the dispatcher, in the same order, and adds none. They are: confirmed number, live `outbound_calls` consent, run has a slot, slot still exists. On the page:
+  - consent revoked showed "Calls are off"
+  - unconfirmed phone showed "No confirmed number"
+  - deleted slot showed "No call time"
+  - the normal account showed "Tomorrow, 08:00"
+
+  With the fix reverted, the page promised call times again.
+- **F3:** all six mutants that survived round 1 now fail, each with its own assertion message.
+- **F4:** I served the real built Worker with `wrangler dev --local`, never deploy. `/login` and `/app/settings` loaded with no runtime error, and there is no import cycle. Local Settings made 0 requests to `orma-api.nryn.dev`. A build with no local override still bakes in the production URL, and the header check passes. With the fix reverted, Settings called production again.
+- **F5:** the live list follows the briefing order, not mention count. A null briefing falls back to the open list. A dozen malformed briefing and result shapes did not crash anything.
+- **Round 1 basics all passed again:**
+  - `npm run check` and `npm run build`
+  - times in the profile's timezone, including first run in New York
+  - next-run choice, and isolation between accounts
+  - redirects: signed out, `/login`, magic-link callback and onboarding
+  - error state, and polling stopping both on leaving the page and when the run completes
+  - one nav per page, phone width and dark theme
+  - no secret in the bundle, and no em dashes, semicolons or over-long sentences in the docs
+
+**Findings:** none. These are recorded as notes, not defects:
+- Proving the F4 revert sent one read request to production with a local sign-in token. Production refused it and nothing was written.
+- A briefing string with no item lines would read "Nothing was open". Real briefings never produce that.
+- A null offset in a result would be read as 0. Validation rejects null offsets, so real data can't reach this.
+- The check has no case pinning that an inactive slot is not a refusal. The code behaves correctly.
+- The harness prints the name `PUBLIC_SUPABASE_ANON_KEY` (never the value), although the handoff and round 1 say it prints no key name.
+- The remediation file's header is out of date: it still says "Nothing is committed".
+- The Worker has a `favicon.ico` 404 that predates T6.1.
+
+**Cleanup:** I ran `scripts/p6-local-stack.sh down`. `docker ps` shows 0 `orma-p6-local` containers and 0 volumes, and `/tmp/orma-p6-stack` is gone. The other stacks were not touched. Every wrangler and vite process is stopped, and all temporary code edits are undone.</result>
+<usage><subagent_tokens>211605</subagent_tokens><tool_uses>104</tool_uses><duration_ms>1041022</duration_ms></usage>
+</task-notification>
+
+---
+
+push and deploy
+
+---
+
+Check status now. Is P6 done properly?
+
+---
+
+8.2 is not possible. It has to be synthetic. I have asked the orchestrator to fix
+
+---
+
+It is safe to edit Phase 8 documents. Check what we need to do. why do we need to change feedback survey?
+
+---
+
+We have to remove 8.2 completely. It is not something we need
+
+---
+
+No need for a gap at all
+
+---
+
+yes
+
+---
+
+The UI looks like a blog.
+
+---
+
+Write a UI phase
+
+---
+
+With tasks. we will get it done quickly
+
+---
+
+Dont worry about deadline. we have enough time. The UI has to be reactive. We will be recording with scrpy on my mobile.
+
+---
+
+P9 is in motion. What else can we do in P8?
+
+---
+
+Continue with Telegram
+
+
+Bot domain invalid is shown. We need to fix that Update that p8 document. Add transcript.json to gitignore.
+
+---
+
+Change transcript to synthetic. Telegram bot settings updated. It works now. Update P8 docs thoroughly. I will get agents to work on them.
+
+---
+
+<task-notification>
+<task-id>bt58ktkfv</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/c1950000-44d4-459a-a37e-f4411f2ae47a/tasks/bt58ktkfv.output</output-file>
+<status>failed</status>
+<summary>Background command "Start a bounded local dev server to view current pages" failed with exit code 124</summary>
+</task-notification>
+
+---
+
+yes
+
+---
+
+T8.1 done
+Created scripts/seed.ts — the only file this task owns.
+What it seeds for one named account:
+
+* `the dentist` item with `seeded=true`, `source='call'`, `since_date` = 34 days before demo date
+* Three completed dry-run call runs on separate dates (28, 14, 3 days before demo), each with stable `orma:seed:` keys
+* One `item_mentions` per run for the dentist, plus two background items with fewer mentions
+* Synthetic transcripts, valid results, and the dispatched/ingested/finalised call_events
+
+Validated against the local stack:
+
+* Plan run writes zero rows ✓
+* `--apply` twice leaves identical row counts ✓
+* `--remove` leaves zero seeded rows (and local seed.sql rows survive) ✓
+* `assemble_briefing` returns "You've mentioned the dentist 3 times. It's been 34 days." ✓
+* Non-local `--apply` refused without `--i-confirmed-dry-run` ✓
+
+No other files touched. I only edited the task status line in PHASE-8-ship.md (which this task block carries) and created the one file in `owns`.
+
+verify
+
+---
+
+yes
+
+---
+
+1. H1 (Demo state preservation on rerun):
+   * `applyPlan` now queries existing items before upserting and preserves `status`, `retired_at`, and `retired_reason`.
+   * Mentions are deleted strictly by `call_run_id in (seedRunIds)`. When `the dentist` was retired and given a 4th mention with a null run, running `--apply` preserved the `retired` status and kept the 4th mention intact.
+2. H2 (Patterns empty in production):
+   * Seeded runs are now placed at `demoDate - 6`, `demoDate - 4`, and `demoDate - 3`.
+   * All three fall inside the 7-day pattern analysis window ending yesterday (`[demoDate - 7, demoDate - 1]`).
+   * Verified on `firstrun@example.com` (which holds no harness runs): `compute_pattern_facts` returns `observed_days: 3` and `sufficient_history: true`.
+3. M1 (Transcript mention offsets):
+   * `buildPlan` assigns explicit `offsetSeconds` for each mention matching the transcript turn: `renew the passport` at 10s in run 2, `weekend groceries` at 14s in run 3, and `the dentist` at 0s.
+4. M2 (Empty Timeline request body & null briefing):
+   * Each run now stores a structured `Briefing` object on `call_runs.briefing`.
+   * `dispatched.detail.request_body` now stores the full masked CALL-E request JSON matching `dispatch-mode.ts`.
+5. L1 (Account lookup pagination):
+   * `lookupProfile` now paginates through `auth.admin.listUsers({ page, perPage })` until the email is found or pages are exhausted.
+6. L2 (Weekend groceries capture consistency):
+   * `weekend groceries` is now `source = 'call'`, with `since_date` matching run 3 (`demoDate - 3`) and `created_at` matching run 3's completion timestamp.
