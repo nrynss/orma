@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2F22496KXS5D4FEERXYF3H3",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "dev-diary/adversarial-review/t6.1-handoff.md",
+    "scripts/p6-local-stack.sh",
+    "web/src/lib/today/check.ts",
+    "web/src/lib/today/load.ts",
+    "web/src/lib/today/model.ts",
+    "web/src/routes/app/+page.svelte"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1956,
+    "cache_creation_tokens": 214704,
+    "cache_read_tokens": 9669956,
+    "output_tokens": 66095,
+    "api_call_count": 75
+  }
+}
