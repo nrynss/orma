@@ -157,3 +157,7 @@ It is safe to edit Phase 8 documents. Check what we need to do. why do we need t
 ---
 
 We have to remove 8.2 completely. It is not something we need
+
+---
+
+No need for a gap at all
