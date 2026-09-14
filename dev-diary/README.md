@@ -162,7 +162,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 4 / 4 | **Complete.** MCP live at `orma-api.nryn.dev/mcp`, six tools wired, docs published at `docs/mcp.md`. |
 | P5 | 4 / 4 | **P5 e2e clean.** Auth, Telegram bridge, web sessions, and onboarding are live. |
-| P6 | 0 / 8 | **In progress.** T6.1 claimed with the app shell and local harness. T6.7 (owner actions) and T6.8 (landing) added at the claim. |
+| P6 | 1 / 8 | **In progress.** T6.1 landed with the app shell, shared tokens and local harness. T6.2, T6.3, T6.4, T6.6 and T6.7 are unblocked. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
 
@@ -1226,3 +1226,42 @@ with zero findings.
 The migration is not deployed yet. Do not add an email column to `profiles`, and do not
 create a second Vertex client. `TELEGRAM_BOT_TOKEN` is now required by the tick env
 factory as well as the Telegram function.
+
+### 2026-09-14 · P7 on the deployment, schedulers live
+
+The facts and analysis migrations are applied, and `analysis`, `tick` and `telegram`
+are redeployed. The operator wrote `ORMA_MATERIALISE_SECRET_KEY` into Vault at 02:51Z.
+`tick-runs` returned 200 from the next minute. A manual materialise found zero slots in
+production, so nothing was missed.
+
+pg_net moved from `public` to `extensions` in `20260914030000_move_pg_net_to_extensions`,
+clearing the security advisor. The cron jobs name `net.http_post` as text and survived.
+`anon` and `authenticated` still hold execute on it through Supabase's own event trigger.
+
+### 2026-09-14 · T6.1 landed, Today and the app shell
+
+T6.1 is done. `/app` is Today, client rendered under RLS. It shows the next call in the
+profile's timezone, the last call summary, and open items with counts and ages from rows.
+It has first-run, live, blocked and error states.
+
+The claim added three tasks' worth of scaffolding to T6.1, recorded in
+`adversarial-review/t6.1-contract-change.md`. The app navigation lives in
+`app/+layout.svelte`. Shared tokens and components live in `web/src/lib/ui/`. Login and
+onboarding now land a finished profile on `/app`. T6.7 and T6.8 were added at the claim.
+
+Round 1 returned REMEDIATE, H1 M3 L1. Retired read any later retirement as a call
+retirement. Today promised calls the dispatcher refuses. Six mutants passed the check.
+Settings called production from the harness. The live list ignored briefing order.
+
+Remediation tied Retired to the run's result and mention, mirrored the dispatcher's four
+refusals, pinned all six mutants, and read the API URL through `getOrmaApiUrl()`. Round 2
+returned APPROVE with zero findings and zero residue, including a local `wrangler dev` run.
+
+**What the next P6 agent must know.** Run `scripts/p6-local-stack.sh up` for a local stack
+on ports 58320 to 58329. The seed, `firstrun@` and `live@` accounts use the local dev
+password. Magic links do not work locally, so sign in from the console per
+`t6.1-handoff.md`. Run `down` when finished.
+
+Import tokens from `$lib/ui` rather than copying styles. `call_runs` stays read-only to
+its owner, so cancel waits for T6.7. The web app is not yet deployed with T6.1. The landing
+footer still says sign-ups are closed, which T6.8 owns.
