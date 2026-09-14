@@ -13,7 +13,11 @@ export const TELEGRAM_BOT_USERNAME = "orma_tele_bot"
 export const LINK_TOKEN_TTL_MS = 10 * 60 * 1000
 export const LINK_TOKEN_BYTES = 32
 export const LINK_TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
-export const ORMA_API_URL = "https://orma-api.nryn.dev"
+// Settings passes this as apiUrl, so it reads getOrmaApiUrl() and a local session stays local.
+// The node header check runs without Vite and cannot resolve $lib. Only there does the production URL stand.
+export const ORMA_API_URL: string = (import.meta as { env?: unknown }).env
+  ? (await import("$lib/supabase")).getOrmaApiUrl()
+  : "https://orma-api.nryn.dev"
 
 export type TelegramLinkClient = {
   apiUrl?: string

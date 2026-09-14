@@ -5,6 +5,7 @@
 	import { ItemLine, LiveDot, MoodMarker } from '$lib/ui'
 	import {
 		addedLabel,
+		callBlock,
 		dispositionLabel,
 		durationSeconds,
 		formatClock,
@@ -19,7 +20,8 @@
 		nextSlotInstant,
 		openItemsView,
 		pickLiveRun,
-		pickNextRun
+		pickNextRun,
+		todaysCallView
 	} from '$lib/today/model'
 
 	let { data } = $props()
@@ -42,10 +44,22 @@
 	const lastCall = $derived(rows?.lastCall ?? null)
 	const summary = $derived(
 		rows && lastCall
-			? lastCallSummary(lastCall, rows.lastMentions, rows.lastCommitments, zone, now)
+			? lastCallSummary(
+					lastCall,
+					rows.lastMentions,
+					rows.lastCommitments,
+					rows.lastResultStructured,
+					zone,
+					now
+				)
 			: null
 	)
 	const OPEN_SHOWN = 5
+	// The dispatcher refuses these runs. Today says why instead of promising a time.
+	const nextBlock = $derived(
+		rows ? callBlock(rows.profile, rows.consents, nextRun, rows.slots) : null
+	)
+	const todays = $derived(rows ? todaysCallView(rows.liveBriefing, open) : null)
 
 	onMount(() => {
 		const clock = setInterval(() => (now = new Date()), 30_000)
@@ -106,15 +120,30 @@
 			<p class="o-hint">Nothing to do here. This page updates on its own.</p>
 		</section>
 
-		<section class="o-stack list">
-			<div class="o-row split">
-				<h2 class="o-h2">Open · {open.length}</h2>
-				<a class="small" href="/app/items">All items</a>
-			</div>
-			{#each open.slice(0, OPEN_SHOWN) as item (item.id)}
-				<ItemLine text={item.text} meta={item.meta} />
-			{/each}
-		</section>
+		{#if todays?.fromBriefing}
+			<section class="o-stack list">
+				<div class="o-stack briefing-head">
+					<h2 class="o-h2">On today's call</h2>
+					<p class="o-hint">Orma is leading with these, in this order.</p>
+				</div>
+				{#each todays.items.slice(0, OPEN_SHOWN) as item (item.id)}
+					<ItemLine text={item.text} meta={item.meta} />
+				{:else}
+					<p class="o-muted empty">Nothing was open when Orma prepared this call.</p>
+				{/each}
+			</section>
+		{:else}
+			<section class="o-stack list">
+				<div class="o-row split">
+					<h2 class="o-h2">Open · {open.length}</h2>
+					<a class="small" href="/app/items">All items</a>
+				</div>
+				<p class="o-hint">The call's order shows here once Orma has prepared the call.</p>
+				{#each open.slice(0, OPEN_SHOWN) as item (item.id)}
+					<ItemLine text={item.text} meta={item.meta} />
+				{/each}
+			</section>
+		{/if}
 	{:else if firstRun}
 		<section class="o-stack head">
 			<span class="o-label">{formatDayLabel(now, zone)}</span>
@@ -123,7 +152,13 @@
 
 		<section class="o-wash o-stack card first">
 			<span class="o-label plum">Your first call</span>
-			{#if firstCallAt}
+			{#if nextBlock}
+				<div class="big">{nextBlock.title}</div>
+				<p class="o-hint">{nextBlock.detail}</p>
+				<div class="o-row actions">
+					<a class="o-btn o-btn-secondary" href="/app/settings">Open Settings</a>
+				</div>
+			{:else if firstCallAt}
 				<div class="big">{formatNextCall(firstCallAt, zone, now)}</div>
 				<p>Two minutes. Orma leads with what you've told it, asks what's new, and hangs up.</p>
 				<p class="o-hint">
@@ -163,7 +198,13 @@
 
 		<section class="o-wash o-stack card">
 			<span class="o-label plum">Next call</span>
-			{#if nextRun}
+			{#if nextBlock}
+				<div class="big">{nextBlock.title}</div>
+				<p class="o-hint">{nextBlock.detail}</p>
+				<div class="o-row actions">
+					<a class="o-btn o-btn-secondary" href="/app/settings">Open Settings</a>
+				</div>
+			{:else if nextRun}
 				<div class="big">{formatNextCall(nextRun.scheduled_for, zone, now)}</div>
 				<p class="o-hint">{zone}. It comes from a number you won't recognise. Answer it anyway.</p>
 				<div class="o-row actions">
@@ -301,6 +342,10 @@
 		gap: 0.25rem;
 	}
 	.list .split {
+		margin-bottom: 0.4rem;
+	}
+	.briefing-head {
+		gap: 0.2rem;
 		margin-bottom: 0.4rem;
 	}
 	.after-list {

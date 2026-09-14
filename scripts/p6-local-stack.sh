@@ -209,6 +209,11 @@ values
   ('30000000-0000-4000-8000-0000000000c1', null, null, now() - interval '9 days'),
   ('30000000-0000-4000-8000-0000000000c1', null, null, now() - interval '4 days');
 
+-- The dispatcher stores the briefing before it places a call. The live run carries one from the real SQL.
+update public.call_runs
+   set briefing = public.assemble_briefing('00000000-0000-4000-8000-0000000000c1', '08:00', now())
+ where id = '4f000000-0000-4000-8000-0000000000c1';
+
 commit;
 SQL
 }

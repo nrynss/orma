@@ -16,9 +16,11 @@ export type RunRow = {
   dispatched_at: string | null
   completed_at: string | null
   poll_after: string | null
+  slot_id: string | null
 }
 
 export type SlotRow = {
+  id?: string
   local_time: string
   weekdays: number[]
   active: boolean
@@ -55,6 +57,22 @@ export type CommitmentRow = {
   due: string | null
   evidence_offset_seconds: number
   items: { text: string } | null
+}
+
+export type ConsentRow = {
+  kind: string
+  revoked_at: string | null
+}
+
+export type DispatchProfile = {
+  phone_e164: string | null
+  phone_confirmed_at: string | null
+}
+
+export type CallBlock = {
+  reason: "phone" | "consent" | "slot"
+  title: string
+  detail: string
 }
 
 const DAY_MS = 86_400_000
@@ -111,6 +129,42 @@ export function pickLastCall<T extends RunRow>(runs: readonly T[]): T | null {
 /** True while the account has never had a call placed or attempted. */
 export function isFirstRun(runs: readonly RunRow[]): boolean {
   return !runs.some((run) => isLive(run.state) || (isTerminal(run.state) && run.state !== "canceled"))
+}
+
+/**
+ * Why the dispatcher would refuse a call, or null when it would place one.
+ * It mirrors dispatchOne in supabase/functions/_shared/calle.ts, in the same order.
+ * A confirmed number comes first, then a live outbound_calls consent, then the run's own slot.
+ * Pass no run for a slot fallback, because that time comes from an existing slot.
+ */
+export function callBlock(
+  profile: DispatchProfile | null,
+  consents: readonly ConsentRow[],
+  run: Pick<RunRow, "slot_id"> | null,
+  slots: readonly SlotRow[],
+): CallBlock | null {
+  if (!profile?.phone_e164 || !profile.phone_confirmed_at) {
+    return {
+      reason: "phone",
+      title: "No confirmed number",
+      detail: "Orma has no confirmed phone number for you, so no call will ring. Confirm your number in Settings.",
+    }
+  }
+  if (!consents.some((row) => row.kind === "outbound_calls" && row.revoked_at === null)) {
+    return {
+      reason: "consent",
+      title: "Calls are off",
+      detail: "You have not given Orma permission to call you, so no call will ring. Turn calls on in Settings.",
+    }
+  }
+  if (run && (!run.slot_id || !slots.some((slot) => slot.id === run.slot_id))) {
+    return {
+      reason: "slot",
+      title: "No call time",
+      detail: "This call has lost the call time it came from, so Orma will not place it. Choose a time in Settings.",
+    }
+  }
+  return null
 }
 
 export type ZonedParts = {
@@ -357,13 +411,35 @@ export type LastCallSummary = {
 }
 
 /**
+ * The retirements a call's own result recorded, as item@offset keys.
+ * Ingest applies every retired_items entry and writes a mention at its offset in the same transaction.
+ * A later retire on the web, by MCP or on Telegram writes neither, so it never appears here.
+ */
+export function callRetirementKeys(structured: unknown): Set<string> {
+  const keys = new Set<string>()
+  if (!structured || typeof structured !== "object") return keys
+  const entries = (structured as Record<string, unknown>).retired_items
+  if (!Array.isArray(entries)) return keys
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue
+    const record = entry as Record<string, unknown>
+    const offset = Number(record.evidence_offset_seconds)
+    if (typeof record.item_id !== "string" || !Number.isInteger(offset)) continue
+    keys.add(`${record.item_id}@${offset}`)
+  }
+  return keys
+}
+
+/**
  * What the last call retired, committed and captured, read from rows on that run.
  * Ingest writes one mention per commitment, so those mentions are not read twice.
+ * A Retired line needs the run's own result to name the retirement. An item's later retired_at never counts.
  */
 export function lastCallSummary(
   run: Pick<RunRow, "id" | "scheduled_for">,
   mentions: readonly RunMentionRow[],
   commitments: readonly CommitmentRow[],
+  resultStructured: unknown,
   timeZone: string,
   now: Date,
 ): LastCallSummary {
@@ -385,6 +461,7 @@ export function lastCallSummary(
   }
   const runStart = ms(run.scheduled_for)
   const pendingCommitMentions = new Set(commitmentKeys)
+  const pendingRetirements = callRetirementKeys(resultStructured)
   for (const row of scoped) {
     const key = `${row.item_id}@${row.offset_seconds}`
     if (pendingCommitMentions.has(key)) {
@@ -393,7 +470,8 @@ export function lastCallSummary(
     }
     const item = row.items
     if (!item) continue
-    if (item.status === "retired" && ms(item.retired_at) >= runStart) {
+    if (pendingRetirements.has(key)) {
+      pendingRetirements.delete(key)
       lines.push({
         kind: "retired",
         label: "Retired",
@@ -494,7 +572,7 @@ export function liveSteps(run: RunRow, timeZone: string): LiveStep[] {
   const clock = (iso: string | null) => (iso ? formatClock(iso, timeZone, true) : "")
   const onCall = run.state === "awaiting_result"
   const steps: Array<{ label: string; at: string; done: boolean }> = [
-    { label: "Picked up by the scheduler", at: clock(run.claimed_at), done: Boolean(run.claimed_at) },
+    { label: "Picked up", at: clock(run.claimed_at), done: Boolean(run.claimed_at) },
     { label: "Call placed", at: clock(run.dispatched_at), done: Boolean(run.dispatched_at) && run.state !== "claimed" },
     {
       label: onCall && run.poll_after ? `On the call. Checking again at ${clock(run.poll_after)}` : "On the call",
@@ -510,4 +588,42 @@ export function liveSteps(run: RunRow, timeZone: string): LiveStep[] {
     at: step.at,
     status: step.done ? "done" : index === current ? "now" : "todo",
   }))
+}
+
+export type TodaysCallView = {
+  /** True when the order comes from call_runs.briefing. False means the page falls back to the open list. */
+  fromBriefing: boolean
+  items: OpenItemView[]
+}
+
+/**
+ * Item ids in the order the briefing leads with them, read from its open_items lines.
+ * Null when the run carries no briefing yet, or the briefing has no open_items text.
+ */
+export function briefingOrder(briefing: unknown): Array<{ id: string; text: string }> | null {
+  if (!briefing || typeof briefing !== "object") return null
+  const text = (briefing as Record<string, unknown>).open_items
+  if (typeof text !== "string") return null
+  const order: Array<{ id: string; text: string }> = []
+  for (const line of text.split("\n")) {
+    const match = /^- (.*) \(id: ([^()\s]+)\)$/.exec(line.trim())
+    if (match) order.push({ id: match[2], text: match[1] })
+  }
+  return order
+}
+
+/**
+ * "On today's call" for the live state, in briefing order with counts from rows.
+ * Without a briefing it falls back to the open list and says so through fromBriefing.
+ */
+export function todaysCallView(briefing: unknown, open: readonly OpenItemView[]): TodaysCallView {
+  const order = briefingOrder(briefing)
+  if (order === null) return { fromBriefing: false, items: [...open] }
+  const byId = new Map(open.map((item) => [item.id, item]))
+  return {
+    fromBriefing: true,
+    items: order.map(
+      (entry) => byId.get(entry.id) ?? { id: entry.id, text: entry.text, mentions: 0, ageDays: 0, meta: "no longer open" },
+    ),
+  }
 }
