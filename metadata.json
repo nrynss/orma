@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2FZQHWXA91KKB67GK0WRM92",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "dev-diary/PHASE-9-ui.md",
+    "dev-diary/adversarial-review/p9-contract-change.md",
+    "dev-diary/adversarial-review/t9.2-handoff.md",
+    "dev-diary/adversarial-review/t9.2-remediation-round1.md",
+    "dev-diary/adversarial-review/t9.2-round1.md",
+    "web/src/app.html",
+    "web/src/lib/assets/orma-wordmark-dark.svg",
+    "web/src/lib/assets/orma-wordmark-light.svg",
+    "web/src/lib/shell/AccountMenu.svelte",
+    "web/src/lib/shell/TabBar.svelte",
+    "web/src/lib/shell/TabIcon.svelte",
+    "web/src/lib/shell/Wordmark.svelte",
+    "web/src/lib/shell/index.ts",
+    "web/src/routes/+layout.svelte",
+    "web/src/routes/app/+layout.svelte"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "prompt": ""
+    }
+  ]
+}

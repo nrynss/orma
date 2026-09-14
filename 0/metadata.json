@@ -1,0 +1,45 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2FZQHWXA91KKB67GK0WRM92",
+  "session_id": "01a09bdb-1b09-7a70-93b2-7781ac088ae2",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-14T12:54:33.204394134Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "dev-diary/PHASE-9-ui.md",
+    "dev-diary/adversarial-review/p9-contract-change.md",
+    "dev-diary/adversarial-review/t9.2-handoff.md",
+    "dev-diary/adversarial-review/t9.2-remediation-round1.md",
+    "dev-diary/adversarial-review/t9.2-round1.md",
+    "web/src/app.html",
+    "web/src/lib/assets/orma-wordmark-dark.svg",
+    "web/src/lib/assets/orma-wordmark-light.svg",
+    "web/src/lib/shell/AccountMenu.svelte",
+    "web/src/lib/shell/TabBar.svelte",
+    "web/src/lib/shell/TabIcon.svelte",
+    "web/src/lib/shell/Wordmark.svelte",
+    "web/src/lib/shell/index.ts",
+    "web/src/routes/+layout.svelte",
+    "web/src/routes/app/+layout.svelte"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "8e1653b8e5ab",
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-14T12:54:33.203964236Z",
+    "agent_lines": 1286,
+    "agent_removed": 122,
+    "human_added": 232,
+    "human_modified": 1,
+    "human_removed": 0,
+    "total_committed": 1519,
+    "total_lines_changed": 1642,
+    "agent_percentage": 85.74908647990256,
+    "metric_version": 2
+  }
+}
