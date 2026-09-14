@@ -39,6 +39,3 @@ supabase/.branches/
 web/.svelte-kit/
 web/build/
 proxy/.wrangler/
-
-# Real CALL-E call transcript. Keep it out of anything published.
-testdata/calle/transcript.json

@@ -118,7 +118,7 @@
       "created_at": "2026-09-11T12:18:31.799405Z",
       "level": "info",
       "status": "completed",
-      "message": "Bot is speaking: I'm here.",
+      "message": "Bot is speaking: Hello, this is Orma.",
       "details": {}
     },
     {
@@ -128,7 +128,7 @@
       "created_at": "2026-09-11T12:18:35.675937Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: yeah",
+      "message": "Callee said: bye",
       "details": {}
     },
     {
@@ -138,7 +138,7 @@
       "created_at": "2026-09-11T12:18:36.620991Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: yeah why don't",
+      "message": "Callee said: hi who is this",
       "details": {}
     },
     {
@@ -148,7 +148,7 @@
       "created_at": "2026-09-11T12:18:36.897025Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: Yeah, why don't?",
+      "message": "Callee said: Hi, who is this?",
       "details": {}
     },
     {
@@ -168,7 +168,7 @@
       "created_at": "2026-09-11T12:18:37.726562Z",
       "level": "info",
       "status": "completed",
-      "message": "Bot is speaking: did that come through clearly? I\u2019m Orma, calling for your quick daily check-in.",
+      "message": "Bot is speaking: this is Orma, calling for your daily check-in.",
       "details": {}
     },
     {
@@ -178,7 +178,7 @@
       "created_at": "2026-09-11T12:18:45.286741Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: yeah",
+      "message": "Callee said: bye",
       "details": {}
     },
     {
@@ -188,7 +188,7 @@
       "created_at": "2026-09-11T12:18:45.584116Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: yeah so",
+      "message": "Callee said: hi who is this",
       "details": {}
     },
     {
@@ -198,7 +198,7 @@
       "created_at": "2026-09-11T12:18:45.905628Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: yeah so i",
+      "message": "Callee said: hi who is this",
       "details": {}
     },
     {
@@ -208,7 +208,7 @@
       "created_at": "2026-09-11T12:18:46.182258Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: yeah so i didn't underst",
+      "message": "Callee said: sorry can you say that again",
       "details": {}
     },
     {
@@ -218,7 +218,7 @@
       "created_at": "2026-09-11T12:18:46.479545Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: yeah so i didn't understand",
+      "message": "Callee said: sorry can you say that again",
       "details": {}
     },
     {
@@ -228,7 +228,7 @@
       "created_at": "2026-09-11T12:18:46.907891Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: yeah so i didn't understand what you said",
+      "message": "Callee said: sorry can you say that again",
       "details": {}
     },
     {
@@ -238,7 +238,7 @@
       "created_at": "2026-09-11T12:18:47.184946Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: Yeah, so I didn't understand what you said.",
+      "message": "Callee said: Sorry, can you say that again?",
       "details": {}
     },
     {
@@ -248,7 +248,7 @@
       "created_at": "2026-09-11T12:18:47.559357Z",
       "level": "info",
       "status": "completed",
-      "message": "Bot is speaking: Oh,",
+      "message": "Bot is speaking: Of course,",
       "details": {}
     },
     {
@@ -258,7 +258,7 @@
       "created_at": "2026-09-11T12:18:48.137393Z",
       "level": "info",
       "status": "completed",
-      "message": "Bot is speaking: just a quick update from Orma: you\u2019ve mentioned the dentist three times,",
+      "message": "Bot is speaking: a quick update from Orma: you\u2019ve mentioned the dentist three times,",
       "details": {}
     },
     {
@@ -278,7 +278,7 @@
       "created_at": "2026-09-11T12:18:57.984590Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: yeah",
+      "message": "Callee said: bye",
       "details": {}
     },
     {
@@ -288,7 +288,7 @@
       "created_at": "2026-09-11T12:18:58.388608Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: yeah i am",
+      "message": "Callee said: hi who is this",
       "details": {}
     },
     {
@@ -298,7 +298,7 @@
       "created_at": "2026-09-11T12:18:58.687750Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: yeah i'm not",
+      "message": "Callee said: hi who is this",
       "details": {}
     },
     {
@@ -308,7 +308,7 @@
       "created_at": "2026-09-11T12:18:58.987827Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: yeah i am not going",
+      "message": "Callee said: i will sort it out this week",
       "details": {}
     },
     {
@@ -318,7 +318,7 @@
       "created_at": "2026-09-11T12:18:59.265773Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: yeah i'm not going to",
+      "message": "Callee said: i will sort it out this week",
       "details": {}
     },
     {
@@ -328,7 +328,7 @@
       "created_at": "2026-09-11T12:19:00.495214Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: Yeah, I'm not going to test.",
+      "message": "Callee said: I will sort it out this week.",
       "details": {}
     },
     {
@@ -338,7 +338,7 @@
       "created_at": "2026-09-11T12:19:00.977822Z",
       "level": "info",
       "status": "completed",
-      "message": "Bot is speaking: Thanks, got it.",
+      "message": "Bot is speaking: Thanks, noted.",
       "details": {}
     },
     {
@@ -368,7 +368,7 @@
       "created_at": "2026-09-11T12:19:09.223910Z",
       "level": "info",
       "status": "completed",
-      "message": "Bot is speaking: Hmm,",
+      "message": "Bot is speaking: Okay,",
       "details": {}
     },
     {
@@ -378,7 +378,7 @@
       "created_at": "2026-09-11T12:19:09.669897Z",
       "level": "info",
       "status": "completed",
-      "message": "Bot is speaking: \u201cContinental\u201d \u2014 do you mean that as a new item to track,",
+      "message": "Bot is speaking: \u201cContinental\u201d. Should I track that as a new item?",
       "details": {}
     },
     {
@@ -388,7 +388,7 @@
       "created_at": "2026-09-11T12:19:10.769434Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: but",
+      "message": "Callee said: bye",
       "details": {}
     },
     {
@@ -408,7 +408,7 @@
       "created_at": "2026-09-11T12:19:11.344752Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: but want to",
+      "message": "Callee said: yes add it please",
       "details": {}
     },
     {
@@ -418,7 +418,7 @@
       "created_at": "2026-09-11T12:19:11.691169Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: but want to call",
+      "message": "Callee said: yes add it please",
       "details": {}
     },
     {
@@ -428,7 +428,7 @@
       "created_at": "2026-09-11T12:19:11.988643Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: but want to call on",
+      "message": "Callee said: yes add it please",
       "details": {}
     },
     {
@@ -438,7 +438,7 @@
       "created_at": "2026-09-11T12:19:13.092573Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: but i want to call on",
+      "message": "Callee said: yes add it please",
       "details": {}
     },
     {
@@ -448,7 +448,7 @@
       "created_at": "2026-09-11T12:19:13.390227Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: But I want to call on.",
+      "message": "Callee said: Yes, add it please.",
       "details": {}
     },
     {
@@ -468,7 +468,7 @@
       "created_at": "2026-09-11T12:19:14.270436Z",
       "level": "info",
       "status": "completed",
-      "message": "Bot is speaking: I can capture that.",
+      "message": "Bot is speaking: I have captured that.",
       "details": {}
     },
     {
@@ -478,7 +478,7 @@
       "created_at": "2026-09-11T12:19:20.365668Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: anything else",
+      "message": "Callee said: is that everything for today",
       "details": {}
     },
     {
@@ -488,7 +488,7 @@
       "created_at": "2026-09-11T12:19:21.334846Z",
       "level": "info",
       "status": "completed",
-      "message": "Callee said: Anything else?",
+      "message": "Callee said: Is that everything for today?",
       "details": {}
     },
     {

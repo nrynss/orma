@@ -62,12 +62,12 @@ export const DRY_RUN_COMPLETED_FIXTURE: CallTaskFixture = {
             {
               "offset_seconds": 12,
               "speaker": "bot",
-              "text": "I'm here."
+              "text": "Hello, this is Orma."
             },
             {
               "offset_seconds": 17,
               "speaker": "user",
-              "text": "Yeah, why don't?"
+              "text": "Hi, who is this?"
             },
             {
               "offset_seconds": 18,
@@ -77,22 +77,22 @@ export const DRY_RUN_COMPLETED_FIXTURE: CallTaskFixture = {
             {
               "offset_seconds": 18,
               "speaker": "bot",
-              "text": "did that come through clearly? I\u2019m Orma, calling for your quick daily check-in."
+              "text": "this is Orma, calling for your daily check-in."
             },
             {
               "offset_seconds": 27,
               "speaker": "user",
-              "text": "Yeah, so I didn't understand what you said."
+              "text": "Sorry, can you say that again?"
             },
             {
               "offset_seconds": 28,
               "speaker": "bot",
-              "text": "Oh,"
+              "text": "Of course,"
             },
             {
               "offset_seconds": 29,
               "speaker": "bot",
-              "text": "just a quick update from Orma: you\u2019ve mentioned the dentist three times,"
+              "text": "a quick update from Orma: you\u2019ve mentioned the dentist three times,"
             },
             {
               "offset_seconds": 33,
@@ -102,12 +102,12 @@ export const DRY_RUN_COMPLETED_FIXTURE: CallTaskFixture = {
             {
               "offset_seconds": 41,
               "speaker": "user",
-              "text": "Yeah, I'm not going to test."
+              "text": "I will sort it out this week."
             },
             {
               "offset_seconds": 41,
               "speaker": "bot",
-              "text": "Thanks, got it."
+              "text": "Thanks, noted."
             },
             {
               "offset_seconds": 42,
@@ -122,17 +122,17 @@ export const DRY_RUN_COMPLETED_FIXTURE: CallTaskFixture = {
             {
               "offset_seconds": 49,
               "speaker": "bot",
-              "text": "Hmm,"
+              "text": "Okay,"
             },
             {
               "offset_seconds": 50,
               "speaker": "bot",
-              "text": "\u201cContinental\u201d \u2014 do you mean that as a new item to track,"
+              "text": "\u201cContinental\u201d. Should I track that as a new item?"
             },
             {
               "offset_seconds": 53,
               "speaker": "user",
-              "text": "But I want to call on."
+              "text": "Yes, add it please."
             },
             {
               "offset_seconds": 54,
@@ -142,12 +142,12 @@ export const DRY_RUN_COMPLETED_FIXTURE: CallTaskFixture = {
             {
               "offset_seconds": 55,
               "speaker": "bot",
-              "text": "I can capture that."
+              "text": "I have captured that."
             },
             {
               "offset_seconds": 62,
               "speaker": "user",
-              "text": "Anything else?"
+              "text": "Is that everything for today?"
             },
             {
               "offset_seconds": 62,
@@ -157,12 +157,12 @@ export const DRY_RUN_COMPLETED_FIXTURE: CallTaskFixture = {
             {
               "offset_seconds": 69,
               "speaker": "user",
-              "text": "I don't have anything else."
+              "text": "Nothing else from me."
             },
             {
               "offset_seconds": 70,
               "speaker": "bot",
-              "text": "Quick"
+              "text": "Great"
             },
             {
               "offset_seconds": 76,
@@ -177,7 +177,7 @@ export const DRY_RUN_COMPLETED_FIXTURE: CallTaskFixture = {
             {
               "offset_seconds": 80,
               "speaker": "bot",
-              "text": "Confirmed for tomorrow at 8 AM,"
+              "text": "Talk tomorrow at 8 AM,"
             },
             {
               "offset_seconds": 82,

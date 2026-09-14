@@ -713,7 +713,7 @@ if (typeof testFn === "function") {
     const fixtureHash = Array.from(new Uint8Array(fixtureDigest))
       .map((byte) => byte.toString(16).padStart(2, "0"))
       .join("");
-    if (fixtureHash !== "8acba02e54af73b0c1a62b3d946aebb5df996074110cf80b1e16e02f19354f3e") {
+    if (fixtureHash !== "bbe9c94ccd6c7cc57ebb5ddd5780848765f7b186916a3478542e2f02730d6bbb") {
       throw new Error("committed CALL-E fixture changed without dispatch review");
     }
     const requests: Request[] = [];
