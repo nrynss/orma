@@ -210,3 +210,26 @@ Change transcript to synthetic. Telegram bot settings updated. It works now. Upd
 ---
 
 yes
+
+---
+
+T8.1 done
+Created scripts/seed.ts — the only file this task owns.
+What it seeds for one named account:
+
+* `the dentist` item with `seeded=true`, `source='call'`, `since_date` = 34 days before demo date
+* Three completed dry-run call runs on separate dates (28, 14, 3 days before demo), each with stable `orma:seed:` keys
+* One `item_mentions` per run for the dentist, plus two background items with fewer mentions
+* Synthetic transcripts, valid results, and the dispatched/ingested/finalised call_events
+
+Validated against the local stack:
+
+* Plan run writes zero rows ✓
+* `--apply` twice leaves identical row counts ✓
+* `--remove` leaves zero seeded rows (and local seed.sql rows survive) ✓
+* `assemble_briefing` returns "You've mentioned the dentist 3 times. It's been 34 days." ✓
+* Non-local `--apply` refused without `--i-confirmed-dry-run` ✓
+
+No other files touched. I only edited the task status line in PHASE-8-ship.md (which this task block carries) and created the one file in `owns`.
+
+verify
