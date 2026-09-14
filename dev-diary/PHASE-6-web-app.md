@@ -23,7 +23,7 @@ parallel: [P2, P3, P4, P7]
 requires:   T5.3, T5.4, T1.6
 fixture-ok: yes
 size:       M · mid
-owns:       web/src/routes/app/+page.svelte, web/src/routes/app/+page.ts, web/src/routes/app/+layout.svelte, web/src/routes/+layout.svelte, web/src/lib/ui/, web/src/lib/today/, web/src/routes/app/onboarding/profile-gate.ts, web/src/routes/app/onboarding/+page.svelte, web/src/routes/app/onboarding/check.ts, web/package.json, scripts/p6-local-stack.sh
+owns:       web/src/routes/app/+page.svelte, web/src/routes/app/+page.ts, web/src/routes/app/+layout.svelte, web/src/routes/+layout.svelte, web/src/lib/ui/, web/src/lib/today/, web/src/routes/app/onboarding/profile-gate.ts, web/src/routes/app/onboarding/+page.svelte, web/src/routes/app/onboarding/check.ts, web/package.json, scripts/p6-local-stack.sh, web/src/lib/telegram-link.ts (API URL only)
 status:     claimed:orma-impl-61
 ```
 The landing surface after sign-in: when the next call is, what is open, and what happened on the last one.
