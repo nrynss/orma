@@ -68,6 +68,8 @@ The key stays in a shell variable and only the token prints. Open `http://localh
 
 5. Browse Today, Items, History, Timeline, Patterns and Settings over the harness rows. Timeline shows each run's `call_events` step by step. Nothing advances while you watch, because no `tick` runs locally. The scheduled run stays `scheduled`, and the live account's run stays `awaiting_result`.
 
+The harness numbers arrive already confirmed. Settings and onboarding still show the confirmation step for an unconfirmed number. "Call me with a code" cannot finish locally, though, because no `confirm-phone` function runs.
+
 6. Optionally, preview the demo seed against the local stack. Run this from the repository root in the same shell:
 
 ```bash
@@ -105,6 +107,7 @@ All backend endpoints run on Supabase Edge Functions in Deno:
 | `materialise` | `pg_cron`, nightly at 00:10 UTC | Generates call runs for the next 48 hours from active user slots |
 | `calle-webhook` | CALL-E HTTP POST | Validates webhook secret, de-duplicates event IDs, re-fetches authoritative runs, and ingests results |
 | `telegram` | Telegram webhook | Captures text items and audio voice notes, transcribes voice with Gemini, and delivers post-call receipts |
+| `confirm-phone` | Browser client, POST with the user JWT | Checks the saved number and live consent, enforces the attempt limits, stores a salted hash of a six-digit code, and places one confirmation call |
 | `mcp` | MCP client requests | Exposes Model Context Protocol tools over streamable HTTP under user JWT authentication |
 | `auth-telegram` | Browser client | Verifies Telegram Login Widget HMAC signature and mints user auth tokens |
 | `analysis` | `pg_cron`, Mondays at 06:20 UTC | Computes aggregate behavioral facts in SQL, phrases pattern reports with Gemini, and delivers them |
@@ -138,7 +141,7 @@ A call run transitions through explicit states:
 - `completed`: Answered and processed. It receives disposition `answered_extracted` or `answered_no_result`.
 - `no_result`: CALL-E finished the call, but the structured result failed validation.
 - `failed`: The recipient did not answer or the provider reported an error. It receives disposition `not_answered`.
-- `canceled`: Canceled by the user before dispatch, or refused by the dispatcher because the profile has no live consent.
+- `canceled`: Canceled by the user before dispatch, or refused by the dispatcher because the profile has no confirmed number or no live consent.
 
 ## Deploy your own
 
@@ -192,6 +195,7 @@ Set every name the functions require. Keep `ORMA_DRY_RUN=true` until you intend 
 ```bash
 supabase secrets set \
   ORMA_API_URL="https://<your-api-host>" \
+  ORMA_ENV=production \
   ORMA_DRY_RUN=true \
   ORMA_WEBHOOK_SECRET="<random webhook secret>" \
   CALLE_API_BASE="<CALL-E API base URL>" \
@@ -208,6 +212,8 @@ supabase secrets set \
 
 `ORMA_DRY_RUN_FIXTURE` is optional. Supabase provides the `SUPABASE_` names to functions itself.
 
+Set `ORMA_ENV=production` on every deployed project. `confirm-phone` returns the confirmation code in its response whenever `ORMA_ENV` is anything other than `production`, including unset.
+
 ### 7. Push the Auth configuration
 
 Magic-link sign-in email goes through Supabase Auth, which sends it over Resend SMTP. `[auth.email.smtp]` in `supabase/config.toml` reads `RESEND_API_KEY` and `RESEND_FROM` from your environment at push time. The function secret does not reach Auth. Review the diff, then push:
@@ -222,6 +228,8 @@ supabase config push
 ```bash
 supabase functions deploy
 ```
+
+This deploys `confirm-phone` with the rest. `supabase/config.toml` sets `verify_jwt = false` for it, because the function checks the caller's JWT itself against `/auth/v1/user`.
 
 ### 9. Store the scheduler key in Vault
 
@@ -277,7 +285,8 @@ The table below lists every external effect and its trigger:
 
 | Effect | Trigger | Target | Cost or retention |
 |---|---|---|---|
-| Phone call | `tick` dispatches a due run with dry run off and live consent | Callee phone number | Consumes CALL-E balance ($0.05 per call after 20 free) |
+| Phone call | `tick` dispatches a due run with dry run off, a confirmed number and live consent | Callee phone number | Consumes CALL-E balance ($0.05 per call after 20 free) |
+| Confirmation call | "Call me with a code", dry run off | The caller's saved number | $0.05 per attempt after 20 free. Limits in Number confirmation |
 | Cron `tick-runs` | `pg_cron` every minute | `tick` function | Function invocations and `call_runs` writes |
 | Cron `materialise-runs` | `pg_cron` daily at 00:10 UTC | `materialise` function | Database row writes |
 | Cron `analysis-report` | `pg_cron` every Monday at 06:20 UTC | `analysis` function, `pattern_reports` table | Vertex AI Gemini token usage |
@@ -335,6 +344,8 @@ A dry run marks the run `billable = false` with `terminal_writer = 'dry_run'`. I
 - `ingested`: Written by `ingest_call_result`, the same as for a live call. It carries `call_run_id`, `calle_call_id`, `state`, `disposition`, `item_count`, `mention_count`, `retirement_count`, `commitment_count` and `skipped`.
 - `finalised`: `dispatch_mode`, `fixture`, `outbound_request_made: false`, `state`, `disposition`, `item_count`, `mention_count` and `failure_reason`.
 
+A confirmation attempt in dry run places no call. `confirm-phone` stores the request in `phone_confirmations.dry_run_request`, with the number, the webhook secret and the code masked. The row moves to `dialled` with no `calle_call_id`. When `ORMA_ENV` is not `production`, the response also carries the code, so a local test can finish. In production it never does.
+
 Setting `ORMA_DRY_RUN=false` enables live telephony. Real calls cost \$0.05 each after CALL-E's 20 initial free calls.
 
 ## Credentials
@@ -353,6 +364,8 @@ The following secrets remain server-side only:
 - `RESEND_API_KEY`: Authenticates email through Resend, for both the API and Auth SMTP.
 - `CF_DNS_API_TOKEN`: Authorises Cloudflare DNS and zone administration.
 
+`confirm-phone` adds no credential. It reuses `SUPABASE_SERVICE_ROLE_KEY`, `CALLE_API_KEY` and `ORMA_WEBHOOK_SECRET`. The code itself never leaves the server in production. The database keeps only a salted SHA-256 hash of it.
+
 ## Consent and numbers
 
 Orma accepts phone numbers in E.164 format only. The format requires a leading plus sign followed by 8 to 15 digits (`^\+[1-9]\d{7,14}$`). All documentation and examples use fictional numbers such as `+15555550100` or masked representations such as `+1 ••• ••• 0100`.
@@ -365,6 +378,38 @@ Orma will phone +15555550100 at the times you choose. Calls are placed through C
 ```
 
 Onboarding does not require consent. A user can skip it, and onboarding then writes no consent row. The dispatcher in `supabase/functions/_shared/calle.ts` refuses every run for a profile without live consent. It marks the run `canceled` and never contacts CALL-E.
+
+### Number confirmation
+
+Anyone can sign up for Orma. So a typed number proves nothing, and Orma places no daily call until the person holding that phone proves they asked for it.
+
+**The guard.** `profiles.phone_confirmed_at` belongs to the server. The trigger `guard_profile_phone_confirmation` runs before every insert and update on `profiles`. For any caller except the service role and `verify_phone_code`, it behaves as follows:
+- An insert always stores `phone_confirmed_at` as null.
+- An update that keeps `phone_e164` keeps the old value, whatever the request sent.
+- An update that changes `phone_e164` clears it. A second trigger expires that user's open confirmation rows at the same moment.
+
+The dispatcher refuses any run whose profile lacks a number or `phone_confirmed_at`, with "profile has no confirmed E.164 number". That one check covers `tick`, `materialise` and MCP alike.
+
+**Asking for the call.** The last onboarding step and the Settings phone card both show "Call me with a code". It posts to `confirm-phone`, which takes no user id and no number. The caller's JWT names the user, and the profile supplies the number. The function then checks the following in order:
+1. The profile has an E.164 number, or it answers 422.
+2. The number is not already confirmed, or it answers 409.
+3. A live `outbound_calls` consent exists, or it answers 422.
+4. The account made no attempt in the last 10 minutes. If it did, the function returns that attempt's state and places no call.
+5. The account has made fewer than 3 attempts, and the number fewer than 5 across all accounts, since midnight UTC. Otherwise it answers 429.
+
+A trigger on `phone_confirmations` enforces the same three limits under advisory locks, so two racing requests cannot pass them together.
+
+**The call.** The function draws a six-digit code from `crypto.getRandomValues` and stores a salted SHA-256 hash, never the code. The row expires 10 minutes after creation. It places exactly one CALL-E call with the idempotency key `orma:confirm:<row id>` and `metadata.phone_confirmation_id`. The call says it is Orma and that someone asked Orma to call this number. It reads the code digit by digit, twice. It says that if you did not ask for this, hang up and Orma will not call again. It asks nothing and captures nothing.
+
+**Entering the code.** The user types the six digits, and the page calls the RPC `verify_phone_code(code)`. It is `security definer`, granted to `authenticated` only, and acts on `auth.uid()`. It checks the newest `requested` or `dialled` row that has not expired and whose number still equals the profile's number. A match marks the row `confirmed` and sets `profiles.phone_confirmed_at`. Each wrong code adds one attempt, and the fifth wrong code expires the row. The RPC returns only true or false.
+
+The owner may read a row's `id`, `state`, `created_at`, `expires_at` and `confirmed_at`. Nobody but the service role reads `code_hash` or writes the table.
+
+**No automatic redial.** Nothing retries a confirmation call. If dispatch fails, the row becomes `failed` and the function answers 502. `calle-webhook` routes events that carry `phone_confirmation_id` to that row alone. A completed call marks it `dialled`, a failed call `failed`, and anything else `refused`. Those events never touch `call_runs` and never ingest. A code from a `failed` or `refused` row no longer verifies. The user asks again, within the limits.
+
+**Once placed, the call cannot be recalled.** Orma has no way to stop a confirmation call after CALL-E accepts it.
+
+**If someone enters your number.** Your phone rings once from a number you will not recognise. You hear that someone asked Orma to call, a six-digit code read twice, and the advice to hang up. Without that code nobody can confirm your number, so no daily call follows. The same account cannot ring you again for 10 minutes, or more than 3 times in a UTC day. No number receives more than 5 confirmation calls in a UTC day, across all accounts.
 
 ## Surfaces
 
@@ -390,6 +435,8 @@ Orma relies on six third-party services:
 
 2. **Unrecognised incoming numbers and spam flags**: Outbound calls originate from rotating telephone numbers provided by CALL-E. Because caller numbers rotate across calls, callees cannot save a static contact in advance. Handsets may display unrecognised numbers or automated spam warnings. The Today screen tells users the call comes from a number they won't recognise.
 
+3. **A confirmation call cannot be recalled**: Once CALL-E accepts a confirmation call, Orma cannot stop it. The limits bound how often a number rings, not whether a placed call completes.
+
 ## Screens
 
 These are screenshots of the running web app on the local stack, at a 390 by 844 viewport. They show the harness account `local@example.com` with its fictional name and 555 number, not the demo seed.
@@ -405,3 +452,9 @@ These are screenshots of the running web app on the local stack, at a 390 by 844
 | Patterns | Settings |
 |---|---|
 | ![Patterns screen](docs/screens/patterns.png) | ![Settings screen](docs/screens/settings.png) |
+
+| Confirm your number |
+|---|
+| ![The phone confirmation step at the end of onboarding](docs/screens/confirm-number.png) |
+
+The last image is the final onboarding step for the harness account `firstrun@example.com`, before any call is requested.

@@ -72,7 +72,8 @@ export function createConfirmPhoneHandler(deps = depsFromEnv()): (request: Reque
       const patched = await deps.fetch(url(deps.apiUrl, "phone_confirmations", new URLSearchParams({ id: `eq.${confirmation.id}` }).toString()), { method: "PATCH", headers: headers(deps.serviceRoleKey), body: JSON.stringify(patch) });
       if (!patched.ok) throw new Error("confirmation dispatch record failed");
       const body: Record<string, unknown> = { id: confirmation.id, state: "dialled", expires_at: row.expires_at };
-      if (deps.getEnv?.("ORMA_ENV") !== "production") body.code = rawCode;
+      // Only a dry run outside production returns the code. A live call is the proof.
+      if (dispatched.mode === "dry_run" && deps.getEnv?.("ORMA_ENV") !== "production") body.code = rawCode;
       return publicResponse(body);
     } catch {
       await deps.fetch(url(deps.apiUrl, "phone_confirmations", new URLSearchParams({ id: `eq.${confirmation.id}` }).toString()), { method: "PATCH", headers: headers(deps.serviceRoleKey), body: JSON.stringify({ state: "failed" }) });

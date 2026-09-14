@@ -70,6 +70,16 @@ pass = "env(RESEND_API_KEY)"
 admin_email = "env(RESEND_FROM)"
 sender_name = "Orma"
 
+# Email links go straight to the app callback. The default links point at the
+# project host, which some networks cannot reach.
+[auth.email.template.magic_link]
+subject = "Your Orma sign-in link"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.confirmation]
+subject = "Confirm your Orma account"
+content_path = "./supabase/templates/confirmation.html"
+
 # The live project allows TOTP enrollment and verification, so the rebuild
 # matches it.
 [auth.mfa.totp]

@@ -12,7 +12,7 @@
 	let busy = $state(false)
 	let now = $state(Date.now())
 
-	const resendAt = $derived(expiresAt ? new Date(expiresAt).getTime() - 10 * 60_000 : 0)
+	const resendAt = $derived(expiresAt ? new Date(expiresAt).getTime() : 0)
 	const canResend = $derived(!expiresAt || now >= resendAt)
 	const resendLabel = $derived(
 		!expiresAt
