@@ -1,0 +1,167 @@
+/*
+ * Orma app tokens from design/orma-app/System.dc.html, light then dark.
+ * Classes carry an o- prefix, so they never collide with page-scoped styles.
+ */
+
+:root {
+	color-scheme: light dark;
+	--o-paper: #fbfaf8;
+	--o-ink: #22201c;
+	--o-muted: #716b61;
+	--o-rule: #d8d2c6;
+	--o-hair: #e6e1d7;
+	--o-line: #948f83;
+	--o-plum: #7a5283;
+	--o-wash: #f6ecf8;
+	--o-danger: #8a2b2b;
+	--o-on-accent: #fbfaf8;
+	--o-serif: 'Source Serif 4', ui-serif, Georgia, 'Times New Roman', serif;
+	--o-mono: 'Source Code Pro', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--o-paper: #14130f;
+		--o-ink: #e8e4dc;
+		--o-muted: #938c80;
+		--o-rule: #3a352c;
+		--o-hair: #2a2620;
+		--o-line: #6e685e;
+		--o-plum: #cfa7d8;
+		--o-wash: #271e29;
+		--o-danger: #e08a8a;
+		--o-on-accent: #14130f;
+	}
+}
+
+.o-app {
+	background: var(--o-paper);
+	color: var(--o-ink);
+	font: 16px/1.6 var(--o-serif);
+	font-optical-sizing: auto;
+	font-variant-numeric: lining-nums tabular-nums;
+	-webkit-font-smoothing: antialiased;
+	min-height: 100vh;
+	box-sizing: border-box;
+}
+.o-app *,
+.o-app *::before,
+.o-app *::after {
+	box-sizing: border-box;
+}
+.o-app a {
+	color: var(--o-plum);
+	text-underline-offset: 3px;
+}
+.o-app a:hover {
+	text-decoration-thickness: 2px;
+}
+.o-app p {
+	margin: 0;
+	text-wrap: pretty;
+}
+.o-h1 {
+	font-size: 2rem;
+	line-height: 1.15;
+	margin: 0;
+	letter-spacing: -0.01em;
+	font-weight: 600;
+}
+.o-h2 {
+	font-size: 0.8rem;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--o-muted);
+	margin: 0;
+	font-weight: 600;
+}
+.o-mono {
+	font-family: var(--o-mono);
+	font-size: 0.8rem;
+	letter-spacing: 0;
+}
+.o-muted {
+	color: var(--o-muted);
+}
+.o-gloss {
+	color: var(--o-muted);
+	font-size: 0.95rem;
+}
+.o-label {
+	font-size: 0.75rem;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--o-muted);
+	font-weight: 600;
+}
+.o-hint {
+	font-size: 0.9rem;
+	color: var(--o-muted);
+	line-height: 1.5;
+}
+.o-stack {
+	display: flex;
+	flex-direction: column;
+}
+.o-row {
+	display: flex;
+	align-items: center;
+}
+.o-wash {
+	background: var(--o-wash);
+	border-radius: 6px;
+}
+.o-btn {
+	font: inherit;
+	font-size: 0.95rem;
+	font-weight: 500;
+	min-height: 44px;
+	padding: 0 1.1rem;
+	border-radius: 4px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	border: 1px solid transparent;
+	cursor: pointer;
+	white-space: nowrap;
+	text-decoration: none;
+}
+.o-app a.o-btn-primary,
+.o-btn-primary {
+	background: var(--o-plum);
+	color: var(--o-on-accent);
+}
+.o-app a.o-btn-secondary,
+.o-btn-secondary {
+	background: transparent;
+	color: var(--o-ink);
+	border-color: var(--o-line);
+}
+.o-app a.o-btn-text,
+.o-btn-text {
+	background: transparent;
+	color: var(--o-plum);
+	padding: 0 0.5rem;
+	min-width: 44px;
+}
+.o-tag {
+	font-family: var(--o-mono);
+	font-size: 0.7rem;
+	letter-spacing: 0.02em;
+	padding: 0.05rem 0.4rem;
+	border: 1px solid var(--o-line);
+	border-radius: 3px;
+	color: var(--o-muted);
+	white-space: nowrap;
+}
+.o-link-button {
+	font: inherit;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--o-plum);
+	cursor: pointer;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}

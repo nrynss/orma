@@ -15,8 +15,20 @@ import {
   prepareOnboarding,
   shownConsentWording,
 } from "./model.ts"
-import { lookupProfileExists } from "./profile-gate.ts"
+import { lookupProfileExists, postAuthPath } from "./profile-gate.ts"
 import { submitOnboarding } from "./submit.ts"
+
+// T6.1: a finished profile lands on Today, after login and after onboarding.
+if (postAuthPath(true) !== "/app") fail("a finished profile did not land on /app")
+if (postAuthPath(false) !== "/app/onboarding") fail("a missing profile did not go to onboarding")
+// svelte-check carries no Node types, so the fs module is typed by hand here.
+const fsModule = "node:" + "fs"
+const { readFileSync } = (await import(fsModule)) as {
+  readFileSync: (path: URL, encoding: "utf8") => string
+}
+const onboardingPage = readFileSync(new URL("./+page.svelte", import.meta.url), "utf8")
+if (!onboardingPage.includes("goto('/app')")) fail("onboarding submit does not go to /app")
+if (onboardingPage.includes("goto('/app/settings')")) fail("onboarding submit still goes to Settings")
 
 const USER_ID = "00000000-0000-4000-8000-000000000099"
 const ANON = "anon-publishable-key-fixture"

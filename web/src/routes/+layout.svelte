@@ -28,17 +28,20 @@
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
+<!-- Inside /app the app layout carries the navigation, so the shell bar stays out. -->
+{#if !(page.url.pathname === '/app' || page.url.pathname.startsWith('/app/'))}
 <nav class="shell-bar">
 	<a href="/">Orma</a>
 	<span class="shell-actions">
 		{#if data.session}
-			<a href="/app/settings">Settings</a>
+			<a href="/app">Today</a>
 			<button type="button" onclick={signOut}>Sign out</button>
 		{:else if !page.url.pathname.startsWith('/login')}
 			<a href="/login">Sign in</a>
 		{/if}
 	</span>
 </nav>
+{/if}
 
 {@render children()}
 

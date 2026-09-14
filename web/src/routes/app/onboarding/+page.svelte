@@ -98,7 +98,7 @@
 					timeZone
 				}
 			)
-			await goto('/app/settings')
+			await goto('/app')
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Could not save onboarding'
 		} finally {

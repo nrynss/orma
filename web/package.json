@@ -8,7 +8,7 @@
 		"build": "node scripts/with-public-env.mjs vite build && printf '_worker.js\\n_routes.json\\n_headers\\n' > .svelte-kit/cloudflare/.assetsignore",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
-		"check": "node scripts/check-no-secret-key.mjs && node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/check-telegram-link-headers.ts && node scripts/check-auth-telegram-headers.mjs && node --experimental-strip-types --disable-warning=ExperimentalWarning src/routes/app/onboarding/check.ts && node scripts/with-public-env.mjs svelte-kit sync && node scripts/with-public-env.mjs svelte-check --tsconfig ./tsconfig.json",
+		"check": "node scripts/check-no-secret-key.mjs && node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/check-telegram-link-headers.ts && node scripts/check-auth-telegram-headers.mjs && node --experimental-strip-types --disable-warning=ExperimentalWarning src/routes/app/onboarding/check.ts && node --experimental-strip-types --disable-warning=ExperimentalWarning src/lib/today/check.ts && node scripts/with-public-env.mjs svelte-kit sync && node scripts/with-public-env.mjs svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "node scripts/with-public-env.mjs svelte-kit sync && node scripts/with-public-env.mjs svelte-check --tsconfig ./tsconfig.json --watch",
 		"deploy": "npm run build && wrangler deploy",
 		"cf-typegen": "wrangler types",

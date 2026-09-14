@@ -13,8 +13,9 @@ export type ProfileLookup = {
   fetch?: typeof fetch
 }
 
-export function postAuthPath(hasProfile: boolean): "/app/onboarding" | "/app/settings" {
-  return hasProfile ? "/app/settings" : "/app/onboarding"
+/** A finished profile lands on Today. An account with no profile goes to onboarding first. */
+export function postAuthPath(hasProfile: boolean): "/app/onboarding" | "/app" {
+  return hasProfile ? "/app" : "/app/onboarding"
 }
 
 export function isOnboardingPath(path: string): boolean {
