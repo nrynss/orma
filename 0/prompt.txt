@@ -297,3 +297,7 @@ Everything on the done-when list holds on the local stack:
 The stack is torn down with zero `orma-p6-local` containers left. I printed no secret and made no production or linked-project request. The only file I wrote is `/home/nryn/work/orma/dev-diary/adversarial-review/t8.1-round2.md`.</result>
 <usage><subagent_tokens>150362</subagent_tokens><tool_uses>37</tool_uses><duration_ms>436097</duration_ms></usage>
 </task-notification>
+
+---
+
+commit and push
