@@ -392,3 +392,7 @@ A scan of the prose found no em dashes, no semicolons, no sentence over 30 words
 * **Other changes in the repo:** `git status` also shows `dev-diary/PHASE-8-ship.md` modified and two untracked files, `devpost-submission.md` and `.devpost-hackathon-state.json`. None of these are mine.</result>
 <usage><subagent_tokens>149532</subagent_tokens><tool_uses>47</tool_uses><duration_ms>425823</duration_ms></usage>
 </task-notification>
+
+---
+
+Update docs to compelte T8.3 and commit and push.  Remove devpost files. I have already added them in Dev Post
