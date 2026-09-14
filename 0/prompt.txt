@@ -1,0 +1,66 @@
+<task-notification>
+<task-id>ac40157c854dde0fb</task-id>
+<tool-use-id>toolu_019A8MjZM2x8hR8FzezsiVB1</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/c1950000-44d4-459a-a37e-f4411f2ae47a/tasks/ac40157c854dde0fb.output</output-file>
+<status>completed</status>
+<summary>Agent "Implement T6.1 Today" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>T6.1 (Today) is built and all changes are left uncommitted in the working tree on `main`. `npm run check` passes with 0 errors and 0 warnings, and `npm run build` succeeds. The harness came up, every measurement matched my SQL counts, and I tore it down. No contract change was needed: every edit is on the owns line.
+
+**What was built**
+- **`/app`**: rendered in the browser and read-only. It has four states picked from `call_runs` rows:
+  - **Live:** a run in claimed, dispatched or awaiting_result shows "Calling now" and refreshes every 15 seconds.
+  - **First run:** no call ever placed or attempted.
+  - **Normal:** next call, last call summary and open items.
+  - **Error:** a failed read shows the message instead of blank panels.
+- **Times:** every time renders in the profile's timezone. "Cancel this call" and "Change time" link to `/app/settings`.
+- **Last call counts:** they come from rows on that run. A commitment's own mention is not counted twice. Duration shows only when `transcripts.raw` has CALL-E's start and end times, and the seed has neither.
+- **App navigation:** `/app/+layout.svelte` has a sidebar on desktop and a header with tabs on phone, with the current page marked. Onboarding keeps a plain wordmark header, matching its design. The root shell bar is hidden inside `/app`.
+- **Post-login path:** `postAuthPath` returns `/app` for a finished profile, and onboarding submit goes to `/app`. The onboarding check asserts both.
+- **Shared UI:** `web/src/lib/ui/` holds the tokens (light and dark, classes prefixed `o-`) and small components for T6.2 to T6.6.
+- **Helpers and check:** `web/src/lib/today/` holds the pure helpers, the data loader and a check script, now part of `npm run check`. The check runs as if the browser were in Los Angeles. It covers the profile-zone render, next-run selection, first-run detection and mention counts equal to rows.
+
+**Harness**
+```sh
+scripts/p6-local-stack.sh up        # ports 58320-58329, refuses if any is taken
+cd web &amp;&amp; env $(../scripts/p6-local-stack.sh env) npm run dev -- --port 5199
+scripts/p6-local-stack.sh down
+```
+- **Accounts:** `local@example.com` is the seed plus a future scheduled run and an earlier canceled one. `firstrun@example.com` has no calls and a New York profile. `live@example.com` has a run in progress. All use `local-dev-password`.
+- **Signing in:** magic link doesn't work locally, so sign in from the browser console with the app's own client. The handoff has the snippet.
+- **Scope:** the script never uses the linked project.
+- **One fix made:** `supabase start` prints the local secret keys, so I filter its output. A rerun printed no key text.
+
+**Measurements**
+- **Signed out:** `/app` redirects to `/login`, and `/login` has no Sign in link.
+- **Signed in:** `/login` redirects to `/app` for all three accounts.
+- **Seed account:** next call "Tomorrow, 08:00" (Asia/Kolkata), skipping the earlier canceled run. The last call shows 3 mentions and 1 commitment at 0:08, with 0 retired. Open items show 4 at 1, 1, 1 and 0 mentions, aged 34, 21, 8 and 2 days. SQL gives the same numbers.
+- **First-run account:** "Welcome, First Run", "Sunday 13 September", "Tomorrow, 08:00". My browser was in Asia/Calcutta and would have shown Monday and "Today, 17:30", so the page follows the profile's zone.
+- **Live account:** "Your 04:39 call" (London time) with the step timestamps from its row.
+- **Navigation:** one nav and no shell bar on Settings, with the current page marked. Light mode, dark mode and phone width all render.
+- **Teardown:** 0 containers, 0 volumes and no workdir remain. The other agents' stacks were not touched.
+
+**Open questions**
+- The harness's scheduled run goes stale once its 08:00 passes. Running `down` then `up` creates a fresh one.
+- Open items are sorted by mention count, then age. The design doesn't state a rule.
+- The live state lists open items rather than the design's "On today's call" order. That order lives in `call_runs.briefing`, which T6.1 doesn't parse.
+
+The full run steps, every measurement and a few gotchas are in `/home/nryn/work/orma/dev-diary/adversarial-review/t6.1-handoff.md`.
+
+**Files**
+- **New:**
+  - `/home/nryn/work/orma/web/src/routes/app/+page.svelte`
+  - `/home/nryn/work/orma/web/src/routes/app/+page.ts`
+  - `/home/nryn/work/orma/web/src/routes/app/+layout.svelte`
+  - `/home/nryn/work/orma/web/src/lib/today/` (`model.ts`, `load.ts`, `check.ts`)
+  - `/home/nryn/work/orma/web/src/lib/ui/` (`tokens.css`, `nav.ts`, `AppNav.svelte`, `MoodMarker.svelte`, `ItemLine.svelte`, `LiveDot.svelte`, `index.ts`)
+  - `/home/nryn/work/orma/scripts/p6-local-stack.sh`
+  - `/home/nryn/work/orma/dev-diary/adversarial-review/t6.1-handoff.md`
+- **Edited:**
+  - `/home/nryn/work/orma/web/package.json`
+  - `/home/nryn/work/orma/web/src/routes/+layout.svelte`
+  - `/home/nryn/work/orma/web/src/routes/app/onboarding/profile-gate.ts`
+  - `/home/nryn/work/orma/web/src/routes/app/onboarding/+page.svelte`
+  - `/home/nryn/work/orma/web/src/routes/app/onboarding/check.ts`</result>
+<usage><subagent_tokens>226022</subagent_tokens><tool_uses>82</tool_uses><duration_ms>971021</duration_ms></usage>
+</task-notification>
