@@ -62,7 +62,7 @@ requires:   T6.1
 fixture-ok: yes
 size:       M · mid
 owns:       web/src/routes/app/history/
-status:     not-started
+status:     claimed:T63Impl
 ```
 Calls in reverse order with summary, disposition, mood and the full transcript as turns with offsets.
 
@@ -79,8 +79,9 @@ An evidence offset on a retirement links into the transcript at that moment, whi
 requires:   T6.1, soft T7.3
 fixture-ok: yes
 size:       M · mid
-owns:       web/src/routes/app/patterns/
-status:     not-started
+owns:       web/src/routes/app/patterns/,
+            scripts/p6-local-stack.sh (fixture pattern_reports row only)
+status:     claimed:T64Impl
 ```
 Pattern reports in writing, with the mood trend across the period.
 
@@ -116,7 +117,7 @@ requires:   T6.1, T2.9
 fixture-ok: yes
 size:       S · mid
 owns:       web/src/routes/app/timeline/
-status:     not-started
+status:     claimed:T66Impl
 ```
 `call_events` for your own account, in order, with the detail payloads expandable.
 
@@ -152,7 +153,7 @@ requires:   T5.1
 fixture-ok: yes
 size:       S · mid
 owns:       web/src/routes/+page.svelte
-status:     not-started
+status:     done
 ```
 Added at the P6 claim. Spec §11 gives `/` what Orma is, the thesis, and one call recording, server rendered. No task owned it. The footer still reads "Not yet open for sign-ups", although T5.1 opened sign-up for judges.
 

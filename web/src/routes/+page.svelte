@@ -1,3 +1,69 @@
+<script lang="ts">
+	import { onDestroy, onMount } from 'svelte'
+
+	const lines = [
+		{ who: 'Orma', text: "You've mentioned the dentist three times. It's been 34 days." },
+		{ who: 'You', text: 'Kill it.' },
+		{ who: 'Orma', text: "Done. It's gone." }
+	]
+
+	let supported = $state(false)
+	let playing = $state(false)
+	let active = $state(-1)
+
+	function reset() {
+		playing = false
+		active = -1
+	}
+
+	function speakLine(index: number) {
+		const utterance = new SpeechSynthesisUtterance(lines[index].text)
+		if (lines[index].who === 'You') {
+			utterance.pitch = 1.5
+		}
+		utterance.onend = () => {
+			if (playing && index + 1 < lines.length) {
+				active = index + 1
+				speakLine(index + 1)
+			} else {
+				reset()
+			}
+		}
+		utterance.onerror = () => {
+			reset()
+		}
+		window.speechSynthesis.speak(utterance)
+	}
+
+	function play() {
+		if (!supported || playing) {
+			return
+		}
+		window.speechSynthesis.cancel()
+		playing = true
+		active = 0
+		speakLine(0)
+	}
+
+	function stop() {
+		if (!supported) {
+			return
+		}
+		window.speechSynthesis.cancel()
+		reset()
+	}
+
+	onMount(() => {
+		supported = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window
+	})
+
+	onDestroy(() => {
+		if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+			window.speechSynthesis.cancel()
+		}
+	})
+</script>
+
 <svelte:head>
 	<title>Orma — it remembers what you keep not doing</title>
 	<meta name="description" content="A daily two-minute accountability call. It rings at a time you chose, leads with what you keep not doing, asks what needs capturing, and hangs up." />
@@ -45,8 +111,38 @@
 		</p>
 	</section>
 
+	<section class="demo" aria-label="Synthetic demo">
+		<h2>Synthetic demo</h2>
+		<p class="demo-note">No real person, no real call. Not production evidence.</p>
+		<ol>
+			{#each lines as line, i}
+				<li class:active={active === i}><span class="who">{line.who}</span>{line.text}</li>
+			{/each}
+		</ol>
+		{#if supported}
+			<p class="controls">
+				<button onclick={play} disabled={playing}>Play synthetic audio</button>
+				<button onclick={stop} disabled={!playing}>Stop</button>
+			</p>
+		{:else}
+			<p class="controls">
+				<button disabled>Play synthetic audio</button>
+			</p>
+			<p class="demo-note">
+				Synthetic audio needs speech synthesis. This browser does not offer it.
+			</p>
+		{/if}
+	</section>
+
+	<section>
+		<h2>Get started</h2>
+		<p>
+			Sign up or sign in through the <a href="/login">login page</a>.
+		</p>
+	</section>
+
 	<footer>
-		<p>Built for CALL-E. Not yet open for sign-ups.</p>
+		<p>Built for CALL-E. Sign up through the <a href="/login">login page</a>.</p>
 	</footer>
 </main>
 
@@ -104,6 +200,52 @@
 		font-size: 0.8rem;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
+	}
+	.demo {
+		margin-top: 3rem;
+		padding: 1.25rem 1.25rem 1rem;
+		border: 1px solid light-dark(#e6e1d7, #2a2620);
+		border-radius: 0.75rem;
+		background: light-dark(#fffdf9, #1a1813);
+	}
+	.demo h2 {
+		margin-top: 0;
+	}
+	.demo-note {
+		color: light-dark(#7a746a, #938c80);
+		font-size: 0.9rem;
+	}
+	.demo ol {
+		list-style: none;
+		margin: 1rem 0;
+		padding: 0;
+	}
+	.demo li {
+		margin: 0.4rem 0;
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.375rem;
+	}
+	.demo li.active {
+		background: light-dark(#f0ebe0, #2a2620);
+	}
+	.controls {
+		display: flex;
+		gap: 0.75rem;
+		margin-bottom: 0;
+	}
+	.controls button {
+		font: inherit;
+		font-size: 0.9rem;
+		padding: 0.4rem 0.9rem;
+		border-radius: 0.5rem;
+		border: 1px solid light-dark(#d8d2c6, #3a352c);
+		background: light-dark(#22201c, #e8e4dc);
+		color: light-dark(#fbfaf8, #14130f);
+		cursor: pointer;
+	}
+	.controls button:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 	footer {
 		margin-top: 4rem;
