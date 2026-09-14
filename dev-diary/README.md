@@ -166,7 +166,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P6 | 8 / 8 | **P6 e2e clean and live.** History, Patterns, Timeline, landing and the fixed owner actions are deployed. Migration applied, types regenerated. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
 | P8 | 2 / 6 | **In progress.** T8.1 seed and T8.3 README landed. T8.4 waits on P9 and P10, and T8.5 on T8.4 and P10. |
-| P9 | 9 / 9 | **Complete, review approved, not deployed.** T9.9 closed the phase with zero findings and 41 of 41 P6 pins. The deploy waits on the operator's go-ahead. |
+| P9 | 9 / 9 | **Complete, reviewed, deployed.** T9.9 closed the phase with zero findings and 41 of 41 P6 pins. Deployed to orma.nryn.dev on the operator's go. |
 
 ---
 
@@ -1500,3 +1500,11 @@ Production is HTTPS and unaffected.
 
 **Nothing is deployed.** The phase doc gates the deploy on the operator's
 go-ahead, which has not been given yet.
+
+### 2026-09-14 · P9 deployed on the operator's go
+
+The operator approved the deploy. The review commit and the wave before it
+went to `main`, then `npm run deploy` in `web/` shipped worker version
+`bb3e415b` to `orma.nryn.dev`. Verified live: the landing carries the new
+hero, the demo label and note, and three login links, and the signed-out app
+routes still 303 to `/login`. T8.4 can record.
