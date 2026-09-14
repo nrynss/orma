@@ -81,7 +81,7 @@ fixture-ok: yes
 size:       M · mid
 owns:       web/src/routes/app/patterns/,
             scripts/p6-local-stack.sh (fixture pattern_reports row only)
-status:     claimed:T64Impl
+status:     done
 ```
 Pattern reports in writing, with the mood trend across the period.
 

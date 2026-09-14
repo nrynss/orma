@@ -208,13 +208,39 @@ insert into public.item_mentions (item_id, call_run_id, offset_seconds, created_
 values
   ('30000000-0000-4000-8000-0000000000c1', null, null, now() - interval '9 days'),
   ('30000000-0000-4000-8000-0000000000c1', null, null, now() - interval '4 days');
-
 -- The dispatcher stores the briefing before it places a call. The live run carries one from the real SQL.
 update public.call_runs
    set briefing = public.assemble_briefing('00000000-0000-4000-8000-0000000000c1', '08:00', now())
  where id = '4f000000-0000-4000-8000-0000000000c1';
 
-commit;
+-- Three earlier completed morning runs for the Patterns mood trend. Together
+-- with the seed completed run they give four moods across four observed days.
+insert into public.call_runs (id, user_id, slot_id, local_date, part_of_day, scheduled_for, state, disposition, mood, idempotency_key, completed_at, dry_run)
+values
+  ('4f000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', ((now() - interval '2 days') at time zone 'Asia/Kolkata')::date, 'morning', now() - interval '2 days', 'completed', 'answered_extracted', 'ok', 'orma:harness-p6:mood-ok:v1', now() - interval '2 days', true),
+  ('4f000000-0000-4000-8000-000000000012', '00000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', ((now() - interval '3 days') at time zone 'Asia/Kolkata')::date, 'morning', now() - interval '3 days', 'completed', 'answered_extracted', 'low', 'orma:harness-p6:mood-low:v1', now() - interval '3 days', true),
+  ('4f000000-0000-4000-8000-000000000013', '00000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', ((now() - interval '4 days') at time zone 'Asia/Kolkata')::date, 'morning', now() - interval '4 days', 'completed', 'answered_extracted', 'stressed', 'orma:harness-p6:mood-stressed:v1', now() - interval '4 days', true);
+
+-- The fixture pattern report. Facts come from the real compute_pattern_facts
+-- SQL over the last seven complete local days, so every number in the prose
+-- below is one of them: 7 days, 4 answered calls, 1 of each mood.
+with report_window as (
+  select ((now() at time zone 'Asia/Kolkata')::date - 7) as period_start, ((now() at time zone 'Asia/Kolkata')::date - 1) as period_end
+)
+insert into public.pattern_reports (user_id, period_start, period_end, facts, prose)
+select
+  '00000000-0000-4000-8000-000000000001',
+  period_start,
+  period_end,
+  public.compute_pattern_facts('00000000-0000-4000-8000-000000000001', period_start, period_end),
+  'Across 7 days you answered 4 calls. The calls heard you as energised 1 time, ok 1 time, low 1 time and stressed 1 time.'
+from report_window;
+
+-- The pattern delivery that renders the sent line on the Patterns page.
+insert into public.deliveries (user_id, channel, kind, call_run_id, payload, sent_at)
+values ('00000000-0000-4000-8000-000000000001', 'telegram', 'pattern', null, '{"harness":"pattern"}'::jsonb, now() - interval '1 day');
+
+ commit;
 SQL
 }
 
