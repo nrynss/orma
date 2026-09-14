@@ -1,0 +1,84 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2FX5PRHVNKZYTTJFA33SXNY",
+  "session_id": "c1950000-44d4-459a-a37e-f4411f2ae47a",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-14T12:09:52.170306934Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "save_step_count": 2,
+  "files_touched": [
+    "dev-diary/PHASE-8-ship.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5",
+  "turn_id": "46f848b6e1e2",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 3890,
+    "cache_creation_tokens": 644886,
+    "cache_read_tokens": 37042390,
+    "output_tokens": 187186,
+    "api_call_count": 155,
+    "subagent_tokens": {
+      "input_tokens": 448,
+      "cache_creation_tokens": 93957,
+      "cache_read_tokens": 1646194,
+      "output_tokens": 31770,
+      "api_call_count": 14
+    }
+  },
+  "session_metrics": {
+    "turn_count": 30
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-14T12:09:51.860352183Z",
+    "agent_lines": 1,
+    "agent_removed": 1,
+    "human_added": 1246,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1247,
+    "total_lines_changed": 1248,
+    "agent_percentage": 0.16025641025641024,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 2017,
+      "user_lines_removed": 6,
+      "agent_lines_added": 167,
+      "agent_lines_removed": 122,
+      "user_added_per_file": {
+        ".devpost-hackathon-state.json": 38,
+        "dev-diary/PHASE-9-ui.md": 1,
+        "dev-diary/adversarial-review/p9-contract-change.md": 1,
+        "dev-diary/adversarial-review/t8.1-remediation-round1.md": 28,
+        "dev-diary/adversarial-review/t9.2-handoff.md": 371,
+        "scripts/seed.ts": 1218,
+        "web/src/app.html": 1,
+        "web/src/lib/assets/orma-wordmark-dark.svg": 10,
+        "web/src/lib/assets/orma-wordmark-light.svg": 10,
+        "web/src/lib/shell/AccountMenu.svelte": 141,
+        "web/src/lib/shell/TabBar.svelte": 74,
+        "web/src/lib/shell/TabIcon.svelte": 53,
+        "web/src/lib/shell/Wordmark.svelte": 61,
+        "web/src/lib/shell/index.ts": 8,
+        "web/src/routes/app/+layout.svelte": 2
+      },
+      "user_removed_per_file": {
+        "dev-diary/PHASE-9-ui.md": 1,
+        "web/src/app.html": 1,
+        "web/src/routes/app/+layout.svelte": 4
+      }
+    }
+  ]
+}
