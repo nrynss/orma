@@ -1,0 +1,46 @@
+Separate from this task: three old local Supabase stacks from two days ago are still running (orma-t1-6-review ×2 and orma-seed-reset). The agents were told not to touch them. You may want to stop them to free memory.
+
+stop them
+
+---
+
+<task-notification>
+<task-id>ab068ea7420be3c20</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/c1950000-44d4-459a-a37e-f4411f2ae47a/tasks/ab068ea7420be3c20.output</output-file>
+<status>completed</status>
+<summary>Agent "Review T6.1 round 1" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: REMEDIATE.** Counts are C 0, H 1, M 3, L 1.
+
+The review is at `/home/nryn/work/orma/dev-diary/adversarial-review/t6.1-round1.md`.
+
+Findings:
+- **F1 (H):** the last-call summary marks an item "Retired" if it was mentioned on the call and retired at any later time. I retired "Renew the passport" in SQL a day after the seed call, the way a web retire would. Today then showed "RETIRED Renew the passport 0:02", though the call only mentioned it.
+- **F2 (M):** Today promises a call to an account with no live `outbound_calls` consent. The first-run account with consent revoked still read "Your first call Today, 08:00". The dispatcher refuses that run (`calle.ts:347-350`), and the page never reads `consents`.
+- **F3 (M):** the Today check misses six of the mutants I ran:
+  - a canceled run picked as last call
+  - a commitment mention counted twice
+  - Today and Tomorrow labels worked out in UTC
+  - `now` read in UTC for item age
+  - `addedLabel` in UTC
+  - a single pass in the DST conversion
+
+  Each still printed "today check passed".
+- **F4 (M):** the harness does not keep Settings local. `telegram-link.ts:16` hardcodes `https://orma-api.nryn.dev`, so Settings sends a local JWT to production and shows "profiles telegram read failed". The handoff doesn't mention this. The fix is outside the owns line, so it needs a contract change or a recorded limit.
+- **F5 (L):** the live state departs from `TodayLive.dc.html`. The page lists "Open · N" sorted by mentions instead of "On today's call" in briefing order. The first step also reads "Picked up by the scheduler" instead of "Picked up".
+
+What held up under my own measurements:
+- `npm run check` and `npm run build` both pass.
+- The seed, first-run and live accounts show the same counts and ages as my SQL.
+- Next run is picked and dated in the profile's zone. It skips canceled runs, and the labels rolled correctly when New York passed midnight.
+- A second user sees none of the first user's rows.
+- Every redirect is correct: signed out, `/login`, the magic-link callback, and a no-profile account to onboarding.
+- A failed read shows an error message, not blank panels.
+- Polling stops when you leave the page and when the run ends.
+- There is one nav on each `/app` page, and no secret key is in the bundle.
+- The harness refuses port collisions, prints no keys, and `down` leaves no containers, volumes, networks or workdir.
+
+Cleanup: `docker ps` shows no harness containers left. The dev server is stopped and the browser tab is closed. No mutant is in the repo, and the review file is my only write.</result>
+<usage><subagent_tokens>203938</subagent_tokens><tool_uses>63</tool_uses><duration_ms>797807</duration_ms></usage>
+</task-notification>

@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2F19YTWGJ0JJHMQYF4WTY03",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "dev-diary/PHASE-6-web-app.md",
+    "dev-diary/adversarial-review/t6.1-contract-change.md",
+    "dev-diary/adversarial-review/t6.1-round1.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 102,
+    "cache_creation_tokens": 2782,
+    "cache_read_tokens": 1113219,
+    "output_tokens": 2432,
+    "api_call_count": 5
+  }
+}
