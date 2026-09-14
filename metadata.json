@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2FVQHSE5KRM9RMQXGHNCK7E",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "dev-diary/PHASE-9-ui.md",
+    "dev-diary/README.md",
+    "web/src/app.html",
+    "web/src/lib/ui/AppNav.svelte",
+    "web/src/lib/ui/Badge.svelte",
+    "web/src/lib/ui/Button.svelte",
+    "web/src/lib/ui/Card.svelte",
+    "web/src/lib/ui/EmptyState.svelte",
+    "web/src/lib/ui/ItemLine.svelte",
+    "web/src/lib/ui/LiveDot.svelte",
+    "web/src/lib/ui/MoodMarker.svelte",
+    "web/src/lib/ui/Stat.svelte",
+    "web/src/lib/ui/index.ts",
+    "web/src/lib/ui/tokens.css"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3818,
+    "cache_creation_tokens": 638470,
+    "cache_read_tokens": 34732795,
+    "output_tokens": 181623,
+    "api_call_count": 150,
+    "subagent_tokens": {
+      "input_tokens": 0,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "output_tokens": 0,
+      "api_call_count": 0
+    }
+  }
+}
