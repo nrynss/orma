@@ -475,7 +475,7 @@ first-time visitor sees content rather than a spinner.
 
 | Route | Rendering | Content |
 |---|---|---|
-| `/` | SSR | What Orma is, the thesis, one call recording |
+| `/` | SSR | What Orma is, the thesis, one synthetic call demo, labelled, played in the browser |
 | `/login` | SSR | Magic link form and the Telegram widget |
 | `/app` | CSR | Next call, today's open items, last call summary |
 | `/app/items` | CSR | The list, retire, restore, set a since-date |

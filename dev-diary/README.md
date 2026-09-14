@@ -11,9 +11,9 @@ Where a phase document and specification conflict, the specification wins. Recor
 
 Each document provides complete context for an engineer starting cold.
 
-**Current status:** P0, P1, P2, P3, P4 and P5 are complete. Schema, policies, types,
-fixtures, validation and local seed data are frozen. Auth and the web
-shell are live.
+**Current status:** P0, P1, P2, P3, P4, P5, P6 and P7 are complete. Schema, policies, types,
+fixtures, validation and local seed data are frozen. Auth, the web
+app and the front door are live.
 
 P0 is complete. What exists is listed in [PHASE-0-ground.md](PHASE-0-ground.md): the repository, the Supabase project with its extensions and secrets, the deployed app and front door, the bot, verified email, and a proven CALL-E path. Start at P1.
 
@@ -158,11 +158,11 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 |---|---|---|
 | P0 | 2 / 2 | **Complete.** App at orma.nryn.dev, front door at orma-api.nryn.dev. |
 | P1 | 7 / 7 | Complete. Contracts are frozen. |
-| P2 | 12 / 12 | **Complete.** Every task and the e2e remediation landed, and the deployment carries the phase. The operator still owes the Vault scheduler key. |
+| P2 | 12 / 12 | **Complete.** Every task and the e2e remediation landed, and the deployment carries the phase. `ORMA_MATERIALISE_SECRET_KEY` is in Vault. |
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 4 / 4 | **Complete.** MCP live at `orma-api.nryn.dev/mcp`, six tools wired, docs published at `docs/mcp.md`. |
 | P5 | 4 / 4 | **P5 e2e clean.** Auth, Telegram bridge, web sessions, and onboarding are live. |
-| P6 | 8 / 8 | **Complete.** All pages landed: Today, Items, History, Patterns, Settings, Timeline, owner actions and landing. |
+| P6 | 8 / 8 | **P6 e2e clean and live.** History, Patterns, Timeline, landing and the fixed owner actions are deployed. Migration applied, types regenerated. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
 
@@ -1331,3 +1331,28 @@ standing. It returned REMEDIATE with three L findings, all overlong sentences in
 handoffs. Each lived in documentation, touched no code path, and needed reading only,
 so the orchestrator closed all three in the landing commit with no remediation round.
 P6 is e2e clean.
+
+### 2026-09-14 · P6 goes live, T6.7 fixed in production, docs corrected
+
+Production rejected direct deletes on `storage.objects` through its
+`protect_objects_delete` trigger, which the fixture stack lacked. Every account
+deletion failed, including with no files present. T6.7 reopened. The fix sets the
+session switch the trigger itself checks, scoped to the deletion transaction, and
+a new migration block mirrors the safeguard locally so the harness tests the real
+guard. Round 2 approved with zero findings and a push GO. The owner actions
+migration is now the only file pushed, both RPCs exist in production, and the
+generated types match production again, including the P7 facts function.
+
+The web app is deployed. The landing page no longer carries the closed sign-ups
+line. Earlier P6 entries saying undeployed and unpushed are out of date. The push
+covering them already landed.
+
+The user authorized the synthetic demo scope, so spec section 11 now names the
+labelled browser demo and no real recording is owed. The P2 Vault debt is paid.
+`ORMA_MATERIALISE_SECRET_KEY` sits in Vault.
+
+Two production signup attempts for a deletion drill never confirmed, because the
+confirmation mail errored. They may sit as unreachable unconfirmed users. Remove
+them from the dashboard with `delete from auth.users where email like
+'p6deletetest%'`. The drill stays open until someone runs it with a confirmed
+account.

@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -631,6 +636,7 @@ export type Database = {
         Args: { p_now?: string; p_slot_local_time: string; p_user_id: string }
         Returns: Json
       }
+      cancel_call_run: { Args: { run_id: string }; Returns: boolean }
       claim_due_call_runs: {
         Args: { p_limit?: number }
         Returns: {
@@ -667,11 +673,15 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      cancel_call_run: {
-        Args: { run_id: string }
-        Returns: boolean
+      compute_pattern_facts: {
+        Args: {
+          p_period_end: string
+          p_period_start: string
+          p_user_id: string
+        }
+        Returns: Json
       }
-      delete_my_account: { Args: Record<PropertyKey, never>; Returns: boolean }
+      delete_my_account: { Args: never; Returns: boolean }
       ingest_call_result: {
         Args: {
           p_call_run_id: string
