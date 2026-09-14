@@ -10,9 +10,9 @@ parallel: no
 
 **Goal:** A disclosed demo history, a deployment that survives judging, and a submission that explains itself.
 
-**No live call run.** The submission does not depend on real calls across days. T8.1 seeds the whole demo history and discloses it. T8.5 uses a labelled synthetic call, the same approach as the T6.8 landing demo.
+**No live call run.** The submission does not depend on real calls across days. T8.1 seeds the whole demo history and discloses it. T8.4 uses a labelled synthetic call, the same approach as the T6.8 landing demo.
 
-**Clock.** Submissions close 14 September at 23:45 SGT, which is 21:15 IST. T8.1, T8.4, T8.5 and T8.6 are the submission path. T8.3 must run before the project's first seven idle days, and T8.7 closes 18 September.
+**Clock.** Submissions close 14 September at 23:45 SGT, which is 21:15 IST. T8.1, T8.3, T8.4 and T8.5 are the submission path. T8.2 must run before the project's first seven idle days, and T8.6 closes 18 September.
 
 ---
 
@@ -34,7 +34,7 @@ The repository rejects tools that hide side effects, so this is disclosed rather
 
 ---
 
-### T8.3: Keepalive and backup
+### T8.2: Keepalive and backup
 ```yaml
 requires:   T1.1
 fixture-ok: yes
@@ -54,7 +54,7 @@ Copy the `env:` block from `.github/workflows/_env-example.yml` rather than writ
 
 ---
 
-### T8.4: Submission README ★
+### T8.3: Submission README ★
 ```yaml
 requires:   P2, P3, P4
 fixture-ok: yes
@@ -74,7 +74,7 @@ Note Telegram's Bot API under third-party integrations, and link the MCP configu
 
 ---
 
-### T8.5: Demo video ★
+### T8.4: Demo video ★
 ```yaml
 requires:   T8.1, T6.6, T6.8
 fixture-ok: yes
@@ -106,15 +106,15 @@ There is no incoming call screen to show, so start at the exchange. Do not stage
 
 ---
 
-### T8.6: Pull request and Devpost ★
+### T8.5: Pull request and Devpost ★
 ```yaml
-requires:   T8.4, T8.5
+requires:   T8.3, T8.4
 fixture-ok: yes
 size:       S · mid
 owns:       (operational)
 status:     not-started
 ```
-Open the pull request to `CALLE-AI/awesome-phone-call-agents` under `apps/`, following the contribution rules. Put that URL into the Devpost form along with the description, the video link, and the email on the CALL-E account. The live demo URL is optional and, given T8.3, worth including.
+Open the pull request to `CALLE-AI/awesome-phone-call-agents` under `apps/`, following the contribution rules. Put that URL into the Devpost form along with the description, the video link, and the email on the CALL-E account. The live demo URL is optional and, given T8.2, worth including.
 
 The description carries the same disclosure as the README: seeded history and a synthetic exchange.
 
@@ -124,7 +124,7 @@ Submissions close 14 September at 23:45 SGT, which is 21:15 IST.
 
 ---
 
-### T8.7: Feedback survey
+### T8.6: Feedback survey
 ```yaml
 requires:   none
 fixture-ok: yes
