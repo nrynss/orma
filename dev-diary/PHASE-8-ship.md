@@ -64,7 +64,7 @@ requires:   T1.1, T2.2
 fixture-ok: yes
 size:       S · frontier
 owns:       scripts/seed.ts
-status:     not-started
+status:     claimed:t8.1-impl
 ```
 The demo needs history that no run of real calls produced, so the seed carries all of it.
 
