@@ -2,6 +2,7 @@
 	import { invalidate } from '$app/navigation'
 	import { page } from '$app/state'
 	import { formatClock, formatDayLabel } from '$lib/today/model'
+	import { Badge, Button, SectionHeader } from '$lib/ui'
 	import {
 		glossFor,
 		groupByRun,
@@ -37,6 +38,14 @@
 		return `${formatDayLabel(run.scheduled_for, zone)}, ${formatClock(run.scheduled_for, zone)}`
 	}
 
+	/* Step colour, from the event itself. A failure reason reads red. */
+	function stepTone(event: TimelineEvent): 'brand' | 'success' | 'danger' {
+		const detail = (event.detail ?? {}) as Record<string, unknown>
+		if (typeof detail['failure_reason'] === 'string' && detail['failure_reason']) return 'danger'
+		if (event.kind === 'ingested' || event.kind === 'finalised') return 'success'
+		return 'brand'
+	}
+
 	function toggle(id: number) {
 		const next = new Set(openSteps)
 		if (next.has(id)) next.delete(id)
@@ -62,23 +71,29 @@
 
 <main class="timeline">
 	{#if data.error || !rows}
-		<section class="o-stack head"><h1 class="o-h1">Timeline</h1><p class="o-hint" role="alert">{data.error || 'Could not load your timeline.'}</p></section>
+		<section class="head">
+			<h1>Timeline</h1>
+			<p class="hint" role="alert">{data.error || 'Could not load your timeline.'}</p>
+		</section>
 	{:else if runs.length === 0}
-		<section class="o-stack head">
-			<h1 class="o-h1">Timeline</h1>
-			<p class="o-gloss">What happened to each call, step by step. Only your own runs.</p>
-			<p class="o-hint">No runs yet. Your timeline appears after the first call is scheduled.</p>
+		<section class="head">
+			<h1>Timeline</h1>
+			<p class="gloss">What happened to each call, step by step. Only your own runs.</p>
+			<p class="hint">No runs yet. Your timeline appears after the first call is scheduled.</p>
 		</section>
 	{:else if !selected}
-		<section class="o-stack head"><h1 class="o-h1">Timeline</h1><p class="o-hint" role="alert">That run is not on your timeline.</p></section>
+		<section class="head">
+			<h1>Timeline</h1>
+			<p class="hint" role="alert">That run is not on your timeline.</p>
+		</section>
 	{:else}
-		<section class="o-stack head">
-			<h1 class="o-h1">Timeline</h1>
-			<p class="o-gloss">What happened to each call, step by step. Only your own runs.</p>
+		<section class="head">
+			<h1>Timeline</h1>
+			<p class="gloss">What happened to each call, step by step. Only your own runs.</p>
 		</section>
 
-		<section class="o-stack picker">
-			<h2 class="o-h2">Runs, newest first</h2>
+		<section class="picker">
+			<SectionHeader title="Runs, newest first" />
 			<ul>
 				{#each runs as run (run.id)}
 					<li>
@@ -90,39 +105,50 @@
 			</ul>
 		</section>
 
-		<section class="o-stack run">
+		<section class="run">
 			<div class="run-head">
 				<h2 class="run-title">{runTitle(selected)}</h2>
-				<div class="o-row tags">
-					<span class="o-tag">{selected.state}</span>
-					{#if live}<span class="o-tag live">live</span>{/if}
-					{#if selected.dry_run}<span class="o-tag">rehearsal</span>{/if}
+				<div class="row tags">
+					<Badge tone={live ? 'brand' : 'neutral'}>{selected.state}</Badge>
+					{#if live}<Badge tone="brand">live</Badge>{/if}
+					{#if selected.dry_run}<Badge>rehearsal</Badge>{/if}
 				</div>
 			</div>
 			{#if live}
-				<p class="o-hint">New steps appear as they happen.</p>
-				<div><button class="o-btn o-btn-secondary" onclick={refresh} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button></div>
+				<p class="hint">New steps appear as they happen.</p>
+				<div>
+					<Button variant="secondary" onclick={refresh} disabled={refreshing}>
+						{refreshing ? 'Refreshing…' : 'Refresh'}
+					</Button>
+				</div>
 			{/if}
 			{#if steps.length === 0}
-				<p class="o-hint">No steps recorded for this run yet.</p>
+				<p class="hint">No steps recorded for this run yet.</p>
 			{:else}
-				<div class="o-stack steps">
-					{#each steps as event (event.id)}
+				<div class="steps">
+					{#each steps as event, index (event.id)}
 						<div class="step">
-							<span class="o-mono o-muted clock">{formatClock(event.at, zone, true)}</span>
-							<div class="o-stack body">
-								<span class="o-mono kind">{event.kind}</span>
+							<div class="rail">
+								<span class="dot {stepTone(event)}" aria-hidden="true"></span>
+								{#if index < steps.length - 1}<span class="line" aria-hidden="true"></span>{/if}
+							</div>
+							<div class="body">
+								<span class="clock mono muted">{formatClock(event.at, zone, true)}</span>
+								<span class="kind">{event.kind}</span>
 								<span class="gloss">{glossFor(event.kind, event.detail, (iso) => formatClock(iso, zone))}</span>
 								{#if openSteps.has(event.id)}
-									<pre class="o-mono payload">{detailText(event)}</pre>
+									<pre class="payload">{detailText(event)}</pre>
 								{/if}
 							</div>
-							<button
-								class="o-btn o-btn-text toggle"
+							<Button
+								variant="ghost"
+								class="toggle"
 								onclick={() => toggle(event.id)}
-								aria-expanded={openSteps.has(event.id)}
-								aria-label={openSteps.has(event.id) ? `Hide detail for ${event.kind}` : `Show detail for ${event.kind}`}
-							>{openSteps.has(event.id) ? 'Hide' : 'Show'}</button>
+								ariaExpanded={openSteps.has(event.id)}
+								ariaLabel={openSteps.has(event.id) ? `Hide detail for ${event.kind}` : `Show detail for ${event.kind}`}
+							>
+								{openSteps.has(event.id) ? 'Hide' : 'Show'}
+							</Button>
 						</div>
 					{/each}
 				</div>
@@ -130,13 +156,13 @@
 		</section>
 
 		{#if stopped.length > 0}
-			<section class="o-stack stopped">
-				<h2 class="o-h2">A run that stopped</h2>
+			<section class="stopped">
+				<SectionHeader title="A run that stopped" />
 				{#each stopped as entry (entry.run.id)}
 					<div class="stop-row">
-						<span class="o-mono o-muted">{formatDayLabel(entry.run.scheduled_for, zone)}</span>
-						<div class="o-stack">
-							<a class="o-mono" href="?run={entry.run.id}">{entry.run.state}</a>
+						<span class="mono muted">{formatDayLabel(entry.run.scheduled_for, zone)}</span>
+						<div class="stop-body">
+							<a class="mono" href="?run={entry.run.id}">{entry.run.state}</a>
 							<span class="gloss">Stopped{entry.lastKind ? ` at ${entry.lastKind}` : ''}.</span>
 						</div>
 					</div>
@@ -147,24 +173,209 @@
 </main>
 
 <style>
-	.timeline { max-width: 38rem; padding: 1.75rem 1.5rem 3rem; display: flex; flex-direction: column; gap: 2.5rem; }
-	.head, .picker, .run, .stopped { gap: 1rem; }
-	.picker ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-	.picker li { border-top: 1px solid var(--o-hair); }
-	.picker a { display: flex; align-items: center; min-height: 44px; text-decoration: none; }
-	.picker a[aria-current='true'] { font-weight: 600; }
-	.run-head { display: flex; flex-direction: column; gap: 0.5rem; }
-	.run-title { font-size: 1.2rem; line-height: 1.4; margin: 0; font-weight: 600; }
-	.tags { gap: 0.5rem; flex-wrap: wrap; }
-	.live { border-color: var(--o-plum); color: var(--o-plum); }
-	.steps { gap: 0; }
-	.step { display: grid; grid-template-columns: 5.2rem minmax(0, 1fr) auto; gap: 0.75rem; padding: 0.65rem 0; border-top: 1px solid var(--o-hair); align-items: start; }
-	.clock { padding-top: 0.2rem; }
-	.body { gap: 0.1rem; min-width: 0; }
-	.kind { color: var(--o-plum); }
-	.gloss { font-size: 0.95rem; }
-	.toggle { min-width: 44px; }
-	.payload { margin: 0.5rem 0 0; padding: 0.75rem; border: 1px solid var(--o-hair); border-radius: 4px; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
-	.stop-row { display: grid; grid-template-columns: 5.2rem minmax(0, 1fr); gap: 0.75rem; padding: 0.65rem 0; border-top: 1px solid var(--o-hair); }
-	@media (min-width: 900px) { .timeline { padding: 3.5rem 4rem 5rem; } }
+	.timeline {
+		width: 100%;
+		max-width: 40rem;
+		margin: 0 auto;
+		padding: var(--space-8) var(--space-5) var(--space-12);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-8);
+	}
+
+	.head {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+	h1 {
+		margin: 0;
+		color: var(--text);
+		font-size: var(--font-size-2xl);
+		font-weight: var(--weight-bold);
+		line-height: var(--line-tight);
+		letter-spacing: var(--tracking-tight);
+	}
+	.gloss {
+		margin: 0;
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
+	}
+	.hint {
+		margin: 0;
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
+		line-height: var(--line-snug);
+	}
+	.muted {
+		color: var(--text-muted);
+	}
+	.mono {
+		font-family: var(--font-mono);
+		font-size: var(--font-size-sm);
+	}
+	.row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.picker {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.picker ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	.picker li {
+		border-top: 1px solid var(--border);
+	}
+	.picker a {
+		display: flex;
+		align-items: center;
+		min-height: var(--tap-target);
+		padding: 0 var(--space-1);
+		color: var(--text);
+		font-size: var(--font-size-sm);
+		text-decoration: none;
+	}
+	.picker a[aria-current='true'] {
+		color: var(--brand);
+		font-weight: var(--weight-semibold);
+	}
+
+	.run {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+	.run-head {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.run-title {
+		margin: 0;
+		color: var(--text);
+		font-size: var(--font-size-lg);
+		line-height: var(--line-snug);
+		font-weight: var(--weight-semibold);
+		letter-spacing: var(--tracking-tight);
+	}
+	.tags {
+		gap: var(--space-1);
+		flex-wrap: wrap;
+	}
+
+	.steps {
+		display: flex;
+		flex-direction: column;
+	}
+	.step {
+		display: grid;
+		grid-template-columns: 1rem minmax(0, 1fr) auto;
+		gap: var(--space-3);
+		align-items: flex-start;
+	}
+	.rail {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		align-self: stretch;
+		min-height: 100%;
+	}
+	.dot {
+		width: 10px;
+		height: 10px;
+		margin-top: 0.35rem;
+		border-radius: 50%;
+		flex: none;
+	}
+	.dot.brand {
+		background: var(--brand);
+	}
+	.dot.success {
+		background: var(--success);
+	}
+	.dot.danger {
+		background: var(--danger);
+	}
+	.line {
+		flex: 1;
+		width: 2px;
+		margin-top: 0.2rem;
+		background: var(--border);
+	}
+	.body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		min-width: 0;
+		padding-bottom: var(--space-4);
+	}
+	.clock {
+		font-size: var(--font-size-xs);
+	}
+	.kind {
+		color: var(--text);
+		font-family: var(--font-mono);
+		font-size: var(--font-size-sm);
+		font-weight: var(--weight-medium);
+	}
+	.body .gloss {
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
+	}
+	.payload {
+		margin: var(--space-2) 0 0;
+		padding: var(--space-3);
+		background: var(--surface-raised);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		color: var(--text);
+		font-family: var(--font-mono);
+		font-size: var(--font-size-xs);
+		line-height: var(--line-normal);
+		white-space: pre-wrap;
+		word-break: break-word;
+	}
+	.toggle {
+		min-width: var(--tap-target);
+	}
+
+	.stopped {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.stop-row {
+		display: grid;
+		grid-template-columns: 5.2rem minmax(0, 1fr);
+		gap: var(--space-3);
+		padding: var(--space-3) 0;
+		border-top: 1px solid var(--border);
+	}
+	.stop-body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		min-width: 0;
+	}
+	.stop-body a {
+		color: var(--brand);
+		text-decoration: none;
+	}
+	.stop-body a:hover {
+		text-decoration: underline;
+	}
+	.stop-body .gloss {
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
+	}
 </style>

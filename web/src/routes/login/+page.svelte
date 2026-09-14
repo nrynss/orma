@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation'
 	import { onMount } from 'svelte'
 	import { TELEGRAM_BOT_USERNAME } from '$lib/telegram-link'
+	import { Wordmark } from '$lib/shell'
 	import {
 		getOrmaApiUrl,
 		getPublishableKey,
@@ -11,6 +12,7 @@
 		sessionTokensFromUnknown,
 		type TelegramWidgetUser
 	} from '$lib/supabase'
+	import { Button, Field } from '$lib/ui'
 	import { lookupProfileExists, postAuthPath } from '../app/onboarding/profile-gate'
 
 	let email = $state('')
@@ -103,179 +105,153 @@
 </svelte:head>
 
 <main>
-	<header>
-		<h1>Orma</h1>
-		<p class="gloss">ഓർമ്മ — it remembers what you keep not doing.</p>
-	</header>
+	<section class="card">
+		<header class="brand">
+			<Wordmark height="2.25rem" />
+			<p class="gloss">ഓർമ്മ · it remembers what you keep not doing.</p>
+		</header>
 
-	<p class="lede">Sign in to set up your daily call.</p>
+		<p class="lede">Sign in to set up your daily call.</p>
 
-	<form class="stack" onsubmit={sendLink}>
-		<label class="field">
-			<span class="field-label">Email</span>
-			<input
-				class="input"
-				type="email"
-				name="email"
-				autocomplete="email"
-				bind:value={email}
-				placeholder="you@example.com"
-				required
-			/>
-		</label>
-		<button class="btn btn-primary" type="submit" disabled={busy}>Email me a sign-in link</button>
-		<p class="hint">No password. The link signs you in on this device.</p>
-	</form>
+		<form class="form" onsubmit={sendLink}>
+			<Field label="Email">
+				<input
+					type="email"
+					name="email"
+					autocomplete="email"
+					placeholder="you@example.com"
+					bind:value={email}
+					required
+				/>
+			</Field>
+			<Button type="submit" disabled={busy}>Email me a sign-in link</Button>
+			<p class="hint">No password. The link signs you in on this device.</p>
+		</form>
 
-	<div class="divider">
-		<span class="hair"></span>
-		<span class="or">or</span>
-		<span class="hair"></span>
-	</div>
+		<div class="divider" role="separator">
+			<span class="hair"></span>
+			<span class="or">or</span>
+			<span class="hair"></span>
+		</div>
 
-	<div class="stack">
-		<p class="field-label">Continue with Telegram</p>
-		<div class="widget" bind:this={widgetHost}></div>
-		<p class="hint">Orma sees your Telegram name and id. Never your messages.</p>
-	</div>
+		<div class="telegram">
+			<div class="widget" bind:this={widgetHost}></div>
+			<p class="hint">Orma sees your Telegram name and id. Never your messages.</p>
+		</div>
 
-	{#if status}
-		<p class="status">{status}</p>
-	{/if}
-	{#if error}
-		<p class="error">{error}</p>
-	{/if}
+		{#if status}
+			<p class="status" role="status">{status}</p>
+		{/if}
+		{#if error}
+			<p class="error" role="alert">{error}</p>
+		{/if}
+	</section>
 
 	<p class="foot-hint">
-		Telegram-only sign-in starts here. To add Telegram to an email account, open Settings after you
-		sign in.
+		Telegram-only sign-in starts here. To add Telegram to an email account, open Settings after
+		you sign in.
 	</p>
 </main>
 
 <style>
-	:global(html) {
-		color-scheme: light dark;
-	}
-	:global(body) {
-		margin: 0;
-		background: light-dark(#fbfaf8, #14130f);
-		color: light-dark(#22201c, #e8e4dc);
-		font: 16px/1.6 ui-serif, Georgia, 'Times New Roman', serif;
-	}
 	main {
-		max-width: 24rem;
-		margin: 0 auto;
-		padding: 3rem 1.5rem 6rem;
 		display: flex;
 		flex-direction: column;
-		gap: 2.25rem;
+		align-items: center;
+		gap: var(--space-4);
+		padding: var(--space-12) var(--space-4) var(--space-16);
 	}
-	header {
+
+	.card {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: var(--space-6);
+		width: min(24rem, 100%);
+		padding: var(--space-8) var(--space-6);
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-xl);
+		box-shadow: var(--elevation-2);
 	}
-	h1 {
-		font-size: 2.5rem;
-		margin: 0;
-		letter-spacing: -0.02em;
-		font-weight: 600;
-		line-height: 1.1;
+
+	.brand {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-2);
+		text-align: center;
 	}
 	.gloss {
 		margin: 0;
-		color: light-dark(#7a746a, #938c80);
-		font-size: 0.95rem;
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
 	}
+
 	.lede {
 		margin: 0;
-		font-size: 1.2rem;
-		line-height: 1.5;
+		color: var(--text);
+		font-size: var(--font-size-lg);
+		font-weight: var(--weight-semibold);
+		text-align: center;
 	}
-	.stack {
+
+	.form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: var(--space-3);
 	}
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-	}
-	.field-label {
-		font-size: 0.95rem;
-		font-weight: 600;
-	}
-	.input {
-		font: inherit;
-		min-height: 44px;
-		padding: 0 0.75rem;
-		border: 1px solid light-dark(#948f83, #6e685e);
-		border-radius: 4px;
-		background: light-dark(#fbfaf8, #14130f);
-		color: inherit;
-		box-sizing: border-box;
-		width: 100%;
-	}
-	.input:focus {
-		outline: 2px solid light-dark(#7a5283, #cfa7d8);
-		outline-offset: 2px;
-	}
-	.btn {
-		font: inherit;
-		font-size: 0.95rem;
-		font-weight: 500;
-		min-height: 44px;
-		padding: 0 1.1rem;
-		border-radius: 4px;
-		border: 1px solid transparent;
-		cursor: pointer;
-	}
-	.btn:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-	.btn-primary {
-		background: light-dark(#7a5283, #cfa7d8);
-		color: light-dark(#fbfaf8, #14130f);
-	}
-	.hint,
-	.status,
-	.or {
-		color: light-dark(#7a746a, #938c80);
-	}
+
 	.hint {
 		margin: 0;
-		font-size: 0.9rem;
-		line-height: 1.5;
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
+		line-height: var(--line-snug);
 	}
-	.status,
-	.error {
-		margin: 0;
-	}
-	.error {
-		color: light-dark(#8a2b2b, #e08a8a);
-	}
+
 	.divider {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: var(--space-3);
 	}
 	.hair {
 		flex: 1;
-		border-top: 1px solid light-dark(#e6e1d7, #2a2620);
+		border-top: 1px solid var(--border);
 	}
 	.or {
-		font-size: 0.85rem;
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
+	}
+
+	.telegram {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-2);
 	}
 	.widget {
-		min-height: 44px;
+		display: flex;
+		justify-content: center;
+		min-height: var(--tap-target);
 	}
-	.foot-hint {
+
+	.status,
+	.error {
 		margin: 0;
-		padding-top: 1.5rem;
-		border-top: 1px solid light-dark(#e6e1d7, #2a2620);
-		font-size: 0.9rem;
-		color: light-dark(#7a746a, #938c80);
+		font-size: var(--font-size-sm);
+	}
+	.status {
+		color: var(--success);
+	}
+	.error {
+		color: var(--danger);
+	}
+
+	.foot-hint {
+		max-width: 24rem;
+		margin: 0;
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
+		line-height: var(--line-snug);
+		text-align: center;
 	}
 </style>

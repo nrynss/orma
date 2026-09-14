@@ -166,7 +166,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P6 | 8 / 8 | **P6 e2e clean and live.** History, Patterns, Timeline, landing and the fixed owner actions are deployed. Migration applied, types regenerated. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
 | P8 | 2 / 6 | **In progress.** T8.1 seed and T8.3 README landed. T8.4 waits on P9 and P10, and T8.5 on T8.4 and P10. |
-| P9 | 2 / 9 | **In progress.** T9.1 and T9.2 landed. T9.3 to T9.8 run in parallel next, then T9.9 closes the phase. |
+| P9 | 8 / 9 | **Implemented, review pending.** T9.3 to T9.8 restyled on the shared tokens and verified against the harness. T9.9 visual QA and the adversarial review round close the phase. |
 
 ---
 
@@ -1416,3 +1416,60 @@ lands. The clone step uses a placeholder, because this repository is private and
 publishes the app through the list repository. P10 will change "Consent and numbers", so
 update that section when P10 lands. The Devpost description and form details now live on
 Devpost only, and the local drafts were removed.
+
+### 2026-09-14 · T9.3 to T9.8 implemented, review round owed
+
+**One operator decision overrides a P9 pin.** The phase froze the demo label
+word for word. On 14 September the operator directed that the label drop the
+word synthetic, and that the note read "No real person. No real call." alone.
+The demo section now carries the heading Demo with that note, and the buttons
+read Play and Stop. T9.9 must measure the demo section against this direction,
+not against the frozen-label pin. Landing copy elsewhere was cut for length on
+the same instruction.
+
+**Six tasks restyled, one wave.** T9.3 rebuilt the landing as a product page
+(hero, how-it-works, demo, surfaces, trust, sign-in) and sign-in as a centred
+card on the shared tokens, with the wordmark replacing the text Orma on both.
+T9.4 turned onboarding into a six-step stepper with a progress bar. T9.5
+rebuilt Today with a skeleton that shows only when a navigation changes URL,
+never on a poll tick. T9.6 gave Items open and retired tabs with inline retire
+and restore, and History badges and the marked evidence turn. T9.7 put the
+Patterns prose in a card beside fact tiles, moved the trend onto token colours,
+and made the trend fluid, which closed the Patterns sideways-scroll defect the
+T9.2 round 2 review carried. T9.8 regrouped Settings into six cards with a
+danger zone holding pause, cancel today and delete account.
+
+**What did not change.** Every loader, model.ts, `web/src/lib/today/` and
+`web/src/lib/supabase.ts` file is untouched. The consent wording, the
+unrecognised-number warning, the cancellation and deletion warnings, and every
+count and age render from the same rows as before. `git status` shows only the
+nine owned page files plus this log and the phase document.
+
+**Verified against the harness, per task.** `npm run check` (343 files, zero
+errors) and `npm run build` pass after every task. Onboarding: a fresh account
+walked the stepper to Today and its stored `text_version` equals the pre-P9
+wording. Today: regular, first-run and live states render on the three harness
+accounts with the seeded numbers. Items: retire and restore update the list in
+place with counts matching rows. History: a deep link expands the run and marks
+the turn. Patterns: all 14 fact fields show beside the prose and the trend
+draws the same four points. Settings: save, add and remove time, consent
+toggle, pause and resume all update in place, and deletion stays gated on
+typing DELETE. A 320 pixel sweep across all nine routes passes in light and
+dark.
+
+**Two findings to carry into the review.** First, `web/static/landing/` ships
+empty. A captured Today screenshot showed the pre-T9.5 editorial page, so it
+was deleted rather than committed. If the operator wants a real screenshot in
+the hero, recapture after T9.5 and drop it in that directory. Second, the
+Settings Telegram attach was already inert before P9: `onMount` reads
+`widgetHost` while the loading branch is on screen, so the widget script never
+attaches on that page. The restyle preserves the behavior byte for byte. A fix
+is a logic change and needs its own finding.
+
+**Harness sign-in recipe for reviewers.** `scripts/p6-local-stack.sh env` names
+the API port. Mint a magic link with the stack service key through
+`/auth/v1/admin/generate_link`, then open
+`/login/callback?token_hash=<token>&type=magiclink` in the browser. The app's
+own callback sets the session cookies and routes by profile. The dev server
+needs `PUBLIC_ORMA_API_URL` and `PUBLIC_SUPABASE_ANON_KEY` pointed at the stack,
+or it reads the live values from `.env`.

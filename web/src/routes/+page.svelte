@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte'
+	import { Button } from '$lib/ui'
 
 	const lines = [
 		{ who: 'Orma', text: "You've mentioned the dentist three times. It's been 34 days." },
@@ -63,9 +64,8 @@
 		}
 	})
 </script>
-
 <svelte:head>
-	<title>Orma — it remembers what you keep not doing</title>
+	<title>Orma · it remembers what you keep not doing</title>
 	<meta name="description" content="A daily two-minute accountability call. It rings at a time you chose, leads with what you keep not doing, asks what needs capturing, and hangs up." />
 	<meta property="og:title" content="Orma" />
 	<meta property="og:description" content="It remembers what you keep not doing." />
@@ -73,47 +73,61 @@
 </svelte:head>
 
 <main>
-	<header>
-		<h1>Orma</h1>
-		<p class="gloss">ഓർമ്മ — it remembers what you keep not doing.</p>
-	</header>
+	<section class="hero">
+		<div class="hero-copy">
+			<p class="kicker">A daily two-minute call</p>
+			<h1>It remembers what you keep not&nbsp;doing.</h1>
+			<p class="lede">
+				Orma rings at a time you chose, leads with what you keep <em>not</em> doing, asks what
+				needs capturing, and hangs up.
+			</p>
+			<div class="hero-actions">
+				<Button href="/login">Sign in</Button>
+				<Button href="#how" variant="secondary">How it works</Button>
+			</div>
+		</div>
 
-	<p class="lede">
-		A daily two-minute accountability call. It rings at a time you chose, leads with what you
-		keep <em>not</em> doing, asks what needs capturing, and hangs up.
-	</p>
-
-	<section class="beat">
-		<p><span class="who">Orma</span>You've mentioned the dentist three times. It's been 34 days.</p>
-		<p><span class="who">You</span>Kill it.</p>
-		<p><span class="who">Orma</span>Done. It's gone.</p>
+		<!-- Product visual: the phone frame, drawn on tokens. -->
+		<div class="hero-visual" aria-hidden="true">
+			<div class="phone">
+				<div class="phone-card">
+					<p class="phone-label">Next call · Tomorrow, 08:00</p>
+					<div class="chat">
+						<p class="line"><span class="who">Orma</span>You've mentioned the dentist three times. It's been 34 days.</p>
+						<p class="line you"><span class="who">You</span>Kill it.</p>
+						<p class="line"><span class="who">Orma</span>Done. It's gone.</p>
+					</div>
+				</div>
+			</div>
+		</div>
 	</section>
 
-	<section>
-		<h2>Why a phone call</h2>
-		<p>
-			An app can be dismissed with no consequence and no witness. That is not a flaw in the
-			design, it is the absence of the mechanism. A question asked out loud, by something that
-			remembers what you said last time, has weight.
-		</p>
-		<p>
-			The competitive set is gym buddies, standups, sponsors and coaches. People pay monthly for
-			those, because the value was never tracking. It was someone asking.
-		</p>
+	<section class="how" id="how">
+		<h2>How it works</h2>
+		<div class="steps">
+			<div class="step">
+				<span class="step-no">1</span>
+				<h3>Set a time</h3>
+				<p>Pick a daily slot. It rings from a number you won't recognise. Answer it anyway.</p>
+			</div>
+			<div class="step">
+				<span class="step-no">2</span>
+				<h3>Answer the call</h3>
+				<p>It leads with what you keep not doing, then asks what needs capturing.</p>
+			</div>
+			<div class="step">
+				<span class="step-no">3</span>
+				<h3>The list stays honest</h3>
+				<p>Being allowed to drop something honestly keeps the rest of the list truthful.</p>
+			</div>
+		</div>
 	</section>
 
-	<section>
-		<h2>Quitting is easy and unpunished</h2>
-		<p>
-			You can say <em>kill it, I am never doing this</em>, and Orma agrees. A list you cannot
-			retire from becomes a wall of shame, and a wall of shame is a call you stop answering.
-			Being allowed to drop something honestly is what keeps the rest of the list truthful.
-		</p>
-	</section>
-
-	<section class="demo" aria-label="Synthetic demo">
-		<h2>Synthetic demo</h2>
-		<p class="demo-note">No real person, no real call. Not production evidence.</p>
+	<section class="demo" aria-label="Demo">
+		<div class="demo-head">
+			<h2>Demo</h2>
+			<p class="demo-note">No real person. No real call.</p>
+		</div>
 		<ol>
 			{#each lines as line, i}
 				<li class:active={active === i}><span class="who">{line.who}</span>{line.text}</li>
@@ -121,137 +135,314 @@
 		</ol>
 		{#if supported}
 			<p class="controls">
-				<button onclick={play} disabled={playing}>Play synthetic audio</button>
-				<button onclick={stop} disabled={!playing}>Stop</button>
+				<Button onclick={play} disabled={playing}>Play</Button>
+				<Button onclick={stop} variant="secondary" disabled={!playing}>Stop</Button>
 			</p>
 		{:else}
 			<p class="controls">
-				<button disabled>Play synthetic audio</button>
+				<Button disabled>Play</Button>
 			</p>
 			<p class="demo-note">
-				Synthetic audio needs speech synthesis. This browser does not offer it.
+				This browser does not offer speech synthesis.
 			</p>
 		{/if}
 	</section>
 
-	<section>
-		<h2>Get started</h2>
-		<p>
-			Sign up or sign in through the <a href="/login">login page</a>.
-		</p>
+	<section class="surfaces">
+		<h2>One call, three ways in</h2>
+		<div class="cards">
+			<div class="card">
+				<h3>Phone call</h3>
+				<p>The only channel that asks. Everything else is a receipt.</p>
+			</div>
+			<div class="card">
+				<h3>Telegram</h3>
+				<p>Capture a thought the moment you have it. The summary comes back after the call.</p>
+			</div>
+			<div class="card">
+				<h3>MCP</h3>
+				<p>Add items, set the slot, read the last call. From your agent, no browser.</p>
+			</div>
+		</div>
 	</section>
 
-	<footer>
-		<p>Built for CALL-E. Sign up through the <a href="/login">login page</a>.</p>
-	</footer>
+	<section class="trust">
+		<h2>The fine print, up front</h2>
+		<div class="cards">
+			<div class="card">
+				<h3>Consent first</h3>
+				<p>The wording you agree to is stored, versioned, and withdrawable any time.</p>
+			</div>
+			<div class="card">
+				<h3>Cancel any time</h3>
+				<p>Cancel today's call, pause all calls, delete the account. One tap each.</p>
+			</div>
+			<div class="card">
+				<h3>Dry run by default</h3>
+				<p>The engine is verified against recorded calls before anything rings.</p>
+			</div>
+		</div>
+	</section>
+
+	<section class="cta">
+		<h2>Set your first call</h2>
+		<p class="lede">Sign up or sign in. Your first slot takes a minute.</p>
+		<Button href="/login">Sign in</Button>
+	</section>
 </main>
 
 <style>
-	:global(html) {
-		color-scheme: light dark;
-	}
-	:global(body) {
-		margin: 0;
-		background: light-dark(#fbfaf8, #14130f);
-		color: light-dark(#22201c, #e8e4dc);
-		font: 16px/1.6 ui-serif, Georgia, 'Times New Roman', serif;
-	}
 	main {
-		max-width: 34rem;
-		margin: 0 auto;
-		padding: 4rem 1.5rem 6rem;
+		width: 100%;
 	}
-	header {
-		margin-bottom: 3rem;
-	}
-	h1 {
-		font-size: 2.5rem;
-		margin: 0;
-		letter-spacing: -0.02em;
-	}
-	.gloss {
-		margin: 0.25rem 0 0;
-		color: light-dark(#7a746a, #938c80);
-		font-size: 0.95rem;
-	}
-	.lede {
-		font-size: 1.2rem;
+
+	/* Shared rhythm. */
+	.kicker,
+	h2 {
+		color: var(--brand);
+		font-size: var(--font-size-sm);
+		font-weight: var(--weight-semibold);
+		letter-spacing: var(--tracking-wide);
+		text-transform: uppercase;
 	}
 	h2 {
-		font-size: 1rem;
+		margin: 0 0 var(--space-6);
+	}
+	.lede {
+		color: var(--text-muted);
+		font-size: var(--font-size-lg);
+		line-height: var(--line-normal);
+	}
+
+	/* Hero. */
+	.hero {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-10);
+		max-width: 66rem;
+		margin: 0 auto;
+		padding: var(--space-10) var(--space-5) 0;
+	}
+	.hero-copy {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--space-4);
+		max-width: 34rem;
+	}
+	h1 {
+		margin: 0;
+		color: var(--text);
+		font-size: var(--font-size-3xl);
+		font-weight: var(--weight-bold);
+		line-height: var(--line-tight);
+		letter-spacing: var(--tracking-tight);
+	}
+	.hero-actions {
+		display: flex;
+		gap: var(--space-3);
+		margin-top: var(--space-2);
+	}
+
+	/* The phone frame is decorative and carries no interaction. */
+	.hero-visual {
+		display: flex;
+		justify-content: center;
+	}
+	.phone {
+		width: min(20rem, 100%);
+		padding: var(--space-3);
+		background: var(--canvas);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-xl);
+		box-shadow: var(--elevation-3);
+	}
+	.phone-card {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		padding: var(--space-5);
+		background: var(--surface-raised);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+	}
+	.phone-label {
+		color: var(--text-muted);
+		font-size: var(--font-size-xs);
+		font-weight: var(--weight-semibold);
+		letter-spacing: var(--tracking-wide);
 		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: light-dark(#7a746a, #938c80);
-		margin-top: 3rem;
-		font-weight: 600;
 	}
-	.beat {
-		border-left: 2px solid light-dark(#d8d2c6, #3a352c);
-		padding-left: 1.25rem;
-		margin: 3rem 0;
+	.chat {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 	}
-	.beat p {
-		margin: 0.4rem 0;
+	.line {
+		padding: var(--space-2) var(--space-3);
+		background: var(--brand-soft);
+		border-radius: var(--radius-md);
+		font-size: var(--font-size-sm);
+		line-height: var(--line-snug);
+	}
+	.line.you {
+		align-self: flex-end;
+		background: color-mix(in srgb, var(--text) 6%, transparent);
 	}
 	.who {
-		display: inline-block;
-		width: 4.2rem;
-		color: light-dark(#7a746a, #938c80);
-		font-size: 0.8rem;
+		display: block;
+		margin-bottom: var(--space-1);
+		color: var(--text-muted);
+		font-size: var(--font-size-xs);
+		font-weight: var(--weight-semibold);
+		letter-spacing: var(--tracking-wide);
 		text-transform: uppercase;
-		letter-spacing: 0.06em;
 	}
+
+	/* Sections. */
+	.how,
+	.demo,
+	.surfaces,
+	.trust,
+	.cta {
+		max-width: 66rem;
+		margin: 0 auto;
+		padding: var(--space-16) var(--space-5) 0;
+	}
+
+	.steps {
+		display: grid;
+		gap: var(--space-4);
+	}
+	@media (min-width: 900px) {
+		.steps {
+			grid-template-columns: repeat(3, 1fr);
+		}
+	}
+	.step {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		padding: var(--space-5);
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+	}
+	.step h3,
+	.card h3 {
+		margin: 0;
+		color: var(--text);
+		font-size: var(--font-size-lg);
+		font-weight: var(--weight-semibold);
+		letter-spacing: var(--tracking-tight);
+	}
+	.step p,
+	.card p {
+		margin: 0;
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
+		line-height: var(--line-snug);
+	}
+	.step-no {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		background: var(--brand);
+		color: var(--brand-contrast);
+		border-radius: var(--radius-pill);
+		font-size: var(--font-size-sm);
+		font-weight: var(--weight-semibold);
+	}
+
+	/* The playable demo. */
 	.demo {
-		margin-top: 3rem;
-		padding: 1.25rem 1.25rem 1rem;
-		border: 1px solid light-dark(#e6e1d7, #2a2620);
-		border-radius: 0.75rem;
-		background: light-dark(#fffdf9, #1a1813);
+		max-width: 44rem;
+		padding-top: var(--space-16);
 	}
-	.demo h2 {
-		margin-top: 0;
+	.demo-head {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		margin-bottom: var(--space-6);
+	}
+	.demo-head h2 {
+		margin: 0;
 	}
 	.demo-note {
-		color: light-dark(#7a746a, #938c80);
-		font-size: 0.9rem;
+		margin: 0;
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
 	}
 	.demo ol {
-		list-style: none;
-		margin: 1rem 0;
+		margin: 0;
 		padding: 0;
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 	}
 	.demo li {
-		margin: 0.4rem 0;
-		padding: 0.25rem 0.5rem;
-		border-radius: 0.375rem;
+		margin: 0;
+		padding: var(--space-3) var(--space-4);
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		transition: background-color var(--motion-fast) ease-out;
 	}
 	.demo li.active {
-		background: light-dark(#f0ebe0, #2a2620);
+		background: var(--brand-soft);
+		border-color: color-mix(in srgb, var(--brand) 70%, transparent);
 	}
 	.controls {
 		display: flex;
-		gap: 0.75rem;
-		margin-bottom: 0;
+		gap: var(--space-3);
+		margin: var(--space-6) 0 0;
 	}
-	.controls button {
-		font: inherit;
-		font-size: 0.9rem;
-		padding: 0.4rem 0.9rem;
-		border-radius: 0.5rem;
-		border: 1px solid light-dark(#d8d2c6, #3a352c);
-		background: light-dark(#22201c, #e8e4dc);
-		color: light-dark(#fbfaf8, #14130f);
-		cursor: pointer;
+
+	.cards {
+		display: grid;
+		gap: var(--space-4);
 	}
-	.controls button:disabled {
-		opacity: 0.5;
-		cursor: default;
+	@media (min-width: 900px) {
+		.cards {
+			grid-template-columns: repeat(3, 1fr);
+		}
 	}
-	footer {
-		margin-top: 4rem;
-		padding-top: 1.5rem;
-		border-top: 1px solid light-dark(#e6e1d7, #2a2620);
-		color: light-dark(#7a746a, #938c80);
-		font-size: 0.9rem;
+	.card {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding: var(--space-5);
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+	}
+
+	/* Closing action. */
+	.cta {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-4);
+		padding-bottom: var(--space-16);
+		text-align: center;
+	}
+	.cta .lede {
+		max-width: 30rem;
+	}
+	@media (min-width: 900px) {
+		.hero {
+			flex-direction: row;
+			align-items: center;
+			gap: var(--space-16);
+		}
+		.hero-copy {
+			flex: 1;
+		}
+		.hero-visual {
+			flex: 1;
+		}
 	}
 </style>

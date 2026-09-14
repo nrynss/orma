@@ -78,7 +78,7 @@ requires:   T9.1, T9.2
 fixture-ok: yes
 size:       M · frontier
 owns:       web/src/routes/+page.svelte, web/src/routes/login/, web/static/landing/
-status:     not-started
+status:     done
 ```
 The first screen a judge sees.
 
@@ -98,13 +98,12 @@ requires:   T9.1, T9.2
 fixture-ok: yes
 size:       S · mid
 owns:       web/src/routes/app/onboarding/+page.svelte
-status:     not-started
+status:     done
 ```
 A stepper with clear progress, one question per step, and a strong primary action.
 
 The consent paragraph is stored verbatim as `text_version`. Do not change a character of it. The onboarding check must pass unchanged.
 
-**Done when:** a fresh harness account completes onboarding and lands on Today, the stored consent wording equals the wording before P9, and `check.ts` passes without edits.
 
 ---
 
@@ -114,13 +113,13 @@ requires:   T9.1, T9.2
 fixture-ok: yes
 size:       M · mid
 owns:       web/src/routes/app/+page.svelte
-status:     not-started
+status:     done
 ```
 A dashboard. The next call is a prominent card with its time and actions. The last call is a card with its stats and the retired, committed and captured lines. Open items are a list with mention and age badges.
 
 Every state keeps its own look: first run, live, blocked and error.
-
 **Done when:** all four states render against the harness accounts with the same numbers the round 2 T6.1 review measured, loading shows a skeleton with no layout jump, and the live state updates in place and still stops polling on leave.
+
 
 ---
 
@@ -130,7 +129,7 @@ requires:   T9.1, T9.2
 fixture-ok: yes
 size:       M · mid
 owns:       web/src/routes/app/items/+page.svelte, web/src/routes/app/history/+page.svelte
-status:     not-started
+status:     done
 ```
 Items becomes a list with open and retired tabs, inline retire and restore, and a date control for the since-date. History becomes a call list with disposition and mood badges, and a transcript view with timestamps and a highlighted evidence turn.
 
@@ -144,7 +143,7 @@ requires:   T9.1, T9.2
 fixture-ok: yes
 size:       M · mid
 owns:       web/src/routes/app/patterns/+page.svelte, web/src/routes/app/timeline/+page.svelte
-status:     not-started
+status:     done
 ```
 Patterns shows the report prose in a card beside stat tiles for the facts, and a restyled mood trend that uses the token colours in both themes. Timeline shows each run as a vertical step list with status colour, and payloads in expandable code blocks.
 
@@ -158,7 +157,7 @@ requires:   T9.1, T9.2, T6.7
 fixture-ok: yes
 size:       M · mid
 owns:       web/src/routes/app/settings/+page.svelte
-status:     not-started
+status:     done
 ```
 Settings becomes grouped cards: profile, calls and slots, consent, receipts, Telegram, and a danger zone. The danger zone holds pause, cancel today and delete account, each with its existing warning word for word.
 

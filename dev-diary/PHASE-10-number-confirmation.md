@@ -93,7 +93,7 @@ requires:   T10.2, T9.4, T9.8
 fixture-ok: yes
 size:       M · mid
 owns:       web/src/lib/phone-confirm/, web/src/routes/app/onboarding/+page.svelte, web/src/routes/app/settings/+page.svelte
-status:     not-started
+status:     done
 ```
 The user sees one clear step: we will call you with a code.
 
