@@ -165,7 +165,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P5 | 4 / 4 | **P5 e2e clean.** Auth, Telegram bridge, web sessions, and onboarding are live. |
 | P6 | 8 / 8 | **P6 e2e clean and live.** History, Patterns, Timeline, landing and the fixed owner actions are deployed. Migration applied, types regenerated. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
-| P8 | 2 / 6 | **In progress.** T8.1 seed and T8.3 README landed. T8.4 waits on P9 and P10, and T8.5 on T8.4 and P10. |
+| P8 | 3 / 6 | **In progress.** T8.1, T8.2 and T8.3 landed. The list PR is open as CALLE-AI/awesome-phone-call-agents#707. T8.4 video and the Devpost submission remain. |
 | P9 | 9 / 9 | **Complete, reviewed, deployed.** T9.9 closed the phase with zero findings and 41 of 41 P6 pins. Deployed to orma.nryn.dev on the operator's go. |
 
 ---
@@ -1508,3 +1508,33 @@ went to `main`, then `npm run deploy` in `web/` shipped worker version
 `bb3e415b` to `orma.nryn.dev`. Verified live: the landing carries the new
 hero, the demo label and note, and three login links, and the signed-out app
 routes still 303 to `/login`. T8.4 can record.
+
+### 2026-09-14 · P10 deployed, sign-in links fixed, the list PR opened
+
+The P9 web deploy had shipped without the P10 backend, so new accounts could
+not confirm a number. Both P10 migrations are now applied, and `confirm-phone`,
+`calle-webhook` and `tick` are redeployed. Verified live: `confirm-phone`
+answers 401 without a session, the guard triggers sit on `profiles`, and
+`verify_phone_code` runs for `authenticated` only.
+
+Three fixes went live with it. Magic-link and confirmation emails now link to
+`orma.nryn.dev/login/callback` with a token hash, through templates in
+`supabase/templates/`. The default links pointed at the project host, which
+the operator's network cannot reach. `confirm-phone` returns the code only in
+a dry run outside production. It had returned the code on a live call whenever
+`ORMA_ENV` was not `production`. The resend button now waits until the attempt
+expires. The landing page no longer carries the synthetic demo section, at the
+operator's request.
+
+`scripts/package-list-pr.sh` copies the committed tree into `apps/web/orma/`,
+scans it, runs the Deno suites and `npm run check` inside the copy, adds the
+index row, and runs the list repository's validator. It passed on `6270fbc`
+with 179 files. The pull request is CALLE-AI/awesome-phone-call-agents#707,
+from `nrynss:feat/orma-accountability-calls`. GitHub reports it mergeable. No
+checks have run yet, because a first-time fork PR waits for a maintainer to
+approve its workflows.
+
+**Next agent notes.** Rerun the packaging script and push the fork branch
+whenever the app changes before merge. Devpost still needs the PR URL and the
+T8.4 video. The README describes number confirmation, and its screens come
+from the finished P9 app.

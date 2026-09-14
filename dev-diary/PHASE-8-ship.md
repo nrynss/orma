@@ -201,7 +201,7 @@ requires:   T8.3, T8.4, P10
 fixture-ok: yes
 size:       M · frontier
 owns:       scripts/package-list-pr.sh, (operational)
-status:     not-started
+status:     claimed:orchestrator (PR #707 open, Devpost submission waits on the T8.4 video)
 ```
 Open the pull request to `CALLE-AI/awesome-phone-call-agents` under `apps/`, then submit Devpost with that URL, the description, the video link, and the email on the CALL-E account. The live demo URL is optional and, given T8.2, worth including.
 
