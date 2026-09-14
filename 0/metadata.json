@@ -1,0 +1,47 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2EXFF00J2C8D92K78HSDCXV",
+  "session_id": "c1950000-44d4-459a-a37e-f4411f2ae47a",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-14T02:55:58.533927095Z",
+  "branch": "main",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "supabase/migrations/20260914030000_move_pg_net_to_extensions.sql"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5",
+  "turn_id": "4a1d34d483bf",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 1072,
+    "cache_creation_tokens": 102029,
+    "cache_read_tokens": 3529378,
+    "output_tokens": 22721,
+    "api_call_count": 41
+  },
+  "session_metrics": {
+    "turn_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-14T02:55:58.496946823Z",
+    "agent_lines": 10,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 10,
+    "total_lines_changed": 10,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

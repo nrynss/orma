@@ -1,0 +1,47 @@
+check the current status
+
+---
+
+Check current status. 
+
+We need to do these next:  deploy 20260914000000_schedule_analysis.sql and the analysis function, and write ORMA_MATERIALISE_SECRET_KEY into Vault. The cron stays fail-closed until then. TELEGRAM_BOT_TOKEN is now also required by the tick env factory.
+
+---
+
+Do it
+
+---
+
+You can do it. I authorize
+
+---
+
+what is the key?
+
+---
+
+Done
+
+---
+
+yes
+
+---
+
+Refresh
+
+Export
+
+
+
+
+Extension in Public
+security
+
+Entity
+public.pg_net
+Issue
+Extension pg_net is installed in the public schema. Move it to another schema.
+
+Description
+Detects extensions installed in the public schema.
