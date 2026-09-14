@@ -21,17 +21,18 @@ Every task here runs through the loop in `AGENTS.md`: implement, review, remedia
 - **Telegram.** The Login Widget works on `orma.nryn.dev`. BotFather's `/setdomain` for `@orma_tele_bot` is set to that domain. A bot has one login domain, so `localhost` always shows "Bot domain invalid".
 - **P9 is in motion.** The UI is being rebuilt as a phone-first product UI. T8.4 records after P9 deploys. Screenshots in T8.3 wait for it too.
 - **Fixtures.** The conversation in `testdata/calle/` is synthetic, as `testdata/calle/README.md` explains. Provider summary and evidence text there still names the operator.
+- **Devpost drafting.** The local draft is `devpost-submission.md`. It leads with the operator's experience of forgetting and labels seeded dry-run history. The planned recording uses a real call.
 - **Nothing in P8 exists yet.** There is no root `README.md`, no `scripts/seed.ts`, and `.github/workflows/` holds only `_env-example.yml`.
 
 ## Rules for every P8 task
 
-**No calls.** Nothing in P8 places a real call. There is no live call run, and the demo exchange is synthetic.
+**Real calls, seeded history.** Orma is open, and anyone who signs up and consents gets real calls. The demo video records a real call to a real, consenting user. Only the history behind that call is seeded. No agent places a call during building or review. Every local and test run stays in dry run.
 
-**Check dry run before touching production.** `ORMA_DRY_RUN` is a function secret whose value cannot be read back. A profile with a confirmed phone, live consent and an active slot gets dialled by `tick` for real if dry run is off. Before any production write, the operator confirms `ORMA_DRY_RUN=true` by setting it again with `supabase secrets set`. Say in the review file that this happened.
+**Know the dry-run state before touching production.** `ORMA_DRY_RUN` is a function secret whose value cannot be read back. With dry run off, `tick` dials every profile that has a confirmed phone, live consent and an active slot. Before any production write, the operator states which mode production is in, and sets it again with `supabase secrets set` if unsure. Say in the review file that this happened.
 
 **Production writes need the operator.** Build and test against `scripts/p6-local-stack.sh`. Running against the linked project, opening the pull request, uploading the video, and submitting Devpost or the survey all wait for the operator's explicit go-ahead.
 
-**Disclose, never disguise.** Seeded rows are marked and named. Synthetic audio is labelled on screen. The README, the video and the Devpost text say the same thing.
+**Disclose, never disguise.** Seeded rows are marked and named, on screen and in text. The call is real and is never described as synthetic. The README, the video and the Devpost text say the same thing.
 
 **Mask every number.** No real phone number, name of a third party, key or token appears in any file, screenshot, frame or log.
 
@@ -39,7 +40,8 @@ Every task here runs through the loop in `AGENTS.md`: implement, review, remedia
 
 | Step | For | When |
 |---|---|---|
-| Confirm `ORMA_DRY_RUN=true` in function secrets | T8.1, T8.4 | Before seeding production |
+| State production's dry-run mode | T8.1 | Before seeding production |
+| Turn dry run off, and confirm the recording account's consent, number and slot | T8.4 | Before recording |
 | Name the production account to seed | T8.1 | Before `--apply` |
 | Create a private backup repository and a fine-grained token | T8.2 | Before the first scheduled run |
 | Add the session pooler URL as a repository secret | T8.2 | Before the first scheduled run |
@@ -64,7 +66,7 @@ requires:   T1.1, T2.2
 fixture-ok: yes
 size:       S · frontier
 owns:       scripts/seed.ts
-status:     claimed:t8.1-impl
+status:     done
 ```
 The demo needs history that no run of real calls produced, so the seed carries all of it.
 
@@ -134,7 +136,7 @@ The repository requires apps that place calls or create recurring jobs to docume
 **Sections, in this order.**
 
 1. **What Orma is.** One paragraph from `product.md` §1. The call arrives already knowing what you keep not doing.
-2. **How the demo was made.** Seeded history from T8.1, named. A synthetic exchange, labelled. No live call run took place.
+2. **How the demo was made.** The call in the video is real. The history it reads is seeded by T8.1, and every seeded row is named.
 3. **Try it without calling anyone.** Clone, `scripts/p6-local-stack.sh up`, run the web app against it, sign in as the seed account, and watch a dry-run call reach a terminal state on Timeline. Then `down`.
 4. **Architecture.** The two Workers, the Supabase functions table from `spec.md` §6, the three cron jobs, and one diagram of a call's life from `spec.md` §3.
 5. **Deploy your own.** `scripts/bootstrap-env.sh`, the three places secrets live, `supabase db push`, `supabase functions deploy`, the Vault key, the Telegram webhook, BotFather `/setdomain`, Resend, and both `npm run deploy` commands. Each step names its command.
@@ -155,13 +157,13 @@ Every command in the README is run at least once while writing it. Every sample 
 
 ### T8.4: Demo video ★
 ```yaml
-requires:   T8.1, T6.6, T6.8, P9
+requires:   T8.1, T6.6, T6.8, P9, P10
 fixture-ok: yes
 size:       L · frontier
 owns:       dev-diary/demo-video.md
 status:     not-started
 ```
-Under three minutes, public on YouTube or Vimeo. The operator records the phone with scrcpy. An agent writes the script, the shot list and the synthetic audio plan in `dev-diary/demo-video.md`, and reviews the cut against it.
+Under three minutes, public on YouTube or Vimeo. The operator records a real call on their own phone with scrcpy. An agent writes the script and the shot list in `dev-diary/demo-video.md`, and reviews the cut against it.
 
 **The centre is one exchange, not a feature tour.**
 
@@ -171,28 +173,31 @@ Under three minutes, public on YouTube or Vimeo. The operator records the phone 
 
 That beat carries give-before-take and unpunished quitting together. Lead with the call arriving already knowing, not with scheduling. The list repository already ships a scheduler wrapper for reminders, so that ground is taken.
 
-**The exchange is synthetic, and the video says so on screen.** Render both voices with a text-to-speech engine. Hold a caption such as "Synthetic voices. No real call." for the whole exchange. Never imply that a real person took a call or that the audio is a recording.
+**The call is real.** CALL-E rings the operator's phone on a real slot, and the operator answers. The briefing reads the seeded rows, so "three times" and "34 days" come from SQL. "Kill it" on the call retires the item for real through the ingest. Caption the history as seeded, never the call.
+
+The call's exact wording is the model's, so the script plans for the beat without forcing it. If a take misses it, schedule another slot and record again.
 
 **Shot list, roughly.**
 
-1. The synthetic exchange over the landing page's call beat, captioned.
-2. Today on the phone, with the dentist item showing three mentions and 34 days from rows. Caption it as seeded.
-3. Items, retiring the dentist with one tap. The list updates in place.
-4. Timeline, showing a dry-run run, labelled dry run. If the next briefing is shown, schedule that dry-run run after the retirement, so its briefing no longer names the item.
-5. Patterns, the report prose beside its facts.
-6. Telegram on the same phone, a captured item and its receipt.
-7. Settings, showing cancel today, pause and delete.
-8. A closing card with the seed disclosure, the synthetic label and the repository link.
+1. The incoming call, answered. Either start after it is answered, or show the unrecognised number and say the line from issue 9.
+2. The exchange itself, in one unbroken take of real audio.
+3. Today on the phone after the call, with the dentist retired and the receipt from the call.
+4. History, the call's transcript with the retirement's evidence offset.
+5. Timeline, the real run's steps in order.
+6. Patterns, the report prose beside its facts, captioned as computed over seeded history.
+7. Telegram on the same phone, the post-call receipt.
+8. Settings, showing cancel today, pause and delete.
+9. A closing card with the seed disclosure and the repository link.
 
-**Recording.** Check `ORMA_DRY_RUN=true` first. Use `scrcpy --record` at the phone's native resolution. Turn on do not disturb so no notification lands in the frame. The incoming call screen never appears, because there is no call, and nothing may stage a saved contact.
+**Recording.** Turn dry run off only for the recording window, with one consenting account, its own confirmed number and one slot a few minutes ahead. Use `scrcpy --record` at the phone's native resolution. Turn on do not disturb so no other notification lands in the frame. Nothing may stage a saved contact or a caller name.
 
-**Done when:** `demo-video.md` holds the final script with timings under three minutes, every caption is legible at phone size, every number shown comes from seeded rows, the video is public, and its link is in `demo-video.md`.
+**Done when:** `demo-video.md` holds the final script with timings under three minutes, the exchange is one unbroken real take, the seed disclosure is legible at phone size, every number shown comes from rows, the video is public, and its link is in `demo-video.md`.
 
 ---
 
 ### T8.5: Pull request and Devpost ★
 ```yaml
-requires:   T8.3, T8.4
+requires:   T8.3, T8.4, P10
 fixture-ok: yes
 size:       M · frontier
 owns:       scripts/package-list-pr.sh, (operational)
@@ -206,8 +211,9 @@ Read `CONTRIBUTING.md`, `docs/community-review-policy.md`, `docs/git-naming-conv
 
 **Package with a script.** `scripts/package-list-pr.sh <target-dir>` copies a clean tree into `apps/web/orma/` of a local checkout of the list repository, so every run produces the same result.
 
-- **Include.** `web/`, `supabase/`, `proxy/`, `scripts/`, `testdata/`, `docs/`, `.env.example`, and an app `README.md` adapted from T8.3.
-- **Exclude.** `dev-diary/`, `design/`, `AGENTS.md`, agent configs, every `.env`, `node_modules`, build output, and anything gitignored.
+- **Include.** `web/`, `supabase/`, `scripts/`, `testdata/`, `docs/`, `.env.example`, and an app `README.md` adapted from T8.3.
+- **Exclude.** `proxy/`, `dev-diary/`, `design/`, `AGENTS.md`, agent configs, every `.env`, `node_modules`, build output, and anything gitignored. The script excludes these itself, never by hand.
+- **Without the proxy.** The web app and several functions refuse any API URL containing `supabase.co`, starting at `web/src/lib/supabase.ts:23`. The app README must say how a self-hoster points `ORMA_API_URL` at their project without the proxy, or the guard needs a contract change first.
 - **Replace in the copy.** The `summary`, `evidence` and task text in `testdata/calle/` and in the inline fixture in `dispatch-mode.ts` still carry provider text that names the operator. Replace them with synthetic text in the packaged copy. Rerun the Deno tests inside the copy afterwards.
 - **Scan the copy.** Fail on any phone-shaped string outside reserved fictional ranges, any key-shaped string, the operator's name, and any `supabase.co` project host.
 - **Index.** Add one row for Orma to `apps/README.md`, in that table's format and tone.
@@ -216,7 +222,7 @@ Read `CONTRIBUTING.md`, `docs/community-review-policy.md`, `docs/git-naming-conv
 
 **Their naming and checks.** Branch in `<type>/<short-kebab-summary>` form, such as `feat/orma-accountability-calls`. PR title `feat(apps): add Orma accountability calls`, or similar in their format. Fill in every item of their pull request template. Run `python3 scripts/validate_repository.py` in the checkout and pass it. English only.
 
-**Devpost.** The description carries the same disclosure as the README: seeded history and a synthetic exchange. Judging covers real world impact, quality of the idea, technical implementation, and product experience and demo, per `product.md` §9.
+**Devpost.** The description carries the same disclosure as the README: a real call over seeded history. Judging covers real world impact, quality of the idea, technical implementation, and product experience and demo, per `product.md` §9.
 
 **Done when:** the packaged app runs from its README on a clean clone in dry run with no hosted service. The scan finds no real transcript, number, name or secret. `validate_repository.py` passes. The pull request is open and passing its checks, and the Devpost entry is submitted rather than saved as a draft.
 

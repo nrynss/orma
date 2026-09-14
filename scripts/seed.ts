@@ -26,6 +26,9 @@
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { renderCallTask, type Briefing } from "../supabase/functions/_shared/briefing.ts";
+import { buildCallRequest } from "../supabase/functions/_shared/calle.ts";
+import { maskedRequestBody } from "../supabase/functions/_shared/dispatch-mode.ts";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -218,7 +221,7 @@ function seedUuid(userId: string, label: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Date helpers
+// Date helpers (host timezone independent)
 // ---------------------------------------------------------------------------
 
 function todayInTimezone(tz: string): string {
@@ -233,136 +236,52 @@ function todayInTimezone(tz: string): string {
 }
 
 function subtractDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + "T12:00:00Z");
-  d.setUTCDate(d.getUTCDate() - days);
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day - days, 12, 0, 0));
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Converts a wall calendar date and time in a target IANA timezone to an ISO UTC string.
+ * Uses only Intl.DateTimeFormat on UTC instants so host machine zone has zero effect.
+ */
 function dateTimeInTz(
   dateStr: string,
   hour: number,
   minute: number,
   tz: string,
 ): string {
-  const probe = new Date(`${dateStr}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`);
-  const utcStr = probe.toLocaleString("en-US", { timeZone: "UTC" });
-  const tzStr = probe.toLocaleString("en-US", { timeZone: tz });
-  const utcDate = new Date(utcStr);
-  const tzDate = new Date(tzStr);
-  const offsetMs = utcDate.getTime() - tzDate.getTime();
-  const result = new Date(probe.getTime() + offsetMs);
-  return result.toISOString();
-}
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const targetUtc = Date.UTC(year, month - 1, day, hour, minute, 0);
 
-// ---------------------------------------------------------------------------
-// CALL-E schema and request helpers
-// ---------------------------------------------------------------------------
+  const getOffsetMs = (date: Date, timeZone: string) => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(date);
+    let y = 0, m = 0, d = 0, h = 0, min = 0, s = 0;
+    for (const p of parts) {
+      if (p.type === "year") y = Number(p.value);
+      else if (p.type === "month") m = Number(p.value);
+      else if (p.type === "day") d = Number(p.value);
+      else if (p.type === "hour") h = Number(p.value) % 24;
+      else if (p.type === "minute") min = Number(p.value);
+      else if (p.type === "second") s = Number(p.value);
+    }
+    const asUtc = Date.UTC(y, m - 1, d, h, min, s);
+    return asUtc - date.getTime();
+  };
 
-const CALL_E_RESULT_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["captured_items", "retired_items"],
-  properties: {
-    captured_items: {
-      type: "array",
-      description: "New things the caller said they need to track. Empty array if none.",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["text", "evidence_offset_seconds"],
-        properties: {
-          text: { type: "string", description: "The item in the caller's own words, one short line." },
-          evidence_offset_seconds: { type: "integer", description: "Transcript offset in seconds where the caller said it." },
-        },
-      },
-    },
-    retired_items: {
-      type: "array",
-      description: "Items the caller asked to drop. Evidence is required because retiring is destructive. Empty array if none.",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["item_id", "evidence_offset_seconds"],
-        properties: {
-          item_id: { type: "string", description: "The id given in the task for that item." },
-          evidence_offset_seconds: { type: "integer", description: "Transcript offset in seconds where the caller asked to drop it." },
-        },
-      },
-    },
-    commitments: {
-      type: "array",
-      description: "Things the caller said out loud they would do, with a time attached where they gave one.",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["item_id", "evidence_offset_seconds"],
-        properties: {
-          item_id: { type: "string", description: "The id given in the task for that item." },
-          due: { type: "string", description: "When they said they would do it, in their own words. Omit if they gave no time." },
-          evidence_offset_seconds: { type: "integer", description: "Transcript offset in seconds where they committed." },
-        },
-      },
-    },
-    slot_change_requested: {
-      type: "string",
-      enum: ["yes", "no", "unknown"],
-      description: "Whether the caller asked to change their daily check-in time.",
-    },
-    slot_change_time: {
-      type: "string",
-      description: "The time they asked for, if any.",
-    },
-    mood: {
-      type: "string",
-      enum: ["ok", "low", "stressed", "energised", "unknown"],
-      description: "How the caller sounded during the call.",
-    },
-  },
-};
-
-function renderCallTask(briefing: SeedBriefing): string {
-  return `You are Orma, calling ${briefing.user_name} for their daily two-minute check-in.
-Both of you know you are a machine. Do not pretend otherwise, and do not apologise for it.
-
-Open with what they do not know, then move on:
-${briefing.lead_line}
-
-Then walk what is open, briefly, not the whole list. These are the open items and their ids:
-${briefing.open_items}
-
-After that, ask what is new and needs capturing. Never ask this first.
-
-Then offer the exit. Ask whether anything on the list should be dropped. If they want to drop
-something, agree cleanly. Do not argue, do not ask them to reconsider, and do not make them
-justify it.
-
-Close by confirming tomorrow at ${briefing.slot_local_time} and hang up. Target two minutes. Do not state any number
-that was not given to you above.`;
-}
-
-function maskPhoneNumber(phone: string): string {
-  if (phone.length <= 7) return "X".repeat(phone.length);
-  return `${phone.slice(0, 7)}${"X".repeat(phone.length - 7)}`;
-}
-
-function buildMaskedRequestBody(
-  callRunId: string,
-  phone: string,
-  task: string,
-): string {
-  return JSON.stringify({
-    task,
-    recipients: [
-      {
-        phones: [maskPhoneNumber(phone)],
-      },
-    ],
-    result_schema: CALL_E_RESULT_SCHEMA,
-    webhook_url: "https://orma-api.nryn.dev/functions/v1/calle-webhook/<redacted>",
-    metadata: {
-      call_run_id: callRunId,
-    },
-  });
+  const offset1 = getOffsetMs(new Date(targetUtc), tz);
+  const instant1 = new Date(targetUtc - offset1);
+  const offset2 = getOffsetMs(instant1, tz);
+  return new Date(targetUtc - offset2).toISOString();
 }
 
 // ---------------------------------------------------------------------------
@@ -379,16 +298,8 @@ interface SeedItem {
   text: string;
   sinceDateDaysAgo: number;
   source: string;
+  capturingRunIndex?: number;
   mentions: SeedMention[];
-}
-
-interface SeedBriefing {
-  user_name: string;
-  open_count: number;
-  lead_line: string;
-  open_items: string;
-  last_call_summary: string;
-  slot_local_time: string;
 }
 
 interface SeedRun {
@@ -399,12 +310,12 @@ interface SeedRun {
   partOfDay: string;
   scheduledHour: number;
   mood: string;
-  briefing: SeedBriefing;
+  briefing: Briefing;
   transcript: Array<{ speaker: string; offset_seconds: number; text: string }>;
   structuredResult: {
     captured_items: Array<{ text: string; evidence_offset_seconds: number }>;
     retired_items: Array<{ item_id: string; evidence_offset_seconds: number }>;
-    commitments: Array<{ item_id: string; evidence_offset_seconds: number }>;
+    commitments: Array<{ item_id: string; due?: string; evidence_offset_seconds: number }>;
     mood: string;
     slot_change_requested: string;
   };
@@ -441,8 +352,8 @@ function buildPlan(
   const run2Id = seedUuid(userId, "run:2");
   const run3Id = seedUuid(userId, "run:3");
 
-  // All 3 runs fall in the 7-day window ending yesterday [demoDate - 7, demoDate - 1]
-  // so compute_pattern_facts observes 3 days and generates weekly patterns.
+  // All 3 runs fall in the 7-day window ending yesterday [demoDate - 7, demoDate - 1].
+  // compute_pattern_facts observes 3 distinct days and reports sufficient_history: true.
   const run1Date = subtractDays(demoDate, 6);
   const run2Date = subtractDays(demoDate, 4);
   const run3Date = subtractDays(demoDate, 3);
@@ -476,6 +387,7 @@ function buildPlan(
         text: "weekend groceries",
         sinceDateDaysAgo: 3,
         source: "call",
+        capturingRunIndex: 2,
         mentions: [
           { runIndex: 2, offsetSeconds: 14 },
         ],
@@ -500,7 +412,7 @@ function buildPlan(
         },
         transcript: [
           { speaker: "bot", offset_seconds: 0, text: `Good morning, ${profile.display_name}. You\u2019ve had the dentist on your list for a while now.` },
-          { speaker: "user", offset_seconds: 8, text: "Yeah, I know. I keep putting it off." },
+          { speaker: "user", offset_seconds: 8, text: "Yeah, I know. I will sort it out this week." },
           { speaker: "bot", offset_seconds: 12, text: "Anything new today?" },
           { speaker: "user", offset_seconds: 16, text: "No, nothing new." },
           { speaker: "bot", offset_seconds: 18, text: "Talk tomorrow at 8. Bye." },
@@ -508,7 +420,9 @@ function buildPlan(
         structuredResult: {
           captured_items: [],
           retired_items: [],
-          commitments: [],
+          commitments: [
+            { item_id: dentistId, evidence_offset_seconds: 0 },
+          ],
           mood: "ok",
           slot_change_requested: "no",
         },
@@ -524,14 +438,14 @@ function buildPlan(
         briefing: {
           user_name: profile.display_name,
           open_count: 2,
-          lead_line: "Everything open is still current.",
+          lead_line: "It's been 30 days.",
           open_items: `- the dentist (id: ${dentistId})\n- renew the passport (id: ${passportId})`,
-          last_call_summary: "Last call added nothing new.",
+          last_call_summary: "You promised 1 thing.",
           slot_local_time: "08:00",
         },
         transcript: [
-          { speaker: "bot", offset_seconds: 0, text: `Hi ${profile.display_name}. The dentist keeps coming up.` },
-          { speaker: "user", offset_seconds: 6, text: "I will sort it this week." },
+          { speaker: "bot", offset_seconds: 0, text: `Hi ${profile.display_name}. The dentist has been on your list for 30 days.` },
+          { speaker: "user", offset_seconds: 6, text: "I will call them tomorrow." },
           { speaker: "bot", offset_seconds: 10, text: "You also have renew the passport open." },
           { speaker: "user", offset_seconds: 14, text: "That can wait a bit." },
           { speaker: "bot", offset_seconds: 18, text: "Noted. See you tomorrow." },
@@ -539,7 +453,10 @@ function buildPlan(
         structuredResult: {
           captured_items: [],
           retired_items: [],
-          commitments: [],
+          commitments: [
+            { item_id: dentistId, evidence_offset_seconds: 0 },
+            { item_id: passportId, evidence_offset_seconds: 10 },
+          ],
           mood: "ok",
           slot_change_requested: "no",
         },
@@ -555,13 +472,13 @@ function buildPlan(
         briefing: {
           user_name: profile.display_name,
           open_count: 2,
-          lead_line: "You've mentioned the dentist 3 times. It's been 31 days.",
+          lead_line: "It's been 31 days.",
           open_items: `- the dentist (id: ${dentistId})\n- renew the passport (id: ${passportId})`,
-          last_call_summary: "Last call added nothing new.",
+          last_call_summary: "You promised 2 things.",
           slot_local_time: "08:00",
         },
         transcript: [
-          { speaker: "bot", offset_seconds: 0, text: `You\u2019ve mentioned the dentist three times. It\u2019s been ${34 - 3} days.` },
+          { speaker: "bot", offset_seconds: 0, text: `The dentist, it\u2019s been 31 days.` },
           { speaker: "user", offset_seconds: 7, text: "Fine, I will book it." },
           { speaker: "bot", offset_seconds: 10, text: "Need to pick up anything this weekend?" },
           { speaker: "user", offset_seconds: 14, text: "Yes, weekend groceries." },
@@ -572,7 +489,9 @@ function buildPlan(
             { text: "weekend groceries", evidence_offset_seconds: 14 },
           ],
           retired_items: [],
-          commitments: [],
+          commitments: [
+            { item_id: dentistId, evidence_offset_seconds: 0 },
+          ],
           mood: "unknown",
           slot_change_requested: "no",
         },
@@ -683,7 +602,13 @@ async function applyPlan(plan: SeedPlan): Promise<void> {
 
   for (const item of plan.items) {
     const sinceDate = subtractDays(plan.demoDate, item.sinceDateDaysAgo);
-    const createdAt = dateTimeInTz(sinceDate, 9, 0, tz);
+    let createdAt: string;
+    if (item.capturingRunIndex !== undefined) {
+      const run = plan.runs[item.capturingRunIndex];
+      createdAt = dateTimeInTz(run.localDate, run.scheduledHour, 2, tz);
+    } else {
+      createdAt = dateTimeInTz(sinceDate, 8, 0, tz);
+    }
     const existing = existingMap.get(item.id);
 
     const { error } = await supabase
@@ -707,7 +632,7 @@ async function applyPlan(plan: SeedPlan): Promise<void> {
       console.error(`Failed to insert item "${item.text}":`, error.message);
       Deno.exit(1);
     }
-    console.log(`  ✓ "${item.text}" (since ${sinceDate}, status=${existing?.status ?? "open"})`);
+    console.log(`  ✓ "${item.text}" (since ${sinceDate}, created_at=${createdAt}, status=${existing?.status ?? "open"})`);
   }
 
   // 2. Insert call_runs with briefing populated
@@ -823,10 +748,42 @@ async function applyPlan(plan: SeedPlan): Promise<void> {
     console.log(`  ✓ result for ${run.localDate}`);
   }
 
-  // 5. Insert call_events with masked request body matching dry-run dispatcher
+  // 5. Insert commitments matching structured results
+  console.log("Inserting commitments...");
+  const seedRunIds = plan.runs.map((r) => r.id);
+  await supabase
+    .from("commitments")
+    .delete()
+    .in("call_run_id", seedRunIds);
+
+  for (const run of plan.runs) {
+    const completedAt = dateTimeInTz(
+      run.localDate,
+      run.scheduledHour,
+      2,
+      tz,
+    );
+    for (const com of run.structuredResult.commitments) {
+      const { error } = await supabase
+        .from("commitments")
+        .insert({
+          item_id: com.item_id,
+          user_id: userId,
+          call_run_id: run.id,
+          due: null,
+          evidence_offset_seconds: com.evidence_offset_seconds,
+          created_at: completedAt,
+        });
+      if (error) {
+        console.error(`Failed to insert commitment for run ${run.localDate}:`, error.message);
+        Deno.exit(1);
+      }
+    }
+  }
+
+  // 6. Insert call_events with masked request body matching dry-run dispatcher
   console.log("Inserting call events...");
-  for (let runIdx = 0; runIdx < plan.runs.length; runIdx++) {
-    const run = plan.runs[runIdx];
+  for (const run of plan.runs) {
     const scheduledFor = dateTimeInTz(
       run.localDate,
       run.scheduledHour,
@@ -840,19 +797,21 @@ async function applyPlan(plan: SeedPlan): Promise<void> {
       tz,
     );
 
-    const mentionCount = plan.items.reduce(
-      (sum, item) =>
-        sum + (item.mentions.some((m) => m.runIndex === runIdx) ? 1 : 0),
-      0,
-    );
-    const capturedCount = run.structuredResult.captured_items.length;
+    const structured = run.structuredResult;
+    const itemCount = structured.captured_items.length;
+    const retirementCount = structured.retired_items.length;
+    const commitmentCount = structured.commitments.length;
+    const mentionCount = itemCount + retirementCount + commitmentCount;
 
+    const webhookUrl = `${ORMA_API_URL}/functions/v1/calle-webhook/dummy-seed-secret`;
     const callTask = renderCallTask(run.briefing);
-    const maskedReq = buildMaskedRequestBody(
+    const callReq = buildCallRequest(
       run.id,
       plan.profile.phone_e164 || "+15555550100",
       callTask,
+      webhookUrl,
     );
+    const maskedReq = maskedRequestBody(JSON.stringify(callReq));
 
     const events = [
       {
@@ -876,10 +835,10 @@ async function applyPlan(plan: SeedPlan): Promise<void> {
           calle_call_id: `fixture:seed:${run.id.slice(0, 8)}`,
           state: "completed",
           disposition: "answered_extracted",
-          item_count: capturedCount,
+          item_count: itemCount,
           mention_count: mentionCount,
-          retirement_count: 0,
-          commitment_count: 0,
+          retirement_count: retirementCount,
+          commitment_count: commitmentCount,
           skipped: [],
         },
       },
@@ -893,7 +852,7 @@ async function applyPlan(plan: SeedPlan): Promise<void> {
           outbound_request_made: false,
           state: "completed",
           disposition: "answered_extracted",
-          item_count: capturedCount,
+          item_count: itemCount,
           mention_count: mentionCount,
           failure_reason: "",
         },
@@ -920,9 +879,8 @@ async function applyPlan(plan: SeedPlan): Promise<void> {
     );
   }
 
-  // 6. Insert item_mentions: ONLY delete mentions for seeded runs!
+  // 7. Insert item_mentions: ONLY delete mentions for seeded runs!
   console.log("Inserting item mentions...");
-  const seedRunIds = plan.runs.map((r) => r.id);
   await supabase
     .from("item_mentions")
     .delete()
@@ -981,7 +939,7 @@ async function verifyCounts(plan: SeedPlan): Promise<void> {
   // Count seeded runs.
   const { data: seedRuns } = await supabase
     .from("call_runs")
-    .select("id, briefing")
+    .select("id, briefing, scheduled_for")
     .eq("user_id", plan.profile.id)
     .like("idempotency_key", "orma:seed:%");
   console.log(`Seeded runs: ${seedRuns?.length ?? 0}`);
@@ -1008,21 +966,47 @@ async function verifyCounts(plan: SeedPlan): Promise<void> {
     .select("call_run_id, detail")
     .in("call_run_id", runIds)
     .eq("kind", "dispatched");
-  const hasRequestBody = dispatchedEvents?.every((e) => {
+  const hasValidRequestBody = dispatchedEvents?.every((e) => {
     const detail = e.detail as Record<string, unknown> | null;
-    return typeof detail?.request_body === "string" && detail.request_body.length > 2;
+    const bodyStr = typeof detail?.request_body === "string" ? detail.request_body : "";
+    return bodyStr.includes("Hello. This is Orma.") && bodyStr.includes("<redacted>");
   }) ?? false;
-  if (hasRequestBody) {
-    console.log("✓ Dispatched events carry masked CALL-E request_body");
+  if (hasValidRequestBody) {
+    console.log("✓ Dispatched events carry full reviewed CALL-E request_body with masked webhook");
   } else {
-    console.log("✗ Dispatched events missing request_body");
+    console.log("✗ Dispatched events missing valid reviewed request_body");
   }
 
-  // Check briefing via RPC.
+  // Check captured item created_at <= call_runs.completed_at
+  const groceriesId = plan.items[2].id;
+  const run3Id = plan.runs[2].id;
+  const { data: itemGroceries } = await supabase
+    .from("items")
+    .select("created_at")
+    .eq("id", groceriesId)
+    .single();
+  const { data: run3Data } = await supabase
+    .from("call_runs")
+    .select("completed_at")
+    .eq("id", run3Id)
+    .single();
+  if (itemGroceries && run3Data) {
+    const itemCreated = new Date(itemGroceries.created_at).getTime();
+    const runCompleted = new Date(run3Data.completed_at).getTime();
+    if (itemCreated <= runCompleted) {
+      console.log("✓ Weekend groceries created_at <= run 3 completed_at");
+    } else {
+      console.log(`✗ Weekend groceries created_at (${itemGroceries.created_at}) > run 3 completed_at (${run3Data.completed_at})`);
+    }
+  }
+
+  // Check briefing via RPC evaluated at demo date.
+  const nowAtDemo = dateTimeInTz(plan.demoDate, 8, 0, plan.profile.timezone);
   const { data: briefing, error: briefingError } = await supabase
     .rpc("assemble_briefing", {
       p_user_id: plan.profile.id,
       p_slot_local_time: "08:00",
+      p_now: nowAtDemo,
     });
   if (briefingError) {
     console.error("Failed to call assemble_briefing:", briefingError.message);
@@ -1074,7 +1058,6 @@ async function removeSeed(
   profile: { id: string; display_name: string; timezone: string; phone_e164: string | null },
   demoDate: string,
 ): Promise<void> {
-  const userId = profile.id;
   console.log(`\n=== Removing seeded rows for ${profile.display_name} ===`);
 
   const plan = buildPlan(profile, demoDate);
@@ -1091,6 +1074,13 @@ async function removeSeed(
       .in("call_run_id", runIds);
     if (evErr) console.error("call_events delete error:", evErr.message);
     else console.log("  ✓ Deleted call_events for seeded runs.");
+
+    const { error: comRunErr } = await supabase
+      .from("commitments")
+      .delete()
+      .in("call_run_id", runIds);
+    if (comRunErr) console.error("commitments delete error:", comRunErr.message);
+    else console.log("  ✓ Deleted commitments for seeded runs.");
 
     const { error: trErr } = await supabase
       .from("transcripts")
@@ -1161,27 +1151,25 @@ async function removeSeed(
 }
 
 // ---------------------------------------------------------------------------
-// Disclosure paragraph
+// Disclosure paragraph (active voice)
 // ---------------------------------------------------------------------------
 
 function printDisclosure(plan: SeedPlan): void {
   const runDates = plan.runs.map((r) => r.localDate);
   console.log("\n=== Disclosure paragraph ===");
   console.log(`
-The demo history shown in this repository is seeded data. No real phone call
-produced these rows. The item "the dentist" was inserted with \`seeded = true\`,
-\`source = 'call'\`, and a \`since_date\` of ${subtractDays(plan.demoDate, 34)}
-(34 days before the demo date of ${plan.demoDate}). Three earlier call runs
-dated ${runDates[0]}, ${runDates[1]}, and ${runDates[2]} were inserted in the
-\`completed\` state with \`dry_run = true\` and \`billable = false\`. Each run
-carries a stable idempotency key under the \`orma:seed:\` prefix, a synthetic
-transcript, a valid structured result, and the call_events a dry-run
-dispatcher writes (dispatched, ingested, finalised). One \`item_mentions\` row
-per run links "the dentist" to that run's transcript offset. Two additional
-items ("renew the passport" and "weekend groceries") are seeded with fewer
-mentions so the Today screen does not appear staged. All seeded rows carry
-\`seeded = true\` or an \`orma:seed:\` idempotency key and can be identified
-by a single query on either marker.
+This repository shows seeded demo history. No real phone call produced these
+rows. The seed creates "the dentist" with \`seeded = true\`, \`source = 'call'\`,
+and a \`since_date\` of ${subtractDays(plan.demoDate, 34)} (34 days before the demo date of ${plan.demoDate}).
+The seed also writes three earlier call runs dated ${runDates[0]}, ${runDates[1]},
+and ${runDates[2]} in the \`completed\` state with \`dry_run = true\` and \`billable = false\`.
+Each run carries a stable idempotency key under the \`orma:seed:\` prefix, a
+synthetic transcript, a valid structured result, and the three \`call_events\` a
+dry-run dispatcher writes (dispatched, ingested, and finalised). One
+\`item_mentions\` row per run links "the dentist" to that run's transcript offset.
+The seed adds two more items ("renew the passport" and "weekend groceries") with
+fewer mentions so the Today screen looks natural. A single query on \`seeded = true\`
+or the \`orma:seed:\` prefix matches every seeded row.
 `.trim());
 }
 
