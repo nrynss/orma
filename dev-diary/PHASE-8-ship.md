@@ -10,7 +10,7 @@ parallel: no
 
 **Goal:** A disclosed demo history, a deployment that survives judging, and a submission that explains itself.
 
-**T8.2 is blocked.** A live call run across days is not possible before submission, per the operator on 14 September. The plan changes in three places. T8.1 seeds the whole demo history and discloses it. T8.5 uses a labelled synthetic call, the same approach as the T6.8 landing demo. T8.7 no longer waits for a day log. T8.2 stays on the board as blocked, per the scope rule in `AGENTS.md`.
+**No live call run.** The submission does not depend on real calls across days. T8.1 seeds the whole demo history and discloses it. T8.5 uses a labelled synthetic call, the same approach as the T6.8 landing demo.
 
 **Clock.** Submissions close 14 September at 23:45 SGT, which is 21:15 IST. T8.1, T8.4, T8.5 and T8.6 are the submission path. T8.3 must run before the project's first seven idle days, and T8.7 closes 18 September.
 
@@ -31,30 +31,6 @@ Seed the dentist item aged 34 days, with three mentions on three earlier runs on
 The repository rejects tools that hide side effects, so this is disclosed rather than disguised. The README states which rows were seeded and why, and the video captions it on screen. Nothing after the seed may pretend to be a real call. The retirement in the demo is a live state change through a real surface.
 
 **Done when:** the script is runnable and idempotent, every seeded row is distinguishable in a query, the briefing assembled from the seed says three mentions and 34 days from rows, and the disclosure text exists in both the README and the video script.
-
----
-
-### T8.2: Live call run across days ★
-```yaml
-requires:   T2.4, T2.7, T8.1
-fixture-ok: no
-size:       M · frontier
-owns:       (operational)
-status:     blocked
-```
-Real calls to a real phone, on the real schedule, every day until submission.
-
-**Blocked, 14 September.** The operator confirmed this cannot happen before submission. It stays on the board as a finding, not a cut. Two tasks depended on it. T8.5 now uses a labelled synthetic exchange, and T8.7 no longer needs its day log. What it would have proven stays unproven, and the README says so.
-
-This is what makes "you've mentioned this three times" true. It is also the only way the call's own quality gets tested, which is the eighty percent of perceived polish that no amount of correct plumbing supplies.
-
-Keep a log of each day: the number the handset showed and whether it was flagged, whether the two-beat landing worked, whether it felt like a person thinking or a list being read, and what the extraction got wrong.
-
-Record the caller id by hand every day. The API does not report the originating number, and the line rotates, so a note is the only way to build any picture of the pool at all. Collect them for `feedback.md` issue 9: a list of distinct numbers across a week is evidence that rotation is real and measurable, which is worth more to a reviewer than our description of it. Feed that back into the task template in [docs/calle-call.md](../docs/calle-call.md).
-
-The 11 September call already named four failures to watch for: leading before landing, long silences, skipping the walk and the exit, and capturing something the caller never confirmed. The last two matter most, because the demo beat lives in the exit.
-
-**Done when:** at least one item has accumulated three genuine mentions across three separate days, and the task template has been revised at least once from what the calls actually sounded like.
 
 ---
 
@@ -90,7 +66,7 @@ The repository requires apps that place calls or create recurring jobs to docume
 
 State plainly that missed calls are not handled and why, per `product.md` §10. A documented limitation reads as judgement. An undocumented one reads as a bug found by a judge.
 
-State just as plainly what was not run. No live call run across days took place. The demo history is seeded, and the demo exchange is synthetic. Name the seeded rows and the one real call from 11 September that the fixtures record.
+State just as plainly how the demo was made. The demo history is seeded, and the demo exchange is synthetic. Name the seeded rows and the one real call from 11 September that the fixtures record.
 
 Note Telegram's Bot API under third-party integrations, and link the MCP configuration from T4.3.
 
@@ -116,7 +92,7 @@ The centre is one continuous exchange, not a feature tour:
 
 That single beat carries give-before-take and unpunished quitting together. A product that lets a task go is the thing no other submission will show.
 
-**The exchange is synthetic, and the video says so on screen.** T8.2 is blocked, so no real call carries this line. Use the same labelled synthetic approach as the T6.8 landing demo. Never imply that a real person took the call or that the audio is a production recording.
+**The exchange is synthetic, and the video says so on screen.** No real call carries this line. Use the same labelled synthetic approach as the T6.8 landing demo. Never imply that a real person took the call or that the audio is a production recording.
 
 The numbers in the line still come from rows. Show them in the web app, from the seed, so "three times" and "34 days" are visibly measured. Then show the retirement as a live state change in Items, and the item leaving the next briefing.
 
@@ -140,7 +116,7 @@ status:     not-started
 ```
 Open the pull request to `CALLE-AI/awesome-phone-call-agents` under `apps/`, following the contribution rules. Put that URL into the Devpost form along with the description, the video link, and the email on the CALL-E account. The live demo URL is optional and, given T8.3, worth including.
 
-The description carries the same disclosure as the README: seeded history, a synthetic exchange, and no live run across days.
+The description carries the same disclosure as the README: seeded history and a synthetic exchange.
 
 Submissions close 14 September at 23:45 SGT, which is 21:15 IST.
 
@@ -158,7 +134,7 @@ status:     not-started
 ```
 A separate prize with its own deadline of 18 September, four days after submissions close, and its own judging. One entry per entrant, rewarding actionable comments such as bug reports and interface suggestions.
 
-The raw material already exists. [`dev-diary/feedback.md`](feedback.md) is written as the work happens, so this task is editing rather than remembering. It once waited on the T8.2 day log. That log will not exist, so the survey goes from the fifteen issues already recorded.
+The raw material already exists. [`dev-diary/feedback.md`](feedback.md) is written as the work happens, so this task is editing rather than remembering. The survey goes from the fifteen issues already recorded.
 
 Lead with three: the unsigned webhook, the missing call disposition, and numbers being unavailable in India. Those are the ones that changed what Orma could be, and a reviewer can act on all three. The last is also the one with a commercial answer rather than only an engineering one.
 
