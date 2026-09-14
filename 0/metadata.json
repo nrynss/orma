@@ -1,0 +1,53 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2FZ7QZECNVCG6EQGRJDD27H",
+  "session_id": "01a09bdb-1b09-7a70-93b2-7781ac088ae2",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-14T12:46:13.626217419Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "dev-diary/PHASE-8-ship.md",
+    "dev-diary/adversarial-review/t8.1-handoff.md",
+    "dev-diary/adversarial-review/t8.1-remediation-round2.md",
+    "dev-diary/adversarial-review/t8.1-remediation-round3.md",
+    "dev-diary/adversarial-review/t8.1-round3.md",
+    "dev-diary/adversarial-review/t8.1-round4.md",
+    "scripts/seed.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "8e1653b8e5ab",
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-14T12:46:13.517174873Z",
+    "agent_lines": 443,
+    "agent_removed": 208,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 443,
+    "total_lines_changed": 651,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
