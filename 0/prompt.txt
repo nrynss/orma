@@ -318,3 +318,11 @@ proxy needs to be left out by the script itself.
 ---
 
 Their policy counts unauthorized call destinations as a merge blocker. The fix could be number confirmation before the first call, - how do we do this?
+
+---
+
+Only B is needed. Telegram is just decoration.
+
+---
+
+Just add a new P10.
