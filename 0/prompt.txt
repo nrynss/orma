@@ -346,3 +346,49 @@ No. No need for review remediation. Just send an agent and fix it.
 ---
 
 No risk. I ahve asked the agent to hold off. You are free to edit and update. No need of review
+
+---
+
+<task-notification>
+<task-id>a0cf75de5896a3e81</task-id>
+<tool-use-id>toolu_0196YBpAuUE9Tmc815wttDjW</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/c1950000-44d4-459a-a37e-f4411f2ae47a/tasks/a0cf75de5896a3e81.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix the submission README" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I fixed all twelve items in `/home/nryn/work/orma/README.md`, and the six screenshots in `docs/screens/` are now real captures of the running app. Nothing is committed and I edited no other file.
+
+**What changed, per item**
+1. **Vault key:** `ORMA_VAULT_KEY` is gone. Deploy step 9 now says to create a secret API key named `materialise`, then store it with `vault.create_secret(..., 'ORMA_MATERIALISE_SECRET_KEY')`. Confirmed in the three cron migrations and the `withSupabase({ auth: "secret:materialise" })` calls in `tick`, `materialise` and `analysis`.
+2. **Cron jobs:** now `tick-runs`, `materialise-runs` and `analysis-report` (Monday 06:20 UTC), in the jobs list, the functions table and Side effects.
+3. **Operator SQL:** three `cron.unschedule` statements with the real names, each ending in a semicolon.
+4. **Telegram webhook:** the `curl setWebhook` step is gone. The README now says the function registers itself at boot and on a GET to `${ORMA_API_URL}/functions/v1/telegram/${TELEGRAM_WEBHOOK_SECRET}`. Confirmed in `telegram/index.ts`.
+5. **Local walkthrough:** it now says no edge runtime or `tick` runs locally, so nothing advances. There is no password login, and the local stack has no mail server. So I added a sign-in step that gets a one-time token from the local Auth admin API and prints only the token. I ran it, and the callback signed me in. I also added the `seed.ts` preview command, which I ran in plan mode only. I did not run `--apply`. `answered_extracted` is now called only a disposition.
+6. **Clone:** uses `&lt;this-repository-url&gt;`.
+7. **Voice notes:** they are stored in the `item-audio` bucket with `items.audio_url`, and `delete_my_account` removes them.
+8. **Consent:** quotes the real `CONSENT_WORDING` with `outbound-calls-v1` and the number +15555550100. It says onboarding can skip consent, and that the dispatcher then cancels every run without calling CALL-E.
+9. **Deploy your own:**
+   * Added `npm install` for `web/` and `proxy/`, and `supabase link`.
+   * Added a warning to change the hardcoded cron URLs before `supabase db push`. The same warning covers `web/src/lib/supabase.ts` and the `[auth]` URLs in `config.toml`.
+   * Added `supabase secrets set` naming every secret the functions require. That is your nine names plus `CALLE_API_BASE`, `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` and `GEMINI_MODEL`.
+   * Added `supabase config diff`, then `supabase config push`, for the Resend SMTP settings.
+   * I checked each subcommand exists with `--help` and ran nothing against the linked project.
+10. **Proxy rationale:** now the misresolving Supabase hosts, plus the app's refusal of any `supabase.co` URL.
+11. **Dry-run events:** lists the real keys for `dispatched`, `ingested` and `finalised`. `billable = false` is on the `call_runs` row, not the event.
+12. **Screens:** captured from a headless Chromium session signed in as `local@example.com`, at 390 by 844 (saved at 2x). I viewed all six. They show only "Local Developer", +15555550100 and harness items, with no keys. The wordmark SVGs stay.
+
+**Other fixes I found while checking**
+* **Email receipts:** the "Email receipt" row was wrong. Post-call receipts go only to Telegram. Email goes out only for weekly pattern reports, when the profile turns email on.
+* **Side effects:** added a row for the Telegram webhook registration.
+* **Lifecycle:** added the missing `no_result` state. `canceled` also covers runs the dispatcher refuses for missing consent.
+* **Screens caption:** now says these are harness data, not the demo seed.
+
+A scan of the prose found no em dashes, no semicolons, no sentence over 30 words, and no key or real number.
+
+**Environment**
+* **Local stack:** an `orma-p6-local` stack was already running when I started. I used it and did not stop it, and its 5 containers are still up.
+* **Harness data:** my only writes to it were sign-in tokens for `local@example.com`.
+* **Background processes:** I started the vite dev server (40-minute limit) and headless Chromium (4-minute limit). Both stop on their own.
+* **Other changes in the repo:** `git status` also shows `dev-diary/PHASE-8-ship.md` modified and two untracked files, `devpost-submission.md` and `.devpost-hackathon-state.json`. None of these are mine.</result>
+<usage><subagent_tokens>149532</subagent_tokens><tool_uses>47</tool_uses><duration_ms>425823</duration_ms></usage>
+</task-notification>
