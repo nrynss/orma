@@ -116,11 +116,20 @@ status:     not-started
 ```
 Open the pull request to `CALLE-AI/awesome-phone-call-agents` under `apps/`, following the contribution rules. Put that URL into the Devpost form along with the description, the video link, and the email on the CALL-E account. The live demo URL is optional and, given T8.2, worth including.
 
+**The pull request carries the app itself.** Orma's own repository is private, so the PR is the public code. Recent app PRs to that repository ship full source. Package it before opening anything.
+
+- **Place.** `apps/web/orma/`, holding `web/`, `supabase/`, `proxy/` and `scripts/`, with an app README adapted from T8.3. Add one row for Orma to `apps/README.md`, in that table's format.
+- **Leave out.** `dev-diary/`, `design/`, agent configs, `.env` files, and anything gitignored. `testdata/calle/transcript.json` is a real call transcript. The review policy treats real test-call artifacts as Must Fix, and the PR template forbids private transcripts. Ship a clearly synthetic transcript fixture in its place, with the same shape.
+- **No private services by default.** The policy rejects apps that need private services without a no-call path. The README's first run path is `scripts/p6-local-stack.sh` with dry run on. Hosted Supabase and live CALL-E are opt-in steps after it.
+- **Their rules.** Branch `feat/orma-accountability-calls` or similar in `<type>/<short-kebab-summary>` form. PR title `feat(apps): …`. Fill in every item of their pull request template. Run `python3 scripts/validate_repository.py` and pass it. Masked or reserved fictional numbers only, and English only.
+
+Read `CONTRIBUTING.md`, `docs/community-review-policy.md` and `docs/git-naming-conventions.md` in that repository before packaging, because they change.
+
 The description carries the same disclosure as the README: seeded history and a synthetic exchange.
 
 Submissions close 14 September at 23:45 SGT, which is 21:15 IST.
 
-**Done when:** the pull request is open and passing whatever checks the repository runs, and the Devpost entry is submitted rather than saved as a draft.
+**Done when:** the packaged app runs from its README on a clean clone in dry run with no hosted service, no real transcript, number or secret appears anywhere in the PR, `validate_repository.py` passes, the pull request is open and passing its checks, and the Devpost entry is submitted rather than saved as a draft.
 
 ---
 
