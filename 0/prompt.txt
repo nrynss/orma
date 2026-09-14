@@ -185,3 +185,10 @@ Dont worry about deadline. we have enough time. The UI has to be reactive. We wi
 ---
 
 P9 is in motion. What else can we do in P8?
+
+---
+
+Continue with Telegram
+
+
+Bot domain invalid is shown. We need to fix that Update that p8 document. Add transcript.json to gitignore.
