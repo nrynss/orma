@@ -51,7 +51,7 @@ type WebhookEnvelope = {
 type AuthoritativeCall = {
   id: string;
   status: string;
-  metadata: { call_run_id: string };
+  metadata: { call_run_id?: string; phone_confirmation_id?: string };
 };
 
 export function requireNamedEnv(
@@ -133,8 +133,9 @@ function parseAuthoritativeCall(value: unknown, expectedCallId: string): Authori
     call.status.trim().length === 0 ||
     !call.metadata ||
     typeof call.metadata !== "object" ||
-    typeof call.metadata.call_run_id !== "string" ||
-    !UUID_PATTERN.test(call.metadata.call_run_id)
+    (typeof call.metadata.call_run_id !== "string" && typeof call.metadata.phone_confirmation_id !== "string") ||
+    (typeof call.metadata.call_run_id === "string" && !UUID_PATTERN.test(call.metadata.call_run_id)) ||
+    (typeof call.metadata.phone_confirmation_id === "string" && !UUID_PATTERN.test(call.metadata.phone_confirmation_id))
   ) return null;
   return call as AuthoritativeCall;
 }
@@ -213,10 +214,12 @@ async function terminaliseFromRefetch(
   call: AuthoritativeCall,
   eventTag: string,
 ): Promise<RefetchOutcome> {
+  const runId = call.metadata.call_run_id;
+  if (!runId) throw new Error("call run metadata missing");
   const state = terminalStateFor(call.status);
   if (!state) return "not_terminal";
   const query = new URLSearchParams({
-    id: `eq.${call.metadata.call_run_id}`,
+    id: `eq.${runId}`,
     state: "in.(dispatched,awaiting_result)",
   });
   const response = await deps.fetch(restUrl(deps.apiUrl, "call_runs", query.toString()), {
@@ -230,7 +233,7 @@ async function terminaliseFromRefetch(
   // Zero matched rows means another guarded write moved the run first. The
   // stored tag names that writer, so a redelivery of this event's own write
   // reads it back, and a second event or a poll reads a different tag.
-  return await readTerminalWriter(deps, call.metadata.call_run_id) === eventTag
+  return await readTerminalWriter(deps, runId) === eventTag
     ? "applied"
     : "already_resolved";
 }
@@ -251,6 +254,7 @@ async function readTerminalWriter(deps: WebhookDeps, runId: string): Promise<str
 }
 
 async function hasMatchingOrmaRun(deps: WebhookDeps, call: AuthoritativeCall): Promise<boolean> {
+  if (!call.metadata.call_run_id) return false;
   const query = new URLSearchParams({
     select: "id",
     id: `eq.${call.metadata.call_run_id}`,
@@ -262,6 +266,34 @@ async function hasMatchingOrmaRun(deps: WebhookDeps, call: AuthoritativeCall): P
   });
   if (!response.ok) throw new Error("call run ownership check failed");
   const rows: unknown = await response.json();
+  return Array.isArray(rows) && rows.length === 1;
+}
+
+async function updatePhoneConfirmationFromRefetch(deps: WebhookDeps, call: AuthoritativeCall): Promise<boolean> {
+  const confirmationId = call.metadata.phone_confirmation_id;
+  if (!confirmationId) return false;
+  const state = call.status === "completed" ? "dialled" : call.status === "failed" ? "failed" : "refused";
+  // A confirmation may have been expired because its profile number changed
+  // after CALL-E accepted the request. Recovery may repair a missing dispatch
+  // write, but it must never move an expired, confirmed, or timed-out row.
+  const recoverableStates = call.status === "completed"
+    ? "in.(requested,failed)"
+    : "in.(requested,dialled,failed)";
+  const query = new URLSearchParams({
+    id: `eq.${confirmationId}`,
+    state: recoverableStates,
+    expires_at: `gt.${new Date().toISOString()}`,
+  });
+  const response = await deps.fetch(
+    restUrl(deps.apiUrl, "phone_confirmations", query.toString()),
+    // The original dispatch patch can fail after CALL-E has accepted the
+    // request. The authoritative re-fetch is then the durable handoff: it
+    // binds the provider id and restores a completed call to a verifiable
+    // state, rather than silently consuming the terminal event.
+    { method: "PATCH", headers: serviceHeaders(deps.serviceRoleKey, "return=representation"), body: JSON.stringify({ state, calle_call_id: call.id }) },
+  );
+  if (!response.ok) throw new Error("phone confirmation webhook update failed");
+  const rows = await response.json() as unknown[];
   return Array.isArray(rows) && rows.length === 1;
 }
 
@@ -287,7 +319,20 @@ export function createWebhookHandler(deps: WebhookDeps): (request: Request) => P
       if (!await claimPendingEvent(deps, envelope.id)) return new Response(null, { status: 200 });
       try {
         const call = await fetchAuthoritativeCall(deps, envelope.data.id);
-        if (!call || !await hasMatchingOrmaRun(deps, call)) {
+        if (!call) {
+          await setEventState(deps, envelope.id, IGNORED);
+          return new Response(null, { status: 200 });
+        }
+        if (call.metadata.phone_confirmation_id) {
+          await updatePhoneConfirmationFromRefetch(deps, call);
+          await setEventState(deps, envelope.id, REFETCHED);
+          return new Response(null, { status: 200 });
+        }
+        if (!call.metadata.call_run_id) {
+          await setEventState(deps, envelope.id, IGNORED);
+          return new Response(null, { status: 200 });
+        }
+        if (!await hasMatchingOrmaRun(deps, call)) {
           await setEventState(deps, envelope.id, IGNORED);
           return new Response(null, { status: 200 });
         }
@@ -437,6 +482,69 @@ if (typeof testFn === "function" && !import.meta.main) {
     }));
     const response = await handler(request());
     if (response.status !== 200) throw new Error("duplicate must be acknowledged");
+  });
+
+  testFn("a confirmation webhook repairs a lost post-dispatch record write", async () => {
+    const confirmationPatches: { url: URL; body: Record<string, unknown> }[] = [];
+    const confirmationId = "22222222-2222-4222-8222-222222222222";
+    const handler = createWebhookHandler(baseDeps(async (input, init) => {
+      const current = new Request(input, init);
+      const currentUrl = new URL(current.url);
+      if (currentUrl.pathname.endsWith("/webhook_events") && current.method === "POST") return new Response(null, { status: 201 });
+      if (currentUrl.pathname.endsWith("/webhook_events") && current.method === "PATCH") return Response.json([{ event_id: "evt_terminal" }]);
+      if (currentUrl.pathname.endsWith("/v1/calls/call_terminal")) {
+        return Response.json({ id: "call_terminal", status: "completed", metadata: { phone_confirmation_id: confirmationId } });
+      }
+      if (currentUrl.pathname.endsWith("/phone_confirmations") && current.method === "PATCH") {
+        confirmationPatches.push({ url: currentUrl, body: JSON.parse(await current.text()) });
+        return Response.json([{ id: confirmationId }]);
+      }
+      throw new Error(`unexpected request ${current.method} ${current.url}`);
+    }));
+    const response = await handler(request());
+    if (response.status !== 200) throw new Error("the repair webhook must be acknowledged");
+    if (confirmationPatches.length !== 1) throw new Error(`expected one confirmation repair, saw ${confirmationPatches.length}`);
+    const [patch] = confirmationPatches;
+    if (
+      patch.url.searchParams.get("id") !== `eq.${confirmationId}` ||
+      patch.url.searchParams.get("state") !== "in.(requested,failed)" ||
+      !patch.url.searchParams.get("expires_at")?.startsWith("gt.") ||
+      patch.url.searchParams.has("calle_call_id")
+    ) {
+      throw new Error(`the repair must claim a live recoverable confirmation without a prior provider-id match, saw ${patch.url.search}`);
+    }
+    if (patch.body.state !== "dialled" || patch.body.calle_call_id !== "call_terminal") {
+      throw new Error(`the repair must bind the provider call and restore verification eligibility, saw ${JSON.stringify(patch.body)}`);
+    }
+  });
+
+  testFn("a delayed confirmation callback cannot revive an expired confirmation", async () => {
+    const confirmationId = "33333333-3333-4333-8333-333333333333";
+    let confirmationState = "expired";
+    const handler = createWebhookHandler(baseDeps(async (input, init) => {
+      const current = new Request(input, init);
+      const currentUrl = new URL(current.url);
+      if (currentUrl.pathname.endsWith("/webhook_events") && current.method === "POST") return new Response(null, { status: 201 });
+      if (currentUrl.pathname.endsWith("/webhook_events") && current.method === "PATCH") return Response.json([{ event_id: "evt_terminal" }]);
+      if (currentUrl.pathname.endsWith("/v1/calls/call_terminal")) {
+        return Response.json({ id: "call_terminal", status: "completed", metadata: { phone_confirmation_id: confirmationId } });
+      }
+      if (currentUrl.pathname.endsWith("/phone_confirmations") && current.method === "PATCH") {
+        const states = currentUrl.searchParams.get("state");
+        const live = currentUrl.searchParams.get("expires_at")?.startsWith("gt.");
+        if (states?.includes(confirmationState) && live) {
+          confirmationState = (JSON.parse(await current.text()) as { state: string }).state;
+          return Response.json([{ id: confirmationId }]);
+        }
+        return Response.json([]);
+      }
+      throw new Error(`unexpected request ${current.method} ${current.url}`);
+    }));
+    const response = await handler(request());
+    if (response.status !== 200) throw new Error("a delayed callback must be acknowledged");
+    if (confirmationState !== "expired") {
+      throw new Error(`a delayed callback revived an expired confirmation as ${confirmationState}`);
+    }
   });
 
   testFn("a re-fetch failure releases the event so a retry can win", async () => {

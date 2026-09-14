@@ -474,6 +474,12 @@ export type Database = {
         }
         Relationships: []
       }
+      phone_confirmations: {
+        Row: { id: string; user_id: string; phone_e164: string; code_hash: string; attempts: number; state: string; idempotency_key: string; calle_call_id: string | null; created_at: string; expires_at: string; confirmed_at: string | null; dry_run_request: Json | null }
+        Insert: { id?: string; user_id: string; phone_e164: string; code_hash: string; attempts?: number; state?: string; idempotency_key: string; calle_call_id?: string | null; created_at?: string; expires_at?: string; confirmed_at?: string | null; dry_run_request?: Json | null }
+        Update: { id?: string; user_id?: string; phone_e164?: string; code_hash?: string; attempts?: number; state?: string; idempotency_key?: string; calle_call_id?: string | null; created_at?: string; expires_at?: string; confirmed_at?: string | null; dry_run_request?: Json | null }
+        Relationships: [{ foreignKeyName: "phone_confirmations_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }]
+      }
       results: {
         Row: {
           call_run_id: string
@@ -637,6 +643,7 @@ export type Database = {
         Returns: Json
       }
       cancel_call_run: { Args: { run_id: string }; Returns: boolean }
+      verify_phone_code: { Args: { code: string }; Returns: boolean }
       claim_due_call_runs: {
         Args: { p_limit?: number }
         Returns: {

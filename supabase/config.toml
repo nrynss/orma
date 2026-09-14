@@ -19,6 +19,11 @@ verify_jwt = false
 [functions.calle-webhook]
 verify_jwt = false
 
+# T10.2 owns this block. The handler verifies its caller JWT itself so it can
+# return deliberate refusal reasons without granting anonymous access.
+[functions.confirm-phone]
+verify_jwt = false
+
 # T4.2a owns this block. The handler answers a missing or expired token with a
 # clean 401 protocol error, so the gateway JWT check stays off.
 [functions.mcp]

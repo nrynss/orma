@@ -62,8 +62,44 @@ export type CalleCallRequest = {
   recipients: Array<{ phones: string[] }>;
   result_schema: Record<string, unknown>;
   webhook_url: string;
-  metadata: { call_run_id: string };
+  metadata: { call_run_id?: string; phone_confirmation_id?: string };
 };
+
+export type ConfirmationDispatch = { mode: "dry_run" | "live"; requestBody: string; callId: string | null };
+
+export function maskedConfirmationRequestBody(requestBody: string, code: string): string {
+  const masked = JSON.parse(maskedRequestBody(requestBody)) as Record<string, unknown>;
+  const digits = code.split("").join(", ");
+  if (typeof masked.task === "string") masked.task = masked.task.replaceAll(digits, "<redacted code>");
+  return JSON.stringify(masked);
+}
+
+export function buildConfirmationCallRequest(
+  confirmationId: string, phoneE164: string, code: string, webhookUrl: string,
+): CalleCallRequest {
+  const digits = code.split("").join(", ");
+  return {
+    task: `You are Orma. Say: Hello, this is Orma. Someone asked Orma to call this number with a confirmation code. Your code is ${digits}. Repeat: ${digits}. If you did not ask for this, hang up and Orma will not call again. Ask nothing, capture nothing, then end the call.`,
+    recipients: [{ phones: [phoneE164] }],
+    result_schema: { type: "object", additionalProperties: false, properties: {} },
+    webhook_url: webhookUrl,
+    metadata: { phone_confirmation_id: confirmationId },
+  };
+}
+
+/** The confirmation flow shares the sole CALL-E POST boundary with dispatch. */
+export async function dispatchPhoneConfirmation(
+  confirmationId: string, phoneE164: string, code: string, deps: CalleDeps,
+): Promise<ConfirmationDispatch> {
+  const requestBody = JSON.stringify(buildConfirmationCallRequest(confirmationId, phoneE164, code, deps.webhookUrl));
+  if (isDryRun(false, deps.getEnv)) return { mode: "dry_run", requestBody: maskedConfirmationRequestBody(requestBody, code), callId: null };
+  const response = await deps.fetch(`${deps.calleApiBase.replace(/\/+$/, "")}/v1/calls`, {
+    method: "POST", headers: { authorization: `Bearer ${deps.calleApiKey}`, "content-type": "application/json", "idempotency-key": `orma:confirm:${confirmationId}` }, body: requestBody,
+  });
+  if (!response.ok) throw new Error(`CALL-E confirmation dispatch returned HTTP ${response.status}`);
+  const call = asCallTask(await response.json());
+  return { mode: "live", requestBody: maskedConfirmationRequestBody(requestBody, code), callId: call.id };
+}
 
 /** The reviewed inline schema from docs/calle-call.md. */
 export const CALL_E_RESULT_SCHEMA: Record<string, unknown> = {
@@ -967,6 +1003,21 @@ if (typeof testFn === "function") {
     const terminal = patches.find((patch) => typeof patch.state === "string");
     if (terminal?.state !== "failed" || terminal.terminal_writer !== "dry_run") {
       throw new Error(`the failed rehearsal landed the wrong terminal shape, saw ${JSON.stringify(terminal)}`);
+    }
+  });
+
+  testFn("a confirmation dry-run record redacts its code, number, and webhook secret", () => {
+    const rawCode = "123456";
+    const request = JSON.stringify(buildConfirmationCallRequest(
+      "123e4567-e89b-12d3-a456-426614174000", "+919999999991", rawCode,
+      "https://orma-api.nryn.dev/functions/v1/calle-webhook/deployment-secret",
+    ));
+    const masked = maskedConfirmationRequestBody(request, rawCode);
+    if (masked.includes(rawCode) || masked.includes("1, 2, 3, 4, 5, 6")) {
+      throw new Error("the dry-run confirmation record contains the code");
+    }
+    if (masked.includes("+919999999991") || masked.includes("deployment-secret")) {
+      throw new Error("the dry-run confirmation record contains a protected destination value");
     }
   });
 }

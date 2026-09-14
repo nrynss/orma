@@ -50,7 +50,7 @@ requires:   T10.1, T2.4, T2.6
 fixture-ok: yes
 size:       M · frontier
 owns:       supabase/migrations/<timestamp>_phone_confirmations.sql, supabase/functions/confirm-phone/, supabase/functions/_shared/calle.ts (confirmation request only), supabase/functions/calle-webhook/index.ts (routing only), supabase/config.toml ([functions.confirm-phone] only), web/src/lib/database.types.ts, supabase/functions/_shared/database.types.ts
-status:     not-started
+status:     done
 ```
 One call reads a code. One function checks it. Nothing else can confirm a number.
 
