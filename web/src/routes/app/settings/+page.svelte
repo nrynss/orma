@@ -1,260 +1,59 @@
 <script lang="ts">
+	import { goto, invalidate } from '$app/navigation'
 	import { onMount } from 'svelte'
-	import {
-		ORMA_API_URL,
-		TELEGRAM_BOT_USERNAME,
-		loadTelegramLinkState,
-		mintLinkToken,
-		unlinkTelegram
-	} from '$lib/telegram-link'
-	import {
-		getPublishableKey,
-		getSession,
-		getSupabase,
-		postAuthTelegram,
-		sessionTokensFromUnknown,
-		type TelegramWidgetUser
-	} from '$lib/supabase'
+	import { ORMA_API_URL, TELEGRAM_BOT_USERNAME, loadTelegramLinkState, mintLinkToken, unlinkTelegram } from '$lib/telegram-link'
+	import { getPublishableKey, getSession, getSupabase, postAuthTelegram, sessionTokensFromUnknown, type TelegramWidgetUser } from '$lib/supabase'
+	import { CONSENT_KIND_OUTBOUND, CONSENT_SOURCE, consentTextVersion, DEFAULT_TIMEZONE, isE164, normalizePhone, partOfDayFromHour } from '../onboarding/model'
 
 	let { data } = $props()
+	type Slot = { id: string; local_time: string; weekdays: number[]; active: boolean; part_of_day: string }
+	type Run = { id: string; local_date: string; scheduled_for: string }
+	const WEEKDAYS = [{n:1,label:'M'},{n:2,label:'T'},{n:3,label:'W'},{n:4,label:'T'},{n:5,label:'F'},{n:6,label:'S'},{n:7,label:'S'}]
+	const timeZones = zones()
+	let displayName = $state(''); let phone = $state(''); let timezone = $state(DEFAULT_TIMEZONE)
+	let emailReceipts = $state(false); let telegramReceipts = $state(true); let consented = $state(false)
+	let slots = $state<Slot[]>([]); let runs = $state<Run[]>([]); let loaded = $state(false)
+	let deepLink = $state(''); let telegramChatId = $state<number | null>(null); let attachedTelegramId = $state<string | null>(null); let attachedTelegramName = $state('')
+	let status = $state(''); let error = $state(''); let busy = $state(false); let deleting = $state(false); let deleteConfirmation = $state(''); let widgetHost: HTMLDivElement | undefined = $state()
+	const phoneOk = $derived(isE164(phone)); const today = $derived(dateInZone(new Date(), timezone)); const todaysRuns = $derived(runs.filter((run) => run.local_date === today))
 
-	let deepLink = $state('')
-	let telegramChatId = $state<number | null>(null)
-	let attachedTelegramId = $state<string | null>(null)
-	let attachedTelegramName = $state('')
-	let status = $state('')
-	let error = $state('')
-	let busy = $state(false)
-	let widgetHost: HTMLDivElement | undefined = $state()
+	function zones() { try { const value = [...Intl.supportedValuesOf('timeZone')]; if (!value.includes(DEFAULT_TIMEZONE)) value.unshift(DEFAULT_TIMEZONE); return value } catch { return [DEFAULT_TIMEZONE, 'UTC', 'Europe/London', 'America/New_York', 'Asia/Singapore', 'Asia/Tokyo'] } }
+	function dateInZone(at: Date, zone: string) { try { return new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(at) } catch { return new Intl.DateTimeFormat('en-CA',{timeZone:DEFAULT_TIMEZONE,year:'numeric',month:'2-digit',day:'2-digit'}).format(at) } }
+	function telegramId(value: unknown) { return typeof value === 'number' && Number.isInteger(value) && value > 0 ? String(value) : typeof value === 'string' && /^[1-9][0-9]*$/.test(value) ? value : null }
+	async function session() { const live = await getSession(); const accessToken = live?.access_token ?? data.session?.access_token ?? ''; const userId = live?.user.id ?? data.session?.user.id ?? ''; if (!accessToken || !userId) throw new Error('Sign in, then return to Settings.'); const id = telegramId((live?.user.app_metadata ?? data.session?.user.app_metadata ?? {}).telegram_user_id); if (id) attachedTelegramId = id; return {accessToken,userId} }
+	async function telegramCreds() { const {accessToken,userId} = await session(); return {apiUrl:ORMA_API_URL,accessToken,userId,anonKey:getPublishableKey()} }
+	function failure(err: unknown, fallback: string) { error = err instanceof Error ? err.message : fallback }
 
-	function telegramIdFromUnknown(value: unknown): string | null {
-		if (typeof value === 'number' && Number.isInteger(value) && value > 0) return String(value)
-		if (typeof value === 'string' && /^[1-9][0-9]*$/.test(value)) return value
-		return null
-	}
-
-	async function creds() {
-		const live = await getSession()
-		const accessToken = live?.access_token ?? data.session?.access_token ?? ''
-		const userId = live?.user.id ?? data.session?.user.id ?? ''
-		if (!accessToken || !userId) {
-			throw new Error('Sign in, then return to Settings.')
-		}
-		const meta = live?.user.app_metadata ?? data.session?.user.app_metadata ?? {}
-		const attached = telegramIdFromUnknown(
-			(meta as Record<string, unknown>).telegram_user_id
-		)
-		if (attached) attachedTelegramId = attached
-		return {
-			apiUrl: ORMA_API_URL,
-			accessToken,
-			userId,
-			anonKey: getPublishableKey()
-		}
-	}
-
-	async function refresh() {
-		error = ''
-		status = ''
-		busy = true
-		try {
-			const state = await loadTelegramLinkState(await creds())
-			telegramChatId = state.telegramChatId
-			status = telegramChatId === null ? 'Bot chat is not linked.' : `Linked chat ${telegramChatId}.`
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Could not read link state'
-		} finally {
-			busy = false
-		}
-	}
-
-	async function mint() {
-		error = ''
-		status = ''
-		busy = true
-		try {
-			const minted = await mintLinkToken(await creds())
-			deepLink = minted.deepLink
-			status = 'Open this link in Telegram. One Start press binds this chat.'
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Mint failed'
-		} finally {
-			busy = false
-		}
-	}
-
-	async function unlink() {
-		error = ''
-		status = ''
-		busy = true
-		try {
-			await unlinkTelegram(await creds())
-			deepLink = ''
-			telegramChatId = null
-			status = 'Bot chat is unlinked. Tokens and chat id are cleared. Sign-in identity stays attached.'
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Unlink failed'
-		} finally {
-			busy = false
-		}
-	}
-
-	async function attachTelegram(user: TelegramWidgetUser) {
-		error = ''
-		status = ''
-		busy = true
-		try {
-			const { accessToken } = await creds()
-			const payload = await postAuthTelegram(user, { accessToken })
-			const tokens = sessionTokensFromUnknown(payload)
-			if (!tokens) throw new Error('Telegram attach returned no session')
-			const { error: setError } = await getSupabase().auth.setSession(tokens)
-			if (setError) throw setError
-			attachedTelegramId = String(user.id)
-			attachedTelegramName = [user.first_name, user.last_name].filter(Boolean).join(' ')
-			status = 'Telegram identity is attached to this account.'
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Telegram attach failed'
-		} finally {
-			busy = false
-		}
-	}
-
-	onMount(() => {
-		void refresh()
-		const host = widgetHost
-		if (!host) return
-		const win = window as Window & { onTelegramAuth?: (user: TelegramWidgetUser) => void }
-		win.onTelegramAuth = (user) => {
-			void attachTelegram(user)
-		}
-		const script = document.createElement('script')
-		script.async = true
-		script.src = 'https://telegram.org/js/telegram-widget.js?22'
-		script.setAttribute('data-telegram-login', TELEGRAM_BOT_USERNAME)
-		script.setAttribute('data-size', 'large')
-		script.setAttribute('data-radius', 'true')
-		script.setAttribute('data-request-access', 'write')
-		script.setAttribute('data-onauth', 'onTelegramAuth(user)')
-		host.replaceChildren(script)
-		return () => {
-			win.onTelegramAuth = undefined
-			host.replaceChildren()
-		}
-	})
+	async function loadSettings() { error = ''; try { const {userId} = await session(); const client = getSupabase(); const [profile, consent, slot, run, telegram] = await Promise.all([client.from('profiles').select('display_name,phone_e164,timezone,email_receipts,telegram_receipts').eq('id',userId).single(),client.from('consents').select('id').eq('user_id',userId).eq('kind',CONSENT_KIND_OUTBOUND).is('revoked_at',null).limit(1),client.from('slots').select('id,local_time,weekdays,active,part_of_day').eq('user_id',userId).order('local_time'),client.from('call_runs').select('id,local_date,scheduled_for').eq('user_id',userId).eq('state','scheduled').order('scheduled_for'),loadTelegramLinkState(await telegramCreds())]); if(profile.error) throw profile.error; if(consent.error) throw consent.error; if(slot.error) throw slot.error; if(run.error) throw run.error; displayName=profile.data.display_name; phone=profile.data.phone_e164 ?? ''; timezone=profile.data.timezone; emailReceipts=profile.data.email_receipts; telegramReceipts=profile.data.telegram_receipts; consented=consent.data.length>0; slots=slot.data as Slot[]; runs=run.data as Run[]; telegramChatId=telegram.telegramChatId; loaded=true } catch(err) { failure(err,'Could not load Settings.') } }
+	async function saveProfile(event: SubmitEvent) { event.preventDefault(); error=''; status=''; if(!displayName.trim()) { error='Enter the name Orma should say.'; return } if(!phoneOk) { error='Enter a phone number in international format, starting with +.'; return } busy=true; try { const {userId}=await session(); const {error:problem}=await getSupabase().from('profiles').update({display_name:displayName.trim(),phone_e164:normalizePhone(phone),phone_confirmed_at:new Date().toISOString(),timezone,email_receipts:emailReceipts,telegram_receipts:telegramReceipts}).eq('id',userId); if(problem) throw problem; status='Settings saved.'; await invalidate('orma:today') } catch(err) { failure(err,'Could not save Settings.') } finally { busy=false } }
+	async function setConsent(next: boolean) { error=''; status=''; busy=true; try { const {userId}=await session(); const client=getSupabase(); if(next) { if(!phoneOk) throw new Error('Save a valid phone number before turning calls on.'); const {error:problem}=await client.from('consents').insert({user_id:userId,kind:CONSENT_KIND_OUTBOUND,text_version:consentTextVersion(normalizePhone(phone)),source:CONSENT_SOURCE}); if(problem) throw problem; consented=true; status='Calls are on. Orma may dispatch the next scheduled call.' } else { const {error:problem}=await client.from('consents').update({revoked_at:new Date().toISOString()}).eq('user_id',userId).eq('kind',CONSENT_KIND_OUTBOUND).is('revoked_at',null); if(problem) throw problem; consented=false; status='Calls are off. The next dispatch tick will refuse every call.' } await invalidate('orma:today') } catch(err) { failure(err,'Could not change call consent.') } finally { busy=false } }
+	async function setSlotsActive(active: boolean) { error=''; status=''; busy=true; try { const {userId}=await session(); const {error:problem}=await getSupabase().from('slots').update({active}).eq('user_id',userId); if(problem) throw problem; slots=slots.map((slot)=>({...slot,active})); status=active?'Calls resumed at every saved time.':'Every saved call time is paused. Future runs will be removed by the materialiser.'; await invalidate('orma:today') } catch(err) { failure(err,'Could not update call times.') } finally { busy=false } }
+	async function cancelRun(id: string) { error=''; status=''; busy=true; try { const {data:cancelled,error:problem}=await getSupabase().rpc('cancel_call_run',{run_id:id}); if(problem) throw problem; if(!cancelled) throw new Error('That call was already claimed or is no longer scheduled.'); runs=runs.filter((run)=>run.id!==id); status='Today’s call is cancelled. It will not ring.'; await invalidate('orma:today') } catch(err) { failure(err,'Could not cancel this call.') } finally { busy=false } }
+	async function addSlot() { error=''; status=''; busy=true; try { const {userId}=await session(); const {data:slot,error:problem}=await getSupabase().from('slots').insert({user_id:userId,local_time:'08:00',weekdays:[1,2,3,4,5,6,7],part_of_day:'morning',active:true}).select('id,local_time,weekdays,active,part_of_day').single(); if(problem) throw problem; slots=[...slots,slot as Slot]; status='A new call time was added. Choose its details, then save it.' } catch(err) { failure(err,'Could not add a call time.') } finally { busy=false } }
+	function toggleDay(slot: Slot, day: number) { const weekdays=slot.weekdays.includes(day)?slot.weekdays.filter((item)=>item!==day):[...slot.weekdays,day].sort((a,b)=>a-b); if(weekdays.length) slots=slots.map((item)=>item.id===slot.id?{...item,weekdays}:item) }
+	async function saveSlot(slot: Slot) { error=''; status=''; busy=true; try { const hour=Number(slot.local_time.slice(0,2)); const {error:problem}=await getSupabase().from('slots').update({local_time:slot.local_time,weekdays:slot.weekdays,active:slot.active,part_of_day:partOfDayFromHour(hour)}).eq('id',slot.id); if(problem) throw problem; status='Call time saved.'; await invalidate('orma:today') } catch(err) { failure(err,'Could not save this call time.') } finally { busy=false } }
+	async function removeSlot(id: string) { error=''; status=''; busy=true; try { const {error:problem}=await getSupabase().from('slots').delete().eq('id',id); if(problem) throw problem; slots=slots.filter((slot)=>slot.id!==id); status='Call time removed.'; await invalidate('orma:today') } catch(err) { failure(err,'Could not remove this call time.') } finally { busy=false } }
+	async function refreshTelegram() { error=''; status=''; busy=true; try { const value=await loadTelegramLinkState(await telegramCreds()); telegramChatId=value.telegramChatId; status=telegramChatId===null?'Bot chat is not linked.':`Linked chat ${telegramChatId}.` } catch(err) { failure(err,'Could not read link state.') } finally { busy=false } }
+	async function mint() { error=''; status=''; busy=true; try { deepLink=(await mintLinkToken(await telegramCreds())).deepLink; status='Open this link in Telegram. One Start press binds this chat.' } catch(err) { failure(err,'Mint failed.') } finally { busy=false } }
+	async function unlink() { error=''; status=''; busy=true; try { await unlinkTelegram(await telegramCreds()); deepLink=''; telegramChatId=null; status='Bot chat is unlinked. Tokens and chat id are cleared.' } catch(err) { failure(err,'Unlink failed.') } finally { busy=false } }
+	async function attachTelegram(user: TelegramWidgetUser) { error=''; status=''; busy=true; try { const {accessToken}=await session(); const tokens=sessionTokensFromUnknown(await postAuthTelegram(user,{accessToken})); if(!tokens) throw new Error('Telegram attach returned no session'); const {error:problem}=await getSupabase().auth.setSession(tokens); if(problem) throw problem; attachedTelegramId=String(user.id); attachedTelegramName=[user.first_name,user.last_name].filter(Boolean).join(' '); status='Telegram identity is attached to this account.' } catch(err) { failure(err,'Telegram attach failed.') } finally { busy=false } }
+	async function deleteAccount() { if(deleteConfirmation!=='DELETE') return; error=''; busy=true; try { const {data:deleted,error:problem}=await getSupabase().rpc('delete_my_account'); if(problem) throw problem; if(!deleted) throw new Error('The account could not be deleted.'); await getSupabase().auth.signOut(); await goto('/') } catch(err) { failure(err,'Could not delete this account.') } finally { busy=false } }
+	onMount(()=>{ void loadSettings(); const host=widgetHost; if(!host) return; const win=window as Window & {onTelegramAuth?: (user:TelegramWidgetUser)=>void}; win.onTelegramAuth=(user)=>void attachTelegram(user); const script=document.createElement('script'); script.async=true; script.src='https://telegram.org/js/telegram-widget.js?22'; script.setAttribute('data-telegram-login',TELEGRAM_BOT_USERNAME); script.setAttribute('data-size','large'); script.setAttribute('data-radius','true'); script.setAttribute('data-request-access','write'); script.setAttribute('data-onauth','onTelegramAuth(user)'); host.replaceChildren(script); return ()=>{win.onTelegramAuth=undefined;host.replaceChildren()} })
 </script>
 
-<svelte:head>
-	<title>Telegram settings · Orma</title>
-</svelte:head>
-
-<main>
-	<header>
-		<h1>Telegram</h1>
-		<p class="gloss">Two separate Telegram steps live on this page.</p>
-	</header>
-
-	<section class="block">
-		<h2>Sign-in identity</h2>
-		<p class="lede">
-			Attach the Telegram Login Widget to this account. Later Continue with Telegram reaches this
-			same user. This is identity, not the bot chat.
-		</p>
-		<div class="widget" bind:this={widgetHost}></div>
-		{#if attachedTelegramId}
-			<p class="status">
-				Telegram identity is attached
-				{#if attachedTelegramName}
-					({attachedTelegramName}, id {attachedTelegramId})
-				{:else}
-					(id {attachedTelegramId})
-				{/if}.
-			</p>
-		{/if}
-	</section>
-
-	<section class="block">
-		<h2>Bot messages</h2>
-		<p class="lede">
-			Mint a short-lived Start link. One press on @{TELEGRAM_BOT_USERNAME} binds this chat so Orma
-			can record thoughts you send there. A Start press is messaging, not sign-in.
-		</p>
-
-		<p class="actions">
-			<button type="button" onclick={refresh} disabled={busy}>Refresh</button>
-			<button type="button" onclick={mint} disabled={busy}>Mint Start link</button>
-			<button type="button" onclick={unlink} disabled={busy}>Unlink bot chat</button>
-		</p>
-
-		{#if deepLink}
-			<p>
-				<a href={deepLink}>{deepLink}</a>
-			</p>
-		{/if}
-	</section>
-
-	{#if status}
-		<p class="status">{status}</p>
+<svelte:head><title>Settings · Orma</title></svelte:head>
+<main class="settings">
+	<header class="o-stack head"><span class="o-label">Account</span><h1 class="o-h1">Settings</h1><p class="o-hint">You are always in control of whether Orma can call.</p></header>
+	{#if !loaded}<p class="o-hint">Loading your settings…</p>{:else}
+		<form class="o-stack section" onsubmit={saveProfile}><h2 class="o-h2">Your call</h2><label class="field"><span>Name</span><input class="o-input" bind:value={displayName} autocomplete="name" required /></label><label class="field"><span>Phone</span><input class="o-input" class:bad={phone.length>0&&!phoneOk} type="tel" bind:value={phone} autocomplete="tel" /></label><label class="field"><span>Time zone</span><select class="o-input" bind:value={timezone}>{#each timeZones as zone (zone)}<option value={zone}>{zone}</option>{/each}</select></label><div class="o-stack"><span class="field-label">Receipts</span><label class="check"><input type="checkbox" bind:checked={emailReceipts} /> Email after each call</label><label class="check"><input type="checkbox" bind:checked={telegramReceipts} /> Telegram after each call</label></div><div><button class="o-btn o-btn-primary" disabled={busy}>Save settings</button></div></form>
+		<section class="o-stack section"><h2 class="o-h2">Call permission</h2><p>{consented?'Orma has your permission to call at the times below.':'Calls are off. Orma cannot dispatch a call until you agree.'}</p><button class="o-btn {consented?'o-btn-secondary':'o-btn-primary'}" type="button" onclick={()=>setConsent(!consented)} disabled={busy}>{consented?'Turn calls off':'I agree to calls'}</button><p class="o-hint">Turning calls off revokes consent now. The next dispatch tick will not ring you.</p></section>
+		<section class="o-stack section"><div class="o-row split"><h2 class="o-h2">Call times</h2><button class="o-btn o-btn-text" type="button" onclick={addSlot} disabled={busy}>Add a time</button></div><div class="o-row actions"><button class="o-btn o-btn-secondary" type="button" onclick={()=>setSlotsActive(false)} disabled={busy}>Pause all calls</button><button class="o-btn o-btn-text" type="button" onclick={()=>setSlotsActive(true)} disabled={busy}>Resume all</button></div><p class="o-hint">Pausing makes every saved time inactive. The materialiser removes future calls from inactive times.</p>{#each slots as slot (slot.id)}<article class="slot o-stack"><div class="o-row split"><label class="field compact"><span>Time</span><input class="o-input" type="time" value={slot.local_time.slice(0,5)} onchange={(event)=>slots=slots.map((item)=>item.id===slot.id?{...item,local_time:event.currentTarget.value}:item)} /></label><label class="check"><input type="checkbox" checked={slot.active} onchange={(event)=>slots=slots.map((item)=>item.id===slot.id?{...item,active:event.currentTarget.checked}:item)} /> Active</label></div><div class="days">{#each WEEKDAYS as day (day.n)}<button class:chosen={slot.weekdays.includes(day.n)} type="button" aria-pressed={slot.weekdays.includes(day.n)} onclick={()=>toggleDay(slot,day.n)}>{day.label}</button>{/each}</div><div class="o-row actions"><button class="o-btn o-btn-secondary" type="button" onclick={()=>saveSlot(slot)} disabled={busy}>Save time</button><button class="o-btn o-btn-text" type="button" onclick={()=>removeSlot(slot.id)} disabled={busy}>Remove</button></div></article>{:else}<p class="o-hint">No call times are saved. Add one when you want calls again.</p>{/each}</section>
+		<section class="o-stack section"><h2 class="o-h2">Today’s call</h2>{#each todaysRuns as run (run.id)}<article class="o-row split call"><span>{new Intl.DateTimeFormat(undefined,{timeZone:timezone,hour:'numeric',minute:'2-digit'}).format(new Date(run.scheduled_for))}</span><button class="o-btn o-btn-secondary" type="button" onclick={()=>cancelRun(run.id)} disabled={busy}>Cancel this call</button></article>{:else}<p class="o-hint">There is no scheduled call today.</p>{/each}<p class="o-hint">Cancellation only applies while a call is scheduled. A claimed call may already be dispatching.</p></section>
+		<section class="o-stack section"><h2 class="o-h2">Telegram</h2><p class="o-hint">Sign-in identity and bot messages are separate.</p><div class="widget" bind:this={widgetHost}></div>{#if attachedTelegramId}<p>Telegram identity is attached{attachedTelegramName?` (${attachedTelegramName})`:''}.</p>{/if}<p class="o-row actions"><button class="o-btn o-btn-secondary" type="button" onclick={refreshTelegram} disabled={busy}>Refresh bot chat</button><button class="o-btn o-btn-text" type="button" onclick={mint} disabled={busy}>Mint Start link</button><button class="o-btn o-btn-text" type="button" onclick={unlink} disabled={busy}>Unlink bot chat</button></p>{#if deepLink}<a href={deepLink}>{deepLink}</a>{/if}{#if telegramChatId}<p class="o-hint">Linked chat {telegramChatId}.</p>{/if}</section>
+		<section class="o-stack section danger"><h2 class="o-h2">Delete account</h2><p>Deleting your account permanently removes your profile, call times, items, calls, transcripts, receipts, Telegram links, and audio. This cannot be undone.</p>{#if deleting}<label class="field"><span>Type DELETE to confirm</span><input class="o-input" bind:value={deleteConfirmation} autocomplete="off" /></label><div class="o-row actions"><button class="o-btn o-btn-danger" type="button" onclick={deleteAccount} disabled={busy||deleteConfirmation!=='DELETE'}>Delete everything</button><button class="o-btn o-btn-text" type="button" onclick={()=>{deleting=false;deleteConfirmation=''}} disabled={busy}>Keep my account</button></div>{:else}<div><button class="o-btn o-btn-danger" type="button" onclick={()=>deleting=true}>Delete account</button></div>{/if}</section>
 	{/if}
-	{#if error}
-		<p class="error">{error}</p>
-	{/if}
+	{#if status}<p class="notice" aria-live="polite">{status}</p>{/if}{#if error}<p class="o-hint error" role="alert">{error}</p>{/if}
 </main>
-
 <style>
-	:global(html) {
-		color-scheme: light dark;
-	}
-	:global(body) {
-		margin: 0;
-		background: light-dark(#fbfaf8, #14130f);
-		color: light-dark(#22201c, #e8e4dc);
-		font: 16px/1.6 ui-serif, Georgia, 'Times New Roman', serif;
-	}
-	main {
-		max-width: 34rem;
-		margin: 0 auto;
-		padding: 4rem 1.5rem 6rem;
-		display: flex;
-		flex-direction: column;
-		gap: 2rem;
-	}
-	h1 {
-		font-size: 2rem;
-		margin: 0;
-	}
-	h2 {
-		font-size: 1.2rem;
-		margin: 0 0 0.5rem;
-	}
-	.gloss,
-	.status {
-		color: light-dark(#7a746a, #938c80);
-	}
-	.lede {
-		margin: 0 0 0.75rem;
-	}
-	.block {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	.error {
-		color: light-dark(#8a2b2b, #e08a8a);
-	}
-	.actions {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-	button {
-		font: inherit;
-		padding: 0.4rem 0.8rem;
-	}
-	a {
-		color: light-dark(#7a5283, #cfa7d8);
-	}
-	.widget {
-		min-height: 44px;
-	}
+	.settings{max-width:44rem;margin:0 auto;padding:2.25rem 1.5rem 5rem}.head,.section{padding-bottom:2rem;margin-bottom:2rem;border-bottom:1px solid var(--o-hair)}.section{gap:.9rem}.field{display:grid;gap:.35rem;max-width:28rem}.field span,.field-label{font-size:.85rem;color:var(--o-muted)}.compact{min-width:10rem}.check{display:flex;gap:.55rem;align-items:center}.actions{gap:.65rem;flex-wrap:wrap}.slot{border:1px solid var(--o-hair);padding:1rem}.days{display:flex;gap:.35rem;flex-wrap:wrap}.days button{width:2.2rem;height:2.2rem;border:1px solid var(--o-hair);background:transparent;color:var(--o-ink);border-radius:50%}.days button.chosen{background:var(--o-plum);color:white;border-color:var(--o-plum)}.call{border:1px solid var(--o-hair);padding:.8rem 1rem}.danger{border-color:#b54d4d}.notice{color:var(--o-plum)}.error{color:#b33a3a}.bad{border-color:#b33a3a}.widget{min-height:44px}@media(min-width:900px){.settings{margin-left:0;padding:3rem 3.5rem 5rem}}
 </style>

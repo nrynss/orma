@@ -667,6 +667,11 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      cancel_call_run: {
+        Args: { run_id: string }
+        Returns: boolean
+      }
+      delete_my_account: { Args: Record<PropertyKey, never>; Returns: boolean }
       ingest_call_result: {
         Args: {
           p_call_run_id: string
@@ -823,4 +828,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

@@ -44,7 +44,7 @@ requires:   T6.1
 fixture-ok: yes
 size:       M · mid
 owns:       web/src/routes/app/items/
-status:     not-started
+status:     done
 ```
 The list, with retire and restore, and a since-date a user can set by hand.
 
@@ -96,7 +96,7 @@ requires:   T5.4, T6.1, T6.7
 fixture-ok: yes
 size:       M · frontier
 owns:       web/src/routes/app/settings/
-status:     not-started
+status:     done
 ```
 Phone, consent, timezone, slots, receipt channels, Telegram linking and unlinking.
 
@@ -132,7 +132,7 @@ requires:   T1.2
 fixture-ok: yes
 size:       S · frontier
 owns:       supabase/migrations/<timestamp>_owner_actions.sql, web/src/lib/database.types.ts, supabase/functions/_shared/database.types.ts
-status:     not-started
+status:     done
 ```
 Added at the P6 claim. The browser cannot cancel a call or delete an account today. `call_runs` has only an owner read policy, and deleting `auth.users` needs more than the user's own grant.
 
@@ -148,14 +148,14 @@ Two `security definer` functions, callable by `authenticated` only and revoked f
 
 ### T6.8: Landing page
 ```yaml
-requires:   T5.1, T8.2
-fixture-ok: no
+requires:   T5.1
+fixture-ok: yes
 size:       S · mid
 owns:       web/src/routes/+page.svelte
 status:     not-started
 ```
 Added at the P6 claim. Spec §11 gives `/` what Orma is, the thesis, and one call recording, server rendered. No task owned it. The footer still reads "Not yet open for sign-ups", although T5.1 opened sign-up for judges.
 
-The copy and the sign-in path can land before T8.2. The recording comes from a real T8.2 call, with every number masked.
+The page uses a synthetic audio demo and labels it as a demo. It must not imply that a real person made the call or that the clip is production evidence.
 
-**Done when:** a signed-out visitor gets server-rendered content with a clear way in, the closed sign-ups line is gone, and one real call recording plays on the page.
+**Done when:** a signed-out visitor gets server-rendered content with a clear way in, the closed sign-ups line is gone, and one clearly labelled synthetic call demo plays on the page.

@@ -1265,3 +1265,24 @@ password. Magic links do not work locally, so sign in from the console per
 Import tokens from `$lib/ui` rather than copying styles. `call_runs` stays read-only to
 its owner, so cancel waits for T6.7. The web app is not yet deployed with T6.1. The landing
 footer still says sign-ups are closed, which T6.8 owns.
+
+### 2026-09-14 · T6.2 landed, Items
+
+Items shows open and retired rows, each with SQL-derived mention counts and ages. Users can
+retire, restore, and set a since date through their own RLS-protected rows. Round 1 found
+retired cards omitted their mention count. Remediation restored the shared row-derived metadata.
+Round 2 approved with zero findings and zero residue.
+
+### 2026-09-14 · T6.7 landed, owner actions
+
+`cancel_call_run` locks and changes only the caller's scheduled row. It records one canceled
+event and leaves claimed runs untouched. `delete_my_account` removes caller-owned item audio
+before removing the Auth user. Local acceptance proved cross-user isolation, scheduler safety,
+cascades, storage cleanup, and denied anonymous access. Round 1 approved with zero findings.
+
+### 2026-09-14 · T6.5 landed, Settings and cancellation
+
+Settings now manages profile preferences, consent, slots, pause and resume, receipt channels,
+Telegram linking, call cancellation, and account deletion. Cancellation and deletion use T6.7
+RPCs rather than direct writes. Local validation preserved the existing Telegram flow and placed
+no live calls. Luna's round 1 approved with zero findings.
