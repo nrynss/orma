@@ -256,3 +256,44 @@ yes
    * `lookupProfile` now paginates through `auth.admin.listUsers({ page, perPage })` until the email is found or pages are exhausted.
 6. L2 (Weekend groceries capture consistency):
    * `weekend groceries` is now `source = 'call'`, with `since_date` matching run 3 (`demoDate - 3`) and `created_at` matching run 3's completion timestamp.
+
+---
+
+<task-notification>
+<task-id>a4370f0ea326b26e8</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/tmp/claude-1000/-home-nryn-work-orma/c1950000-44d4-459a-a37e-f4411f2ae47a/tasks/a4370f0ea326b26e8.output</output-file>
+<status>completed</status>
+<summary>Agent "Review T8.1 round 2" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: REMEDIATE.** C 0, H 0, M 3, L 3.
+
+Everything on the done-when list holds on the local stack:
+- A plan run writes nothing.
+- Two `--apply` runs leave the same counts.
+- `--remove` brings every count back to where it started.
+- The briefing at the demo date says "You've mentioned the dentist 3 times. It's been 34 days."
+- Every seeded run is finished, so `tick` can't pick one up.
+- Non-local `--apply` is refused before any request.
+
+**Round 1 findings:**
+- **Fixed, nothing left:** F1, F2, F3 and F5. For F2 I used firstrun@example.com, which has no harness runs. The analysis window for New York is 2026-09-07 to 2026-09-13, and it gives 3 observed days with enough history. For F5, firstrun still resolved after I pushed it onto page 2 of the user list.
+- **Still open:** F4, now F9, and F6, now F10.
+
+**Findings:**
+- **F7 (M):** the date helper reads the wall time in the machine's own timezone. On this Asia/Kolkata machine every seeded run reads 02:30 local instead of 08:00, while the stored briefing says 08:00. Running with `TZ=UTC` gives the right time. The remediation made this reach every seeded timestamp.
+- **F8 (M):** the stored briefings state numbers the rows didn't support at the time. Run 3 says "3 times" when only 2 mention rows existed before it. Run 2 says "Everything open is still current." when the item was already 30 days old, which should read "It's been 30 days."
+- **F9 (M, left over from F4):** the request body's field names and number masking match the dispatcher, but the `task` is a short invented text, not the real call template. "Hello. This is Orma." appears in none of the three. The production webhook host is also hardcoded into rows written to any target, the local stack included.
+- **F10 (L, left over from F6):** weekend groceries is created at 07:30Z, an hour after run 3 captured it at 06:32Z. Its only mention is older than the item itself.
+- **F11 (L):** the ingested and finalised events report 1, 2 and 2 mentions, but the stored results hold 0, 0 and 1 entries. No real ingest could write that combination.
+- **F12 (L):** the disclosure paragraph uses passive voice four times ("was inserted", "were inserted", "are seeded", "can be identified").
+
+**Other checks:**
+- **Different `--demo-date` rerun:** no duplicate runs and no orphaned rows. Idempotency keys stay unique, and no scheduled run, slot, consent or report was written.
+- **No leaks:** no real number or key appears in any briefing or request body.
+- **Timeline order:** events run dispatched, ingested, finalised, with dispatch before completion.
+- **Remove after a live retire:** `--remove` also deletes an extra non-seed mention on a seeded item. The item is being deleted and the database cascade would remove it anyway. I recorded that as acceptable, not a finding.
+
+The stack is torn down with zero `orma-p6-local` containers left. I printed no secret and made no production or linked-project request. The only file I wrote is `/home/nryn/work/orma/dev-diary/adversarial-review/t8.1-round2.md`.</result>
+<usage><subagent_tokens>150362</subagent_tokens><tool_uses>37</tool_uses><duration_ms>436097</duration_ms></usage>
+</task-notification>
