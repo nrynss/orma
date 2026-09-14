@@ -117,7 +117,7 @@ requires:   T6.1, T2.9
 fixture-ok: yes
 size:       S · mid
 owns:       web/src/routes/app/timeline/
-status:     claimed:T66Impl
+status:     done
 ```
 `call_events` for your own account, in order, with the detail payloads expandable.
 
