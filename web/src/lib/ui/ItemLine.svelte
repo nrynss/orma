@@ -3,21 +3,26 @@
 	let { text, meta }: { text: string; meta: string } = $props()
 </script>
 
-<div class="item-line">
-	<span>{text}</span>
-	<span class="meta">{meta}</span>
+<div class="o-item-line">
+	<span class="o-item-text">{text}</span>
+	<span class="o-item-meta">{meta}</span>
 </div>
 
 <style>
-	.item-line {
+	.o-item-line {
 		display: flex;
 		flex-direction: column;
-		gap: 0.1rem;
-		padding: 0.7rem 0;
-		border-top: 1px solid var(--o-hair);
+		gap: var(--space-1);
+		padding: var(--space-3) 0;
+		border-top: 1px solid var(--border);
 	}
-	.meta {
-		color: var(--o-muted);
-		font-size: 0.88rem;
+	.o-item-text {
+		color: var(--text);
+		line-height: var(--line-snug);
+		text-wrap: pretty;
+	}
+	.o-item-meta {
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
 	}
 </style>

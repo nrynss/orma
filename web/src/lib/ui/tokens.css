@@ -1,167 +1,148 @@
 /*
- * Orma app tokens from design/orma-app/System.dc.html, light then dark.
- * Classes carry an o- prefix, so they never collide with page-scoped styles.
+ * Orma design system. Colour, type, space, radius and elevation in one place.
+ * Each colour role flips through light-dark(), so a [data-theme] wrapper turns
+ * a whole subtree over. The retired editorial set is gone. Pages read roles.
+ * Class names carry an o- prefix, so page styles never collide with them.
  */
 
 :root {
 	color-scheme: light dark;
-	--o-paper: #fbfaf8;
-	--o-ink: #22201c;
-	--o-muted: #716b61;
-	--o-rule: #d8d2c6;
-	--o-hair: #e6e1d7;
-	--o-line: #948f83;
-	--o-plum: #7a5283;
-	--o-wash: #f6ecf8;
-	--o-danger: #8a2b2b;
-	--o-on-accent: #fbfaf8;
-	--o-serif: 'Source Serif 4', ui-serif, Georgia, 'Times New Roman', serif;
-	--o-mono: 'Source Code Pro', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+	/*
+	 * Colour. The named roles are canvas, surface, raised surface, border,
+	 * text, muted text, brand, brand contrast, success, warning and danger.
+	 * The -soft roles tint a fill, the -contrast roles sit on a fill, and
+	 * border-strong carries the 3 to 1 outline contrast a control needs.
+	 */
+	--canvas: light-dark(#f1f1f5, #0f0e13);
+	--surface: light-dark(#fafafc, #191723);
+	--surface-raised: light-dark(#ffffff, #221f2d);
+	--border: light-dark(#e3e0e9, #332f3e);
+	--border-strong: light-dark(#8a8496, #6f6880);
+	--text: light-dark(#1a1721, #ede9f2);
+	--text-muted: light-dark(#5c5966, #a8a2b4);
+	--brand: light-dark(#6f2b7f, #d9a6ea);
+	--brand-contrast: light-dark(#ffffff, #1b0f20);
+	--brand-soft: light-dark(#f4e9f8, #2b1c34);
+	--success: light-dark(#0f6b41, #6fd3a2);
+	--success-soft: light-dark(#e3f6ec, #13291f);
+	--warning: light-dark(#8a5200, #eab765);
+	--warning-soft: light-dark(#fdf0dc, #2c2113);
+	--danger: light-dark(#b3261e, #f0908a);
+	--danger-contrast: light-dark(#ffffff, #240d0b);
+	--danger-soft: light-dark(#fce9e7, #2f1817);
+	--elevation-colour: light-dark(rgb(28 18 38 / 0.08), rgb(0 0 0 / 0.55));
+
+	/* Type. A system sans stack, so nothing downloads. */
+	--font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+		'Noto Sans', sans-serif;
+	--font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono',
+		monospace;
+	--font-size-xs: 0.75rem;
+	--font-size-sm: 0.875rem;
+	--font-size-base: 1rem;
+	--font-size-lg: 1.125rem;
+	--font-size-xl: 1.375rem;
+	--font-size-2xl: 1.75rem;
+	--font-size-3xl: 2.25rem;
+	--line-tight: 1.15;
+	--line-snug: 1.35;
+	--line-normal: 1.5;
+	--weight-regular: 400;
+	--weight-medium: 500;
+	--weight-semibold: 600;
+	--weight-bold: 700;
+	--tracking-tight: -0.015em;
+	--tracking-wide: 0.06em;
+
+	/* Space, on a four pixel grid. */
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.25rem;
+	--space-6: 1.5rem;
+	--space-8: 2rem;
+	--space-10: 2.5rem;
+	--space-12: 3rem;
+	--space-16: 4rem;
+
+	--radius-sm: 8px;
+	--radius-md: 12px;
+	--radius-lg: 16px;
+	--radius-xl: 22px;
+	--radius-pill: 999px;
+
+	/* Elevation. Geometry is fixed, the shadow colour follows the theme. */
+	--elevation-1: 0 1px 2px var(--elevation-colour);
+	--elevation-2: 0 2px 8px var(--elevation-colour), 0 1px 2px var(--elevation-colour);
+	--elevation-3: 0 14px 32px var(--elevation-colour), 0 2px 6px var(--elevation-colour);
+
+	--motion-fast: 120ms;
+	--motion-slow: 240ms;
+
+	/* Every control keeps a 44 pixel target, on the phone and on the desk. */
+	--tap-target: 2.75rem;
 }
 
-@media (prefers-color-scheme: dark) {
-	:root {
-		--o-paper: #14130f;
-		--o-ink: #e8e4dc;
-		--o-muted: #938c80;
-		--o-rule: #3a352c;
-		--o-hair: #2a2620;
-		--o-line: #6e685e;
-		--o-plum: #cfa7d8;
-		--o-wash: #271e29;
-		--o-danger: #e08a8a;
-		--o-on-accent: #14130f;
-	}
+/* An explicit theme on any wrapper flips every role inside it. */
+[data-theme='light'] {
+	color-scheme: light;
+}
+[data-theme='dark'] {
+	color-scheme: dark;
 }
 
-.o-app {
-	background: var(--o-paper);
-	color: var(--o-ink);
-	font: 16px/1.6 var(--o-serif);
-	font-optical-sizing: auto;
-	font-variant-numeric: lining-nums tabular-nums;
+/* Base layer. Pages and components inherit the canvas, the type and focus. */
+/*
+ * Border box everywhere. A control that asks for width 100 percent, padding
+ * and a border then equals its field width instead of overhanging it.
+ */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	min-height: 100dvh;
+	background: var(--canvas);
+	color: var(--text);
+	font-family: var(--font-sans);
+	font-size: var(--font-size-base);
+	font-weight: var(--weight-regular);
+	line-height: var(--line-normal);
+	font-variant-numeric: tabular-nums;
 	-webkit-font-smoothing: antialiased;
-	min-height: 100vh;
-	box-sizing: border-box;
 }
-.o-app *,
-.o-app *::before,
-.o-app *::after {
-	box-sizing: border-box;
-}
-.o-app a {
-	color: var(--o-plum);
+
+a {
+	color: var(--brand);
 	text-underline-offset: 3px;
 }
-.o-app a:hover {
-	text-decoration-thickness: 2px;
-}
-.o-app p {
+
+:where(h1, h2, h3, p, figure) {
 	margin: 0;
-	text-wrap: pretty;
 }
-.o-h1 {
-	font-size: 2rem;
-	line-height: 1.15;
-	margin: 0;
-	letter-spacing: -0.01em;
-	font-weight: 600;
+
+:focus-visible {
+	outline: 2px solid var(--brand);
+	outline-offset: 2px;
 }
-.o-h2 {
-	font-size: 0.8rem;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	color: var(--o-muted);
-	margin: 0;
-	font-weight: 600;
-}
-.o-mono {
-	font-family: var(--o-mono);
-	font-size: 0.8rem;
-	letter-spacing: 0;
-}
-.o-muted {
-	color: var(--o-muted);
-}
-.o-gloss {
-	color: var(--o-muted);
-	font-size: 0.95rem;
-}
-.o-label {
-	font-size: 0.75rem;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	color: var(--o-muted);
-	font-weight: 600;
-}
-.o-hint {
-	font-size: 0.9rem;
-	color: var(--o-muted);
-	line-height: 1.5;
-}
-.o-stack {
-	display: flex;
-	flex-direction: column;
-}
-.o-row {
-	display: flex;
-	align-items: center;
-}
-.o-wash {
-	background: var(--o-wash);
-	border-radius: 6px;
-}
-.o-btn {
-	font: inherit;
-	font-size: 0.95rem;
-	font-weight: 500;
-	min-height: 44px;
-	padding: 0 1.1rem;
-	border-radius: 4px;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 0.5rem;
-	border: 1px solid transparent;
-	cursor: pointer;
-	white-space: nowrap;
-	text-decoration: none;
-}
-.o-app a.o-btn-primary,
-.o-btn-primary {
-	background: var(--o-plum);
-	color: var(--o-on-accent);
-}
-.o-app a.o-btn-secondary,
-.o-btn-secondary {
-	background: transparent;
-	color: var(--o-ink);
-	border-color: var(--o-line);
-}
-.o-app a.o-btn-text,
-.o-btn-text {
-	background: transparent;
-	color: var(--o-plum);
-	padding: 0 0.5rem;
-	min-width: 44px;
-}
-.o-tag {
-	font-family: var(--o-mono);
-	font-size: 0.7rem;
-	letter-spacing: 0.02em;
-	padding: 0.05rem 0.4rem;
-	border: 1px solid var(--o-line);
-	border-radius: 3px;
-	color: var(--o-muted);
-	white-space: nowrap;
-}
-.o-link-button {
-	font: inherit;
-	padding: 0;
-	border: 0;
-	background: transparent;
-	color: var(--o-plum);
-	cursor: pointer;
-	text-decoration: underline;
-	text-underline-offset: 3px;
+
+/* Motion is short everywhere, and it stops when the reader asks it to. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
 }

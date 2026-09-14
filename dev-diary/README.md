@@ -11,9 +11,9 @@ Where a phase document and specification conflict, the specification wins. Recor
 
 Each document provides complete context for an engineer starting cold.
 
-**Current status:** P0, P1, P2, P3, P4, P5, P6 and P7 are complete. Schema, policies, types,
-fixtures, validation and local seed data are frozen. Auth, the web
-app and the front door are live.
+**Current status:** P0 to P7 are complete and P6 is live. The web app is deployed.
+P9 restyles every surface as a product UI, phone first, with no logic change.
+P8 ships after P9 lands.
 
 P0 is complete. What exists is listed in [PHASE-0-ground.md](PHASE-0-ground.md): the repository, the Supabase project with its extensions and secrets, the deployed app and front door, the bot, verified email, and a proven CALL-E path. Start at P1.
 
@@ -44,6 +44,7 @@ This allows almost the whole system to be built offline. The web app, the MCP se
 | **P6** Web app | [PHASE-6-web-app.md](PHASE-6-web-app.md) | T5.3, soft P2 | P2, P3, P4, P7 | P8 |
 | **P7** Analysis and receipts | [PHASE-7-analysis.md](PHASE-7-analysis.md) | T1.1, T3.4, soft P2 | P4, P6 | P8 |
 | **P8** Ship | [PHASE-8-ship.md](PHASE-8-ship.md) | P2, P3, P4, P5, P6, P7 | none | final submission |
+| **P9** Product UI | [PHASE-9-ui.md](PHASE-9-ui.md) | P6 | P8 except T8.4 | T8.4 |
 
 ```text
   P0 done
@@ -164,7 +165,8 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P5 | 4 / 4 | **P5 e2e clean.** Auth, Telegram bridge, web sessions, and onboarding are live. |
 | P6 | 8 / 8 | **P6 e2e clean and live.** History, Patterns, Timeline, landing and the fixed owner actions are deployed. Migration applied, types regenerated. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
-| P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
+| P8 | 0 / 7 | Not started. T8.4 softly waits on P9, because the demo video films the P9 screens. |
+| P9 | 1 / 9 | **In progress.** T9.1 landed the product design system and the dev gallery. T9.2 is next, then T9.3 to T9.8 in parallel. |
 
 ---
 
@@ -1356,3 +1358,16 @@ confirmation mail errored. They may sit as unreachable unconfirmed users. Remove
 them from the dashboard with `delete from auth.users where email like
 'p6deletetest%'`. The drill stays open until someone runs it with a confirmed
 account.
+
+### 2026-09-14 · T9.1 landed, the product design system
+
+The editorial tokens are gone. `web/src/lib/ui/` now carries product role tokens in light and
+dark, a type and space scale, elevation, and twelve components with props. A gallery at
+`/dev/ui` renders every component and token in both themes and answers 404 in a production
+build. Round 1 returned REMEDIATE with H1 M3. The live dot had lost its fill and measured
+1.04 to 1, the pulse ran four times too fast, the missing box-sizing reset pushed field
+controls 26 pixels past their field, and the invalid border lost on specificity. Remediation
+closed all four and round 2 approved with zero residue.
+
+Pages still name the retired `--o-*` names until their own task lands. The phase deploys only
+whole. The root layout does not import the sheet yet, which T9.2 owns.

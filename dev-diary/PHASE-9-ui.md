@@ -38,7 +38,7 @@ requires:   T6.1
 fixture-ok: yes
 size:       M · frontier
 owns:       web/src/lib/ui/, web/src/app.html, web/src/routes/dev/ui/
-status:     not-started
+status:     done
 ```
 Replace the editorial tokens with a product system. Every later task builds on this, so it decides rather than transcribes.
 

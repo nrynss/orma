@@ -4,51 +4,61 @@
 	let { path }: { path: string } = $props()
 </script>
 
-<nav class="app-nav" aria-label="App">
+<nav class="o-nav" aria-label="App">
 	{#each APP_NAV as link (link.href)}
 		{@const current = isCurrentNav(path, link.href)}
-		<a href={link.href} class:on={current} aria-current={current ? 'page' : undefined}>{link.label}</a>
+		<a href={link.href} class="o-nav-link" class:on={current} aria-current={current ? 'page' : undefined}>{link.label}</a>
 	{/each}
 </nav>
 
 <style>
-	.app-nav {
+	.o-nav {
 		display: flex;
-		gap: 1.25rem;
+		gap: var(--space-1);
 		overflow-x: auto;
 		white-space: nowrap;
-		font-size: 0.95rem;
-		border-bottom: 1px solid var(--o-hair);
+		border-bottom: 1px solid var(--border);
 		scrollbar-width: none;
 	}
-	.app-nav a {
-		color: var(--o-ink);
-		text-decoration: none;
-		min-height: 44px;
+	.o-nav::-webkit-scrollbar {
+		display: none;
+	}
+	.o-nav-link {
 		display: flex;
 		align-items: center;
-		padding: 0 0.1rem;
+		min-height: var(--tap-target);
+		padding: 0 var(--space-3);
+		color: var(--text-muted);
+		font-size: var(--font-size-base);
+		font-weight: var(--weight-medium);
+		text-decoration: none;
 		border-bottom: 2px solid transparent;
+		transition:
+			color var(--motion-fast) ease-out,
+			background-color var(--motion-fast) ease-out;
 	}
-	.app-nav a.on {
-		color: var(--o-plum);
-		font-weight: 600;
-		border-bottom-color: var(--o-plum);
+	.o-nav-link:hover {
+		color: var(--text);
+	}
+	.o-nav-link.on {
+		color: var(--brand);
+		font-weight: var(--weight-semibold);
+		border-bottom-color: var(--brand);
 	}
 	@media (min-width: 900px) {
-		.app-nav {
+		.o-nav {
 			flex-direction: column;
-			gap: 0.1rem;
+			gap: var(--space-1);
 			border-bottom: 0;
 			overflow: visible;
 		}
-		.app-nav a {
-			padding: 0 0.75rem;
-			border-radius: 4px;
+		.o-nav-link {
 			border-bottom: 0;
+			border-radius: var(--radius-md);
+			padding: 0 var(--space-3);
 		}
-		.app-nav a.on {
-			background: var(--o-wash);
+		.o-nav-link.on {
+			background: var(--brand-soft);
 		}
 	}
 </style>

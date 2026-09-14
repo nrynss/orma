@@ -3,25 +3,25 @@
 	let { label, none = false }: { label: string; none?: boolean } = $props()
 </script>
 
-<span class="mood"><i class:none aria-hidden="true"></i>{label}</span>
+<span class="o-mood"><i class="o-mood-dot" class:none aria-hidden="true"></i>{label}</span>
 
 <style>
-	.mood {
+	.o-mood {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.35rem;
-		font-size: 0.85rem;
-		color: var(--o-muted);
+		gap: var(--space-2);
+		color: var(--text-muted);
+		font-size: var(--font-size-sm);
 	}
-	i {
+	.o-mood-dot {
 		width: 8px;
 		height: 8px;
+		flex: none;
+		background: var(--brand);
 		border-radius: 50%;
-		background: var(--o-plum);
-		display: inline-block;
 	}
-	i.none {
+	.o-mood-dot.none {
 		background: transparent;
-		border: 1.5px solid var(--o-line);
+		border: 1.5px solid var(--border-strong);
 	}
 </style>
