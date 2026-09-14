@@ -115,7 +115,7 @@ requires:   T10.1, T10.2, T10.3
 fixture-ok: yes
 size:       S · mid
 owns:       dev-diary/spec.md (§7 and §13 only), docs/number-confirmation.md
-status:     not-started
+status:     done
 ```
 Write down what "confirmed" means now, so T8.3 and the pull request can quote it.
 

@@ -161,7 +161,7 @@ requires:   T8.1, T6.6, T6.8, P9, P10
 fixture-ok: yes
 size:       L · frontier
 owns:       dev-diary/demo-video.md
-status:     not-started
+status:     done
 ```
 Under three minutes, public on YouTube or Vimeo. The operator records a real call on their own phone with scrcpy. An agent writes the script and the shot list in `dev-diary/demo-video.md`, and reviews the cut against it.
 
@@ -201,7 +201,7 @@ requires:   T8.3, T8.4, P10
 fixture-ok: yes
 size:       M · frontier
 owns:       scripts/package-list-pr.sh, (operational)
-status:     claimed:orchestrator (PR #707 open, Devpost submission waits on the T8.4 video)
+status:     done
 ```
 Open the pull request to `CALLE-AI/awesome-phone-call-agents` under `apps/`, then submit Devpost with that URL, the description, the video link, and the email on the CALL-E account. The live demo URL is optional and, given T8.2, worth including.
 

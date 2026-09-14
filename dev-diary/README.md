@@ -11,8 +11,9 @@ Where a phase document and specification conflict, the specification wins. Recor
 
 Each document provides complete context for an engineer starting cold.
 
-**Current status:** P0 to P7 are complete and P6 is live. The web app is deployed.
-P9 restyles every surface as a product UI, phone first, with no logic change.
+**Current status:** Submitted on 14 September. P0 to P10 are complete and live at
+orma.nryn.dev. The list PR is CALLE-AI/awesome-phone-call-agents#707. Only the
+CALL-E feedback survey (T8.6) remains, due 18 September.
 P8 ships after P9 lands.
 
 P0 is complete. What exists is listed in [PHASE-0-ground.md](PHASE-0-ground.md): the repository, the Supabase project with its extensions and secrets, the deployed app and front door, the bot, verified email, and a proven CALL-E path. Start at P1.
@@ -165,8 +166,9 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P5 | 4 / 4 | **P5 e2e clean.** Auth, Telegram bridge, web sessions, and onboarding are live. |
 | P6 | 8 / 8 | **P6 e2e clean and live.** History, Patterns, Timeline, landing and the fixed owner actions are deployed. Migration applied, types regenerated. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
-| P8 | 3 / 6 | **In progress.** T8.1, T8.2 and T8.3 landed. The list PR is open as CALLE-AI/awesome-phone-call-agents#707. T8.4 video and the Devpost submission remain. |
+| P8 | 5 / 6 | **Submitted.** Seed, keepalive, README, demo video, list PR #707 and Devpost are done. T8.6 feedback survey is due 18 September. |
 | P9 | 9 / 9 | **Complete, reviewed, deployed.** T9.9 closed the phase with zero findings and 41 of 41 P6 pins. Deployed to orma.nryn.dev on the operator's go. |
+| P10 | 4 / 4 | **Complete and live.** Number confirmation by a one-time code call. The operator closed T10.4. |
 
 ---
 
@@ -1538,3 +1540,17 @@ approve its workflows.
 whenever the app changes before merge. Devpost still needs the PR URL and the
 T8.4 video. The README describes number confirmation, and its screens come
 from the finished P9 app.
+
+### 2026-09-14 · Submitted
+
+The operator recorded the demo video and submitted the Devpost entry with the
+list PR, CALLE-AI/awesome-phone-call-agents#707. T8.4 and T8.5 are done. The
+operator also closed T10.4. The README carries the number confirmation
+documentation, and no separate `docs/number-confirmation.md` was written.
+
+**What remains.** T8.6, the CALL-E feedback survey, closes 18 September and is
+judged on its own. `dev-diary/feedback.md` holds fifteen issues, and the root
+`feedback.md` holds the T1.4 probe notes. PR #707 waits for a maintainer to
+approve its workflows. If a review asks for changes, rerun
+`scripts/package-list-pr.sh` and push the fork branch. Keepalive (T8.2) must
+keep running through judging, which opens 30 September.
