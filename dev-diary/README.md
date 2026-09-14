@@ -162,7 +162,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P3 | 5 / 5 | **P3 e2e clean.** Capture, link, and voice are wired on the live webhook. |
 | P4 | 4 / 4 | **Complete.** MCP live at `orma-api.nryn.dev/mcp`, six tools wired, docs published at `docs/mcp.md`. |
 | P5 | 4 / 4 | **P5 e2e clean.** Auth, Telegram bridge, web sessions, and onboarding are live. |
-| P6 | 1 / 8 | **In progress.** T6.1 landed with the app shell, shared tokens and local harness. T6.2, T6.3, T6.4, T6.6 and T6.7 are unblocked. |
+| P6 | 6 / 8 | **In progress.** T6.1, T6.2, T6.5, T6.6, T6.7 and T6.8 landed. T6.3 and T6.4 are in remediation. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
 | P8 | 0 / 7 | Not started. T8.2 starts as soon as T2.4 dispatches, not when P8 opens. |
 
@@ -1286,3 +1286,17 @@ Settings now manages profile preferences, consent, slots, pause and resume, rece
 Telegram linking, call cancellation, and account deletion. Cancellation and deletion use T6.7
 RPCs rather than direct writes. Local validation preserved the existing Telegram flow and placed
 no live calls. Luna's round 1 approved with zero findings.
+
+### 2026-09-14 · T6.6 landed, operator timeline
+
+Timeline shows the owner's `call_events` in order with expandable detail payloads. Steps sort by
+time then id, clocks render in the profile timezone, and every loader query is owner scoped.
+A failed run names its last event, live runs carry a manual refresh with no timers, and phone
+shapes are masked before display. Round 1 approved with zero findings.
+
+### 2026-09-14 · T6.8 landed, landing page
+
+The root page stays server rendered with the thesis, the beat, and the two sections intact. The
+closed sign-ups line is gone and three links carry the way into `/login`. One synthetic call
+demo plays through the visitor browser speech engine, labelled as synthetic with no real person
+and no production evidence. No audio asset was added. Round 1 approved with zero findings.
