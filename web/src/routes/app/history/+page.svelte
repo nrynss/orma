@@ -266,9 +266,14 @@
 	.mono {
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
+		min-width: var(--tap-target);
 		min-height: var(--tap-target);
 		font-family: var(--font-mono);
 		font-size: var(--font-size-sm);
+	}
+	a.mono {
+		color: var(--brand);
 	}
 	.label {
 		color: var(--text-muted);

@@ -270,13 +270,13 @@
 		display: flex;
 		gap: var(--space-2);
 		align-items: center;
+		min-height: var(--tap-target);
 		color: var(--text);
 		font-size: var(--font-size-sm);
 	}
 	.check input {
-		min-height: auto;
-		width: 1.1rem;
-		height: 1.1rem;
+		width: 1.5rem;
+		height: 1.5rem;
 		accent-color: var(--brand);
 	}
 	.actions {

@@ -166,7 +166,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P6 | 8 / 8 | **P6 e2e clean and live.** History, Patterns, Timeline, landing and the fixed owner actions are deployed. Migration applied, types regenerated. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
 | P8 | 2 / 6 | **In progress.** T8.1 seed and T8.3 README landed. T8.4 waits on P9 and P10, and T8.5 on T8.4 and P10. |
-| P9 | 8 / 9 | **Implemented, review pending.** T9.3 to T9.8 restyled on the shared tokens and verified against the harness. T9.9 visual QA and the adversarial review round close the phase. |
+| P9 | 9 / 9 | **Complete, review approved, not deployed.** T9.9 closed the phase with zero findings and 41 of 41 P6 pins. The deploy waits on the operator's go-ahead. |
 
 ---
 
@@ -1473,3 +1473,30 @@ the API port. Mint a magic link with the stack service key through
 own callback sets the session cookies and routes by profile. The dev server
 needs `PUBLIC_ORMA_API_URL` and `PUBLIC_SUPABASE_ANON_KEY` pointed at the stack,
 or it reads the live values from `.env`.
+
+### 2026-09-14 · T9.9 closed the phase, deploy awaits the operator
+
+**T9.9 approves with zero findings.** The review lives at
+`dev-diary/adversarial-review/t9.9-round1.md`. The screen set is 55 captures:
+nine routes, light and dark, 360, 412 and 1280, plus Today first-run, Today
+live, onboarding and Items-detail states. Contrast, overflow, focus and target
+audits ran on every route in both themes. All 41 P6 pins hold. The operator's
+Android phone walked the demo path over `adb reverse` and scrcpy: sign in,
+Today, retire, History, Settings, restore. No reload, no jump, no clipped
+control. The operator waived the separate reviewer for the phase, so this
+round is the review record.
+
+**Two defects the audits caught were fixed inside the round.** Evidence offset
+links measured 34 pixels wide and Settings checkboxes sat in sub-44-pixel
+rows. Both now meet the 44 pixel floor. The login callback page still wore
+the editorial skin although T9.3 owned it, and now renders the wordmark card
+on tokens with its logic untouched.
+
+**One environment fact cost the session an hour.** The session cookie is
+`Secure`, so browsers drop it on any http origin that is not localhost. Sign
+in against `localhost:5174` works; a LAN address does not. Harness reviewers
+should use `adb reverse` or the cookie injection recipe in the earlier entry.
+Production is HTTPS and unaffected.
+
+**Nothing is deployed.** The phase doc gates the deploy on the operator's
+go-ahead, which has not been given yet.

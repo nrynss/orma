@@ -171,7 +171,7 @@ requires:   T9.3, T9.4, T9.5, T9.6, T9.7, T9.8
 fixture-ok: yes
 size:       S · frontier
 owns:       dev-diary/adversarial-review/p9-screens/
-status:     not-started
+status:     done
 ```
 One pass over the whole app as a single product.
 

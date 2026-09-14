@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte'
 	import { getOrmaApiUrl, getPublishableKey, getSupabase } from '$lib/supabase'
 	import { lookupProfileExists, postAuthPath } from '../../app/onboarding/profile-gate'
+	import { Wordmark } from '$lib/shell'
 
 	let { data } = $props()
 	let message = $state('Signing you in.')
@@ -50,34 +51,60 @@
 </svelte:head>
 
 <main>
-	<h1>Orma</h1>
-	<p class="status">{message}</p>
-	<p><a href="/login">Back to sign in</a></p>
+	<section class="card">
+		<header class="brand">
+			<Wordmark height="2.25rem" />
+		</header>
+		<p class="status" role="status">{message}</p>
+		<p class="back"><a href="/login">Back to sign in</a></p>
+	</section>
 </main>
 
 <style>
-	:global(html) {
-		color-scheme: light dark;
-	}
-	:global(body) {
-		margin: 0;
-		background: light-dark(#fbfaf8, #14130f);
-		color: light-dark(#22201c, #e8e4dc);
-		font: 16px/1.6 ui-serif, Georgia, 'Times New Roman', serif;
-	}
 	main {
-		max-width: 24rem;
-		margin: 0 auto;
-		padding: 4rem 1.5rem 6rem;
+		display: flex;
+		justify-content: center;
+		padding: var(--space-12) var(--space-4) var(--space-16);
 	}
-	h1 {
-		font-size: 2rem;
-		margin: 0 0 1rem;
+
+	.card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-5);
+		width: min(24rem, 100%);
+		padding: var(--space-8) var(--space-6);
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-xl);
+		box-shadow: var(--elevation-2);
+		text-align: center;
 	}
+
+	.brand {
+		display: flex;
+		justify-content: center;
+	}
+
 	.status {
-		color: light-dark(#7a746a, #938c80);
+		margin: 0;
+		color: var(--text-muted);
+		font-size: var(--font-size-base);
+		line-height: var(--line-snug);
 	}
-	a {
-		color: light-dark(#7a5283, #cfa7d8);
+
+	.back {
+		margin: 0;
+	}
+	.back a {
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--tap-target);
+		color: var(--brand);
+		font-size: var(--font-size-sm);
+		text-decoration: none;
+	}
+	.back a:hover {
+		text-decoration: underline;
 	}
 </style>
