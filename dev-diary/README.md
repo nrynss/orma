@@ -165,7 +165,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P5 | 4 / 4 | **P5 e2e clean.** Auth, Telegram bridge, web sessions, and onboarding are live. |
 | P6 | 8 / 8 | **P6 e2e clean and live.** History, Patterns, Timeline, landing and the fixed owner actions are deployed. Migration applied, types regenerated. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
-| P8 | 0 / 7 | Not started. T8.4 softly waits on P9, because the demo video films the P9 screens. |
+| P8 | 2 / 6 | **In progress.** T8.1 seed and T8.3 README landed. T8.4 waits on P9 and P10, and T8.5 on T8.4 and P10. |
 | P9 | 2 / 9 | **In progress.** T9.1 and T9.2 landed. T9.3 to T9.8 run in parallel next, then T9.9 closes the phase. |
 
 ---
@@ -1396,3 +1396,23 @@ bar clears the home indicator instead of sitting on it.
 Carried forward. The dev-server stack is contended by another session, so T9.2 verification
 ran on isolated harness copies. Patterns scrolls sideways at 320 from its fixed 342 pixel
 trend chart, which belongs to T9.7.
+
+### 2026-09-14 · T8.3 landed, the submission README
+
+The root `README.md` now covers what Orma is, how the demo was made, a no-call local
+walkthrough, architecture, self-hosting, side effects, cancellation, dry run, credentials,
+consent, surfaces and known limitations. The demo disclosure reads as a real call over
+seeded history.
+
+The first draft carried invented details, so the operator had it corrected directly with no
+review round. The fixes: the Vault secret is `ORMA_MATERIALISE_SECRET_KEY`, and the crons
+are `tick-runs`, `materialise-runs` and `analysis-report` on Monday at 06:20 UTC. The
+`telegram` function registers its own webhook. Voice notes stay in `item-audio`. Onboarding
+lets a user skip consent. Post-call receipts go to Telegram only.
+
+**Next agent notes.** The six screens in `docs/screens/` are real captures from the local
+stack at 390 by 844, but they show the P9 shell mid-migration. Recapture them after P9
+lands. The clone step uses a placeholder, because this repository is private and T8.5
+publishes the app through the list repository. P10 will change "Consent and numbers", so
+update that section when P10 lands. The Devpost description and form details now live on
+Devpost only, and the local drafts were removed.

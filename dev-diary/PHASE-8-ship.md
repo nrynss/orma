@@ -19,10 +19,10 @@ Every task here runs through the loop in `AGENTS.md`: implement, review, remedia
 - **Live.** The web app at `orma.nryn.dev` carries P6 (deployed 10:50Z). The API front door is `orma-api.nryn.dev`. The functions are `tick`, `materialise`, `calle-webhook`, `telegram`, `mcp`, `auth-telegram` and `analysis`.
 - **Schedulers.** `tick-runs` runs every minute, `materialise-runs` at 00:10 UTC, and `analysis-report` on Mondays at 06:20 UTC. All three read `ORMA_MATERIALISE_SECRET_KEY` from Vault, which is now set.
 - **Telegram.** The Login Widget works on `orma.nryn.dev`. BotFather's `/setdomain` for `@orma_tele_bot` is set to that domain. A bot has one login domain, so `localhost` always shows "Bot domain invalid".
-- **P9 is in motion.** The UI is being rebuilt as a phone-first product UI. T8.4 records after P9 deploys. Screenshots in T8.3 wait for it too.
+- **P9 is in motion.** The UI is being rebuilt as a phone-first product UI. T8.4 records after P9 deploys. The README screenshots show the shell mid-migration, so recapture them once P9 lands.
 - **Fixtures.** The conversation in `testdata/calle/` is synthetic, as `testdata/calle/README.md` explains. Provider summary and evidence text there still names the operator.
-- **Devpost drafting.** The local draft is `devpost-submission.md`. It leads with the operator's experience of forgetting and labels seeded dry-run history. The planned recording uses a real call.
-- **Nothing in P8 exists yet.** There is no root `README.md`, no `scripts/seed.ts`, and `.github/workflows/` holds only `_env-example.yml`.
+- **Devpost.** The operator entered the description and form details on Devpost directly. The PR URL and the video URL are still to add. The repository keeps no Devpost draft.
+- **P8 so far.** T8.1 landed `scripts/seed.ts`, not yet run against production. T8.3 landed the root `README.md` and `docs/screens/`. `.github/workflows/` still holds only `_env-example.yml`.
 
 ## Rules for every P8 task
 
@@ -129,7 +129,7 @@ requires:   P2, P3, P4, P6, P7, soft P9
 fixture-ok: yes
 size:       M · frontier
 owns:       README.md, docs/screens/
-status:     not-started
+status:     done
 ```
 The repository requires apps that place calls or create recurring jobs to document setup, side effects, cancellation, credential handling, and dry-run behaviour. All of it goes here. T8.5 adapts this file into the app README in the pull request, so write it to stand alone.
 
