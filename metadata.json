@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "01M2HTA275ZF2AG1NSA42E26W6",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 3,
+  "files_touched": [
+    ".github/workflows/keepalive.yml",
+    "dev-diary/PHASE-8-ship.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 160,
+    "cache_creation_tokens": 6109,
+    "cache_read_tokens": 1092993,
+    "output_tokens": 4676,
+    "api_call_count": 5
+  }
+}
