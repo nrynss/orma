@@ -15,17 +15,22 @@ permissions:
 jobs:
   # Activity needs no secrets, so a missing backup credential can never stop
   # the request that keeps the free project from pausing.
+  #
+  # It calls the project host, not ORMA_API_URL. The Cloudflare front door
+  # challenges GitHub's datacenter addresses and answered 403 on the first run.
+  # The front door exists for the operator's network, which misresolves
+  # *.supabase.co. Runners resolve it correctly, and the activity is the same.
   keepalive:
     runs-on: ubuntu-latest
     env:
-      ORMA_API_URL: ${{ vars.ORMA_API_URL }}
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
       SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - name: Keep Supabase active
         run: |
           status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
             --header "apikey: ${SUPABASE_PUBLISHABLE_KEY}" \
-            "${ORMA_API_URL}/rest/v1/profiles?select=id&limit=1")"
+            "${SUPABASE_URL}/rest/v1/profiles?select=id&limit=1")"
           if [ "$status" != '200' ]; then
             printf 'Keepalive returned HTTP %s\n' "$status" >&2
             exit 1

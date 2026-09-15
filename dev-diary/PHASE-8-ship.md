@@ -110,7 +110,7 @@ With no daily calls, nothing else keeps the project active through judging. A pa
 
 **One daily workflow, plus manual dispatch.**
 
-1. **Activity.** A GET against PostgREST through `ORMA_API_URL`, with the publishable key as `apikey`. Fail the job on any status other than 200.
+1. **Activity.** A GET against PostgREST at the project host `SUPABASE_URL`, with the publishable key as `apikey`. Fail the job on any status other than 200. It runs as its own job with no secrets. `ORMA_API_URL` is not used here, because Cloudflare answered the first run from a GitHub runner with 403. The front door exists for the operator's network, and runners resolve `*.supabase.co` correctly.
 2. **Backup.** `pg_dump` with a Postgres 17 client, in custom format, pushed to the operator's private backup repository. Keep the newest 14 dumps and delete older ones.
 
 **Reach the database through the session pooler.** `SUPABASE_DB_URL` points at the direct `db.<ref>` host. That host is IPv6 only on the free plan, and GitHub-hosted runners have no IPv6. The workflow reads a new secret, `SUPABASE_POOLER_URL`, the session-mode pooler string from the dashboard. It never prints it.
