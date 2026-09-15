@@ -1,0 +1,5 @@
+Orma cleanup: I've removed everything I added there. One problem: your commit 8529417 included my diary entry. That entry, in dev-diary/README.md, points to dev-diary/LEDGER.md, which I deleted because it was never committed. Delete that paragraph, or tell me to put the file back.
+
+I also added a short "Our entry" section to call-e.md, and a memory note so future sessions update this ledger.
+
+Are things ok?
