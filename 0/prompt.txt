@@ -1,0 +1,21 @@
+you have permissions now
+
+---
+
+give me commands to set variables
+
+---
+
+You can do 1 yourself. For 2, do I use the variable name or  just the token?
+
+---
+
+you dumbass. how do I pass the token to the variable?
+
+---
+
+done both
+
+---
+
+We dont need backup. Only keepalive
