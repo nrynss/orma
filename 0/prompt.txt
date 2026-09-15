@@ -1,0 +1,11 @@
+push it and clear the conflict for that PR. Reply to that PR comment thanking them and say what we have done in my style.
+
+---
+
+deploy the fixes
+
+---
+
+Problems I found
+
+The keepalive job has never run. Its GitHub workflow has zero runs. The repo is also missing the SUPABASE_POOLER_URL and BACKUP_REPO_TOKEN secrets and the BACKUP_REPO variable. The phase doc marked this task done, but it isn't. A free Supabase project pauses after 7 days of low activity, which could take the demo down during judging (30 Sep – 13 Oct).
