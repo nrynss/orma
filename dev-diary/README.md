@@ -166,7 +166,7 @@ Protect this core flow above auxiliary features. The line "You've mentioned the 
 | P5 | 4 / 4 | **P5 e2e clean.** Auth, Telegram bridge, web sessions, and onboarding are live. |
 | P6 | 8 / 8 | **P6 e2e clean and live.** History, Patterns, Timeline, landing and the fixed owner actions are deployed. Migration applied, types regenerated. |
 | P7 | 6 / 6 | **Complete.** Facts, prose, email, Telegram, and the post-call receipt passed phase e2e round 2 with zero findings. |
-| P8 | 5 / 6 | **Submitted.** Seed, keepalive, README, demo video, list PR #707 and Devpost are done. T8.6 feedback survey is due 18 September. |
+| P8 | 4 / 6 | **Submitted, keepalive open.** Seed, README, demo video, list PR #707 and Devpost are done. T8.2 keepalive never ran and its backup secrets are unset, so it is not done. T8.6 feedback survey is due 18 September. |
 | P9 | 9 / 9 | **Complete, reviewed, deployed.** T9.9 closed the phase with zero findings and 41 of 41 P6 pins. Deployed to orma.nryn.dev on the operator's go. |
 | P10 | 4 / 4 | **Complete and live.** Number confirmation by a one-time code call. The operator closed T10.4. |
 
@@ -1554,3 +1554,16 @@ judged on its own. `dev-diary/feedback.md` holds fifteen issues, and the root
 approve its workflows. If a review asks for changes, rerun
 `scripts/package-list-pr.sh` and push the fork branch. Keepalive (T8.2) must
 keep running through judging, which opens 30 September.
+
+### 2026-09-15 · Review answered, deployed, ledger started
+
+Ray-56 reviewed #707 with three Must Fix items. `de84224` answers all three,
+and the fork branch carries it as `66b93a6` after merging upstream `main`.
+`calle-webhook`, `tick` and `confirm-phone` redeployed at 05:36Z, and the web
+worker at 05:37Z, so production also carries the two confirm-phone fixes
+committed after submissions closed.
+
+`dev-diary/LEDGER.md` is now the record of artifacts, deploys and what is
+owed. Starting it turned up three gaps. The keepalive workflow has never run,
+and its pooler and backup secrets are not set. The Devpost and video URLs are
+in no file. The repository is public, which P8 still called private.

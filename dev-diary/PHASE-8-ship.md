@@ -16,6 +16,8 @@ Every task here runs through the loop in `AGENTS.md`: implement, review, remedia
 
 ## Where things stand, 14 September
 
+> **Superseded.** Orma was submitted on 14 September. Current state, deploys and what is still owed live in `dev-diary/LEDGER.md`. Two corrections to this file: T8.2's workflow has never run and its secrets are not set, so its done-when is not met. The `nrynss/orma` repository is public, not private.
+
 - **Live.** The web app at `orma.nryn.dev` carries P6 (deployed 10:50Z). The API front door is `orma-api.nryn.dev`. The functions are `tick`, `materialise`, `calle-webhook`, `telegram`, `mcp`, `auth-telegram` and `analysis`.
 - **Schedulers.** `tick-runs` runs every minute, `materialise-runs` at 00:10 UTC, and `analysis-report` on Mondays at 06:20 UTC. All three read `ORMA_MATERIALISE_SECRET_KEY` from Vault, which is now set.
 - **Telegram.** The Login Widget works on `orma.nryn.dev`. BotFather's `/setdomain` for `@orma_tele_bot` is set to that domain. A bot has one login domain, so `localhost` always shows "Bot domain invalid".
@@ -102,7 +104,7 @@ requires:   T1.1
 fixture-ok: yes
 size:       S · mid
 owns:       .github/workflows/keepalive.yml, scripts/restore-check.sh
-status:     done
+status:     in-progress (never ran; SUPABASE_POOLER_URL, BACKUP_REPO_TOKEN and BACKUP_REPO unset, backup repository not created; keepalive split into its own job 2026-09-15)
 ```
 With no daily calls, nothing else keeps the project active through judging. A paused project stops `pg_cron` and takes the demo URL down before a judge opens it.
 

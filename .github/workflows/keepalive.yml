@@ -13,17 +13,14 @@ permissions:
   contents: read
 
 jobs:
-  keepalive-and-backup:
+  # Activity needs no secrets, so a missing backup credential can never stop
+  # the request that keeps the free project from pausing.
+  keepalive:
     runs-on: ubuntu-latest
     env:
       ORMA_API_URL: ${{ vars.ORMA_API_URL }}
       SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
-      SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
-      BACKUP_REPO: ${{ vars.BACKUP_REPO }}
-      BACKUP_REPO_TOKEN: ${{ secrets.BACKUP_REPO_TOKEN }}
     steps:
-      - uses: actions/checkout@v5
-
       - name: Keep Supabase active
         run: |
           status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
@@ -31,6 +28,26 @@ jobs:
             "${ORMA_API_URL}/rest/v1/profiles?select=id&limit=1")"
           if [ "$status" != '200' ]; then
             printf 'Keepalive returned HTTP %s\n' "$status" >&2
+            exit 1
+          fi
+
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_POOLER_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+      BACKUP_REPO: ${{ vars.BACKUP_REPO }}
+      BACKUP_REPO_TOKEN: ${{ secrets.BACKUP_REPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Require the backup credentials
+        run: |
+          missing=''
+          [ -n "${SUPABASE_POOLER_URL}" ] || missing="$missing SUPABASE_POOLER_URL"
+          [ -n "${BACKUP_REPO}" ] || missing="$missing BACKUP_REPO"
+          [ -n "${BACKUP_REPO_TOKEN}" ] || missing="$missing BACKUP_REPO_TOKEN"
+          if [ -n "$missing" ]; then
+            printf 'Backup is not configured. Missing:%s\n' "$missing" >&2
             exit 1
           fi
 
