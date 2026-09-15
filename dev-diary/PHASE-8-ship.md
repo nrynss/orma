@@ -16,8 +16,6 @@ Every task here runs through the loop in `AGENTS.md`: implement, review, remedia
 
 ## Where things stand, 14 September
 
-> **Superseded.** Orma was submitted on 14 September. Current state, deploys and what is still owed live in `dev-diary/LEDGER.md`. Two corrections to this file: T8.2's workflow has never run and its secrets are not set, so its done-when is not met. The `nrynss/orma` repository is public, not private.
-
 - **Live.** The web app at `orma.nryn.dev` carries P6 (deployed 10:50Z). The API front door is `orma-api.nryn.dev`. The functions are `tick`, `materialise`, `calle-webhook`, `telegram`, `mcp`, `auth-telegram` and `analysis`.
 - **Schedulers.** `tick-runs` runs every minute, `materialise-runs` at 00:10 UTC, and `analysis-report` on Mondays at 06:20 UTC. All three read `ORMA_MATERIALISE_SECRET_KEY` from Vault, which is now set.
 - **Telegram.** The Login Widget works on `orma.nryn.dev`. BotFather's `/setdomain` for `@orma_tele_bot` is set to that domain. A bot has one login domain, so `localhost` always shows "Bot domain invalid".
@@ -45,8 +43,6 @@ Every task here runs through the loop in `AGENTS.md`: implement, review, remedia
 | State production's dry-run mode | T8.1 | Before seeding production |
 | Turn dry run off, and confirm the recording account's consent, number and slot | T8.4 | Before recording |
 | Name the production account to seed | T8.1 | Before `--apply` |
-| Create a private backup repository and a fine-grained token | T8.2 | Before the first scheduled run |
-| Add the session pooler URL as a repository secret | T8.2 | Before the first scheduled run |
 | Record the phone with scrcpy and upload publicly | T8.4 | After P9 deploys |
 | Approve the fork, branch and pull request | T8.5 | After packaging passes review |
 | Submit Devpost | T8.5 | Before submissions close |
@@ -98,30 +94,23 @@ The demo needs history that no run of real calls produced, so the seed carries a
 
 ---
 
-### T8.2: Keepalive and backup
+### T8.2: Keepalive
 ```yaml
 requires:   T1.1
 fixture-ok: yes
 size:       S · mid
-owns:       .github/workflows/keepalive.yml, scripts/restore-check.sh
-status:     in-progress (never ran; SUPABASE_POOLER_URL, BACKUP_REPO_TOKEN and BACKUP_REPO unset, backup repository not created; keepalive split into its own job 2026-09-15)
+owns:       .github/workflows/keepalive.yml
+status:     in-progress (first passing dispatch 2026-09-15; backup dropped by the operator the same day; done once daily runs pass through 2026-09-22 with the project unpaused)
 ```
 With no daily calls, nothing else keeps the project active through judging. A paused project stops `pg_cron` and takes the demo URL down before a judge opens it.
 
 **One daily workflow, plus manual dispatch.**
 
-1. **Activity.** A GET against PostgREST at the project host `SUPABASE_URL`, with the publishable key as `apikey`. Fail the job on any status other than 200. It runs as its own job with no secrets. `ORMA_API_URL` is not used here, because Cloudflare answered the first run from a GitHub runner with 403. The front door exists for the operator's network, and runners resolve `*.supabase.co` correctly.
-2. **Backup.** `pg_dump` with a Postgres 17 client, in custom format, pushed to the operator's private backup repository. Keep the newest 14 dumps and delete older ones.
+**Activity.** A GET against PostgREST at the project host `SUPABASE_URL`, with the publishable key as `apikey`. Fail the job on any status other than 200. It needs no secrets, only the `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` repository variables. `ORMA_API_URL` is not used here, because Cloudflare answered the first run from a GitHub runner with 403. The front door exists for the operator's network, and runners resolve `*.supabase.co` correctly.
 
-**Reach the database through the session pooler.** `SUPABASE_DB_URL` points at the direct `db.<ref>` host. That host is IPv6 only on the free plan, and GitHub-hosted runners have no IPv6. The workflow reads a new secret, `SUPABASE_POOLER_URL`, the session-mode pooler string from the dashboard. It never prints it.
+**No backup.** The operator dropped the backup on 2026-09-15. The workflow takes no dump and holds no database credential.
 
-**Secrets and variables.** Copy the `env:` block from `.github/workflows/_env-example.yml` rather than writing one. Add only `SUPABASE_POOLER_URL`, `BACKUP_REPO` (a variable such as `nrynss/orma-backups`) and `BACKUP_REPO_TOKEN`. The token is fine-grained, with contents write on the backup repository only.
-
-The dump holds phone numbers and consent rows, so it never lands in this repository, an artifact, or a log. Mask the job output.
-
-**Restore check.** `scripts/restore-check.sh <dump>` restores a dump into a throwaway local Postgres 17 container and prints row counts per table. It never targets the linked project.
-
-**Done when:** a manual dispatch passes both steps, the backup repository shows the dump, and `restore-check.sh` restores it locally with row counts matching production's own counts. After that, the workflow runs daily for a week and the project has not paused.
+**Done when:** a manual dispatch passes, then the workflow runs daily for a week and the project has not paused.
 
 ---
 

@@ -565,9 +565,8 @@ RESEND_FROM
 **Keeping it alive through judging.** Judging opens 30 September and closes
 13 October, sixteen days after submissions close. A free Supabase project pauses
 after seven days of low activity, and a paused project stops `pg_cron`, which
-stops the calls. A GitHub Actions workflow runs daily and does two things: a
-request against PostgREST to register measured activity, and a `pg_dump` into a
-private repository.
+stops the calls. A GitHub Actions workflow runs daily and makes one request
+against PostgREST to register measured activity. It takes no backup.
 
 ## 13. Dry run, consent and cancellation
 
